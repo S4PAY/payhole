@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
 
 jobs:
   dashboard:
@@ -74,19 +76,33 @@ jobs:
       - dashboard
       - payments
       - proxy
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/'))
     runs-on: ubuntu-latest
     env:
       REGISTRY: ghcr.io
+    outputs:
+      image-prefix: ${{ steps.meta.outputs.image-prefix }}
+      image-tag: ${{ steps.meta.outputs.image-tag }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
-      - name: Compute image prefix
+      - name: Compute image metadata
+        id: meta
         run: |
           owner_lc=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
           repo_name=${GITHUB_REPOSITORY##*/}
-          echo "IMAGE_PREFIX=ghcr.io/${owner_lc}/${repo_name}" >> $GITHUB_ENV
+          echo "image-prefix=ghcr.io/${owner_lc}/${repo_name}" >> "$GITHUB_OUTPUT"
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            ref_tag=${GITHUB_REF#refs/tags/}
+            echo "image-tag=${ref_tag}" >> "$GITHUB_OUTPUT"
+          else
+            echo "image-tag=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Export image metadata
+        run: |
+          echo "IMAGE_PREFIX=${{ steps.meta.outputs.image-prefix }}" >> $GITHUB_ENV
+          echo "IMAGE_TAG=${{ steps.meta.outputs.image-tag }}" >> $GITHUB_ENV
       - name: Login to GHCR
         uses: docker/login-action@v3
         with:
@@ -100,7 +116,7 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/dashboard:latest
-            ${{ env.IMAGE_PREFIX }}/dashboard:${{ github.sha }}
+            ${{ env.IMAGE_PREFIX }}/dashboard:${{ env.IMAGE_TAG }}
       - name: Build and push payments image
         uses: docker/build-push-action@v5
         with:
@@ -108,7 +124,7 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/payments:latest
-            ${{ env.IMAGE_PREFIX }}/payments:${{ github.sha }}
+            ${{ env.IMAGE_PREFIX }}/payments:${{ env.IMAGE_TAG }}
       - name: Build and push proxy image
         uses: docker/build-push-action@v5
         with:
@@ -116,5 +132,47 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE_PREFIX }}/proxy:latest
-            ${{ env.IMAGE_PREFIX }}/proxy:${{ github.sha }}
+            ${{ env.IMAGE_PREFIX }}/proxy:${{ env.IMAGE_TAG }}
+
+  deploy:
+    name: Deploy to VPS
+    needs:
+      - build-and-push
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_PREFIX: ${{ needs.build-and-push.outputs.image-prefix }}
+      IMAGE_TAG: ${{ needs.build-and-push.outputs.image-tag }}
+      GHCR_USERNAME: ${{ github.actor }}
+      GHCR_PAT: ${{ secrets.GHCR_PAT }}
+      DEPLOY_PATH: ${{ secrets.VPS_DEPLOY_PATH }}
+    steps:
+      - name: Trigger remote rollout
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: IMAGE_PREFIX,IMAGE_TAG,GHCR_USERNAME,GHCR_PAT,DEPLOY_PATH
+          script: |
+            set -euo pipefail
+            WORKDIR="${DEPLOY_PATH:-/opt/payhole}"
+            if [ ! -d "${WORKDIR}" ]; then
+              echo "Deployment directory ${WORKDIR} is missing" >&2
+              exit 1
+            fi
+
+            cd "${WORKDIR}"
+            if command -v git >/dev/null 2>&1; then
+              git fetch --tags --prune
+              git checkout main
+              git pull --ff-only
+            fi
+
+            docker login ghcr.io -u "${GHCR_USERNAME}" -p "${GHCR_PAT}"
+            export IMAGE_PREFIX IMAGE_TAG
+
+            docker compose -f infra/production/compose.yml pull dashboard payments proxy caddy
+            docker compose -f infra/production/compose.yml up -d --remove-orphans dashboard payments proxy caddy
+            docker system prune -f
 
