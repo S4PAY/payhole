@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.payhole.ai/telemetry-event.json",
+  "title": "TelemetryEvent",
+  "type": "object",
+  "required": [
+    "id",
+    "domain",
+    "reason",
+    "source",
+    "policyVersion",
+    "riskScore",
+    "timestamp"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-f0-9-]{16,64}$"
+    },
+    "domain": {
+      "type": "string",
+      "minLength": 1
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source": {
+      "type": "string",
+      "enum": ["payments", "proxy", "edge"]
+    },
+    "policyVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "riskScore": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "hashedUserId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/=]{16,128}$"
+    },
+    "clientIp": {
+      "type": "string",
+      "format": "ipv4"
+    },
+    "userAgent": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -23,6 +23,11 @@ const schema = z.object({
     .or(z.literal(''))
     .transform((value) => (value === '' ? undefined : value)),
   ANALYTICS_BUFFER_LIMIT: z.coerce.number().int().positive().default(10000),
+  ANALYTICS_EVENT_LOG_PATH: z.string().default('data/telemetry-events.ndjson'),
+  ANALYTICS_POLICY_VERSION: z.string().default('payments-v1'),
+  ANALYTICS_SOURCE: z
+    .enum(['payments', 'proxy', 'edge'])
+    .default('payments'),
 });
 
 export type Env = z.infer<typeof schema>;
@@ -48,4 +53,3 @@ export function getEnv(): Env {
 export function resetEnvCache() {
   cachedEnv = null;
 }
-

@@ -13,6 +13,7 @@ import (
 	"github.com/payhole/proxy/internal/analytics"
 	"github.com/payhole/proxy/internal/auth"
 	"github.com/payhole/proxy/internal/blocklist"
+	"github.com/payhole/proxy/internal/classifier"
 	"github.com/payhole/proxy/internal/config"
 	"github.com/payhole/proxy/internal/dnsproxy"
 	"github.com/payhole/proxy/internal/httpproxy"
@@ -42,8 +43,9 @@ func main() {
 
 	ipCache := auth.NewIPCache()
 	analyticsClient := analytics.NewClient(cfg.AnalyticsURL)
+	classifierClient := classifier.NewClient(cfg.ClassifierURL)
 
-	policyEngine := policy.New(blockedDomains, premiumDomains, jwtAuthorizer, ipCache, analyticsClient)
+	policyEngine := policy.New(blockedDomains, premiumDomains, jwtAuthorizer, ipCache, analyticsClient, classifierClient)
 
 	httpProxy := httpproxy.NewServer(policyEngine, nil)
 
@@ -63,9 +65,9 @@ func main() {
 			return
 		}
 		var payload struct {
-			Wallet   string `json:"wallet"`
+			Wallet    string `json:"wallet"`
 			ExpiresAt string `json:"expiresAt"`
-			ClientIP string `json:"clientIp"`
+			ClientIP  string `json:"clientIp"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
 			http.Error(w, "invalid payload", http.StatusBadRequest)

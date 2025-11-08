@@ -1,6 +1,8 @@
 package policy
 
 import (
+	"context"
+	"fmt"
 	"net"
 	"strings"
 	"time"
@@ -8,6 +10,7 @@ import (
 	"github.com/payhole/proxy/internal/analytics"
 	"github.com/payhole/proxy/internal/auth"
 	"github.com/payhole/proxy/internal/blocklist"
+	"github.com/payhole/proxy/internal/classifier"
 )
 
 // DecisionReason describes why a request was blocked.
@@ -17,6 +20,7 @@ const (
 	ReasonAllowed        DecisionReason = "allowed"
 	ReasonAdBlocked      DecisionReason = "ad_block"
 	ReasonPremiumPayment DecisionReason = "premium_unlock_required"
+	ReasonModelRisk      DecisionReason = "model_risk_block"
 )
 
 // Decision captures the outcome of a filtering check.
@@ -26,13 +30,14 @@ type Decision struct {
 	Reason     DecisionReason
 }
 
-// Policy orchestrates blocklist, premium access, and analytics decisions.
+// Policy orchestrates blocklist, premium access, classifier, and analytics decisions.
 type Policy struct {
-	blocklist blocklist.List
-	premium   blocklist.List
+	blocklist  blocklist.List
+	premium    blocklist.List
 	authorizer *auth.JWTAuthorizer
 	ipCache    *auth.IPCache
 	analytics  *analytics.Client
+	classifier *classifier.Client
 }
 
 // New constructs a Policy.
@@ -41,14 +46,16 @@ func New(
 	premium blocklist.List,
 	authorizer *auth.JWTAuthorizer,
 	ipCache *auth.IPCache,
-	client *analytics.Client,
+	analyticsClient *analytics.Client,
+	classifierClient *classifier.Client,
 ) *Policy {
 	return &Policy{
-		blocklist: blocklist,
-		premium:   premium,
+		blocklist:  blocklist,
+		premium:    premium,
 		authorizer: authorizer,
 		ipCache:    ipCache,
-		analytics:  client,
+		analytics:  analyticsClient,
+		classifier: classifierClient,
 	}
 }
 
@@ -73,6 +80,20 @@ func (p *Policy) Decide(host, remoteAddr, authHeader string) Decision {
 	if p.premium != nil && p.premium.Contains(canonicalHost) && !authorized {
 		p.record(canonicalHost, ReasonPremiumPayment)
 		return Decision{Allow: false, StatusCode: 402, Reason: ReasonPremiumPayment}
+	}
+
+	if p.classifier != nil && p.classifier.Enabled() {
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		defer cancel()
+		resp, err := p.classifier.Predict(ctx, classifier.Request{
+			RequestID: fmt.Sprintf("%s-%d", canonicalHost, time.Now().UnixNano()),
+			Domain:    canonicalHost,
+			Numerical: map[string]float64{"domain_length": float64(len(canonicalHost))},
+		})
+		if err == nil && strings.EqualFold(resp.Label, "block") {
+			p.record(canonicalHost, ReasonModelRisk)
+			return Decision{Allow: false, StatusCode: 451, Reason: ReasonModelRisk}
+		}
 	}
 
 	return Decision{Allow: true, StatusCode: 200, Reason: ReasonAllowed}
@@ -124,4 +145,3 @@ func canonicalizeHost(host string) string {
 	}
 	return strings.TrimSuffix(strings.ToLower(h), ".")
 }
-

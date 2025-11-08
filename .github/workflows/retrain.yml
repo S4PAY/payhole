@@ -1,0 +1,36 @@
+name: Retrain Classifier
+
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r ai/cmd/train/requirements.txt
+          pip install -r ai/cmd/classifier/requirements.txt
+      - name: Retrain model
+        run: |
+          python ai/cmd/train/retrain.py --models ai/models
+      - name: Drift check
+        run: |
+          python ai/cmd/monitor/drift.py --models ai/models --threshold 0.05
+      - name: Upload latest model
+        uses: actions/upload-artifact@v4
+        with:
+          name: risk-classifier-latest
+          path: |
+            ai/models/latest
+            ai/models/production
+            ai/models/*.json

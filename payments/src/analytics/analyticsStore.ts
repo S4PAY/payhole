@@ -1,7 +1,12 @@
+import { TelemetryPublisher, TelemetryRecord } from '@/analytics/telemetryPublisher';
+
 export type AnalyticsEvent = {
   domain: string;
   reason: string;
   timestamp: string;
+  riskScore?: number;
+  userAgent?: string;
+  clientIp?: string;
 };
 
 export type AnalyticsSummary = {
@@ -16,19 +21,27 @@ export class AnalyticsStore {
   private blockedByReason: Record<string, number> = {};
   private latestEvents: AnalyticsEvent[] = [];
   private readonly maxEvents: number;
+  private readonly publisher?: TelemetryPublisher;
 
-  constructor(maxEvents: number) {
+  constructor(maxEvents: number, publisher?: TelemetryPublisher) {
     this.maxEvents = maxEvents;
+    this.publisher = publisher;
   }
 
-  record(domain: string, reason: string, timestamp: string) {
+  record(domain: string, reason: string, timestamp: string, context: Omit<TelemetryRecord, 'domain' | 'reason' | 'timestamp'> = {}) {
     this.totalBlocked += 1;
     this.blockedByReason[reason] = (this.blockedByReason[reason] ?? 0) + 1;
 
-    const event: AnalyticsEvent = { domain, reason, timestamp };
+    const event: AnalyticsEvent = { domain, reason, timestamp, ...context };
     this.latestEvents.unshift(event);
     if (this.latestEvents.length > this.maxEvents) {
       this.latestEvents.length = this.maxEvents;
+    }
+
+    if (this.publisher) {
+      void this.publisher
+        .publish({ domain, reason, timestamp, ...context })
+        .catch(() => undefined);
     }
   }
 
@@ -41,4 +54,3 @@ export class AnalyticsStore {
     };
   }
 }
-

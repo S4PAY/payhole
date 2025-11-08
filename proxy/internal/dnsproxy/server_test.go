@@ -45,7 +45,7 @@ func TestDNSBlockedUnauthorized(t *testing.T) {
 	blocked := blocklist.New([]string{"ads.example.com"})
 	premium := blocklist.New(nil)
 	authorizer, _ := auth.NewJWTAuthorizer("abcdefghijklmnopqrstuvwxyz1234567890abcdef")
-	p := policy.New(blocked, premium, authorizer, auth.NewIPCache(), analytics.NewClient(""))
+	p := policy.New(blocked, premium, authorizer, auth.NewIPCache(), analytics.NewClient(""), nil)
 	server := NewServer(&stubResolver{}, p)
 
 	msg := new(dns.Msg)
@@ -69,7 +69,7 @@ func TestDNSAllowsAuthorized(t *testing.T) {
 	cache := auth.NewIPCache()
 	cache.Authorize("203.0.113.10:53000", time.Now().Add(time.Hour))
 	authorizer, _ := auth.NewJWTAuthorizer("abcdefghijklmnopqrstuvwxyz1234567890abcdef")
-	p := policy.New(blocked, premium, authorizer, cache, analytics.NewClient(""))
+	p := policy.New(blocked, premium, authorizer, cache, analytics.NewClient(""), nil)
 
 	upstream := &dns.Msg{}
 	upstream.SetReply(&dns.Msg{})

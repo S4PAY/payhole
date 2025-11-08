@@ -10,15 +10,16 @@ import (
 
 // Config represents proxy runtime configuration.
 type Config struct {
-	HTTPProxyAddr string
-	DoHAddr       string
-	DNSProxyAddr  string
-	UpstreamDNS   string
-	BlocklistPath string
-	BlocklistURLs []string
-	PremiumDomains []string
-	JWTSecret     string
-	AnalyticsURL  string
+	HTTPProxyAddr   string
+	DoHAddr         string
+	DNSProxyAddr    string
+	UpstreamDNS     string
+	BlocklistPath   string
+	BlocklistURLs   []string
+	PremiumDomains  []string
+	JWTSecret       string
+	AnalyticsURL    string
+	ClassifierURL   string
 	UpstreamTimeout time.Duration
 }
 
@@ -32,15 +33,16 @@ func FromEnv() (Config, error) {
 	}
 
 	cfg := Config{
-		HTTPProxyAddr:  valueOrDefault("HTTP_PROXY_ADDR", ":8080"),
-		DoHAddr:        valueOrDefault("DOH_ADDR", ":8443"),
-		DNSProxyAddr:   valueOrDefault("DNS_PROXY_ADDR", ":5353"),
-		UpstreamDNS:    valueOrDefault("UPSTREAM_DNS_ADDR", "1.1.1.1:53"),
-		BlocklistPath:  valueOrDefault("BLOCKLIST_PATH", "data/blocklist.txt"),
-		BlocklistURLs:  splitList(os.Getenv("BLOCKLIST_URLS")),
-		PremiumDomains: splitList(os.Getenv("PREMIUM_DOMAINS")),
-		JWTSecret:      os.Getenv("PAYMENTS_JWT_SECRET"),
-		AnalyticsURL:   os.Getenv("ANALYTICS_URL"),
+		HTTPProxyAddr:   valueOrDefault("HTTP_PROXY_ADDR", ":8080"),
+		DoHAddr:         valueOrDefault("DOH_ADDR", ":8443"),
+		DNSProxyAddr:    valueOrDefault("DNS_PROXY_ADDR", ":5353"),
+		UpstreamDNS:     valueOrDefault("UPSTREAM_DNS_ADDR", "1.1.1.1:53"),
+		BlocklistPath:   valueOrDefault("BLOCKLIST_PATH", "data/blocklist.txt"),
+		BlocklistURLs:   splitList(os.Getenv("BLOCKLIST_URLS")),
+		PremiumDomains:  splitList(os.Getenv("PREMIUM_DOMAINS")),
+		JWTSecret:       os.Getenv("PAYMENTS_JWT_SECRET"),
+		AnalyticsURL:    os.Getenv("ANALYTICS_URL"),
+		ClassifierURL:   os.Getenv("CLASSIFIER_URL"),
 		UpstreamTimeout: timeout,
 	}
 

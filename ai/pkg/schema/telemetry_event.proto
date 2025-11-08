@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package payhole.telemetry;
+
+option go_package = "github.com/payhole/ai/pkg/schema/telemetry";
+
+message TelemetryEvent {
+  string id = 1;
+  string domain = 2;
+  string reason = 3;
+  string source = 4;
+  string policy_version = 5;
+  double risk_score = 6;
+  string hashed_user_id = 7;
+  string client_ip = 8;
+  string user_agent = 9;
+  string timestamp = 10;
+}

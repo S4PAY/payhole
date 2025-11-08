@@ -26,7 +26,7 @@ func TestProxyBlocksPremiumWithoutToken(t *testing.T) {
 	premium := blocklist.New([]string{"premium.example.com"})
 	authorizer, _ := auth.NewJWTAuthorizer("abcdefghijklmnopqrstuvwxyz1234567890abcdef")
 	ipCache := auth.NewIPCache()
-	p := policy.New(blocked, premium, authorizer, ipCache, analytics.NewClient(""))
+	p := policy.New(blocked, premium, authorizer, ipCache, analytics.NewClient(""), nil)
 	proxy := NewServer(p, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "http://premium.example.com/article", nil)
@@ -51,7 +51,7 @@ func TestProxyAllowsPremiumWithValidToken(t *testing.T) {
 	secret := "abcdefghijklmnopqrstuvwxyz1234567890abcdef"
 	authorizer, _ := auth.NewJWTAuthorizer(secret)
 	ipCache := auth.NewIPCache()
-	p := policy.New(blocked, premium, authorizer, ipCache, analytics.NewClient(""))
+	p := policy.New(blocked, premium, authorizer, ipCache, analytics.NewClient(""), nil)
 
 	var forwardedAuth string
 	transport := roundTripFunc(func(r *http.Request) (*http.Response, error) {

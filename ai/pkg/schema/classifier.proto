@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package payhole.classifier;
+
+option go_package = "github.com/payhole/ai/pkg/schema/classifier";
+
+message FeatureVector {
+  string domain = 1;
+  double risk_score = 2;
+  map<string, double> numerical = 3;
+  map<string, string> categorical = 4;
+}
+
+message ClassificationRequest {
+  string request_id = 1;
+  FeatureVector features = 2;
+}
+
+message ClassificationResponse {
+  string request_id = 1;
+  double score = 2;
+  string label = 3;
+  string model_version = 4;
+}
+
+service Classifier {
+  rpc Predict (ClassificationRequest) returns (ClassificationResponse);
+}

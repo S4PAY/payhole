@@ -30,7 +30,7 @@ func TestPremiumDomainFlow(t *testing.T) {
 	ipCache := auth.NewIPCache()
 
 	client := analytics.NewClient("")
-	p := policy.New(blocked, premium, authorizer, ipCache, client)
+	p := policy.New(blocked, premium, authorizer, ipCache, client, nil)
 
 	upstream := roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		return &http.Response{

@@ -14,11 +14,13 @@
   "license": "Apache-2.0",
   "type": "commonjs",
   "dependencies": {
+    "ajv": "^8.17.1",
     "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "tsconfig-paths": "^4.2.0",
-    "zod": "^4.1.12"
+    "zod": "^4.1.12",
+    "ajv-formats": "^2.1.1"
   },
   "devDependencies": {
     "@types/express": "^5.0.5",
