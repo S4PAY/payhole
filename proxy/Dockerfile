@@ -3,7 +3,8 @@
 FROM golang:1.22-alpine AS builder
 
 WORKDIR /app
-COPY go.mod ./
+RUN apk add --no-cache git
+COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o payhole-proxy ./cmd/proxy
@@ -19,4 +20,3 @@ EXPOSE 5353/tcp
 EXPOSE 5353/udp
 
 ENTRYPOINT ["./payhole-proxy"]
-

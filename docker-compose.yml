@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   dashboard:
     build:
@@ -8,12 +6,15 @@ services:
     env_file:
       - .env
     environment:
-      - NEXT_PUBLIC_PROXY_HTTP_URL=${NEXT_PUBLIC_PROXY_HTTP_URL}
-      - NEXT_PUBLIC_PROXY_DNS_ADDR=${NEXT_PUBLIC_PROXY_DNS_ADDR}
-      - NEXT_PUBLIC_PROXY_HEALTH_URL=${NEXT_PUBLIC_PROXY_HEALTH_URL}
-      - PAYMENTS_API_BASE_URL=${PAYMENTS_API_BASE_URL}
-      - ADMIN_JWT_SECRET=${ADMIN_JWT_SECRET}
-      - ANALYTICS_API_BASE_URL=${ANALYTICS_API_BASE_URL}
+      NEXT_PUBLIC_PROXY_HTTP_URL: ${NEXT_PUBLIC_PROXY_HTTP_URL}
+      NEXT_PUBLIC_PROXY_DNS_ADDR: ${NEXT_PUBLIC_PROXY_DNS_ADDR}
+      NEXT_PUBLIC_PROXY_HEALTH_URL: ${NEXT_PUBLIC_PROXY_HEALTH_URL}
+      PAYMENTS_API_BASE_URL: ${PAYMENTS_API_BASE_URL}
+      ANALYTICS_API_BASE_URL: ${ANALYTICS_API_BASE_URL}
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET}
+      SOLANA_RPC_URL: ${SOLANA_RPC_URL}
+      PROXY_UNLOCK_WEBHOOK: ${PROXY_UNLOCK_WEBHOOK}
     depends_on:
       - payments
       - proxy
@@ -30,15 +31,16 @@ services:
     env_file:
       - .env
     environment:
-      - HELIUS_RPC_URL=${HELIUS_RPC_URL}
-      - JWT_SECRET=${JWT_SECRET}
-      - PORT=4000
-      - UNLOCK_DB_PATH=${UNLOCK_DB_PATH:-data/unlocks.json}
-      - USDC_MINT_ADDRESS=${USDC_MINT_ADDRESS}
+      HELIUS_RPC_URL: ${HELIUS_RPC_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      PORT: 4000
+      UNLOCK_DB_PATH: ${UNLOCK_DB_PATH}
+      USDC_MINT_ADDRESS: ${USDC_MINT_ADDRESS}
+      PROXY_UNLOCK_WEBHOOK: ${PROXY_UNLOCK_WEBHOOK}
     volumes:
       - ./payments/data:/app/data
     ports:
-      - "4000:4000"
+      - "3001:4000"
     restart: unless-stopped
     networks:
       - payhole-net
@@ -49,12 +51,15 @@ services:
       dockerfile: Dockerfile
     env_file:
       - .env
+    depends_on:
+      - payments
     environment:
-      - HTTP_PROXY_ADDR=:8080
-      - DNS_PROXY_ADDR=:5353
-      - UPSTREAM_DNS_ADDR=${UPSTREAM_DNS_ADDR:-1.1.1.1:53}
-      - BLOCKLIST_PATH=${BLOCKLIST_PATH:-data/blocklist.txt}
-      - PAYMENTS_JWT_SECRET=${JWT_SECRET}
+      HTTP_PROXY_ADDR: :8080
+      DNS_PROXY_ADDR: :5353
+      UPSTREAM_DNS_ADDR: ${UPSTREAM_DNS_ADDR}
+      BLOCKLIST_PATH: ${BLOCKLIST_PATH}
+      PAYMENTS_JWT_SECRET: ${JWT_SECRET}
+      PROXY_UNLOCK_WEBHOOK: ${PROXY_UNLOCK_WEBHOOK}
     volumes:
       - ./proxy/data:/home/payhole/data
     ports:
@@ -68,4 +73,3 @@ services:
 networks:
   payhole-net:
     driver: bridge
-

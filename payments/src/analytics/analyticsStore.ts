@@ -37,7 +37,7 @@ export class AnalyticsStore {
       totalBlocked: this.totalBlocked,
       blockedByReason: { ...this.blockedByReason },
       latestEvents: [...this.latestEvents],
-      updatedAt: this.latestEvents.length > 0 ? this.latestEvents[0].timestamp : null,
+      updatedAt: this.latestEvents[0]?.timestamp ?? null,
     };
   }
 }

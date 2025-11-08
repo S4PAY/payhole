@@ -26,13 +26,14 @@ export function createApp(deps: AppDeps = {}) {
   });
 
   app.use('/analytics', createAnalyticsRouter({ store: analyticsStore }));
-  app.use(
-    '/',
-    createPaymentsRouter({
-      unlockStore,
-      unlockWebhookUrl: env.PROXY_UNLOCK_WEBHOOK,
-    })
-  );
+  const paymentsRouterDeps = {
+    unlockStore,
+    ...(env.PROXY_UNLOCK_WEBHOOK
+      ? { unlockWebhookUrl: env.PROXY_UNLOCK_WEBHOOK }
+      : {}),
+  };
+
+  app.use('/', createPaymentsRouter(paymentsRouterDeps));
 
   return { app, unlockStore, analyticsStore };
 }

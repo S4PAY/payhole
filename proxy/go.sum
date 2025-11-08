@@ -1,7 +1,16 @@
-github.com/golang-jwt/jwt/v5 v5.2.1 h1:FKcKSlL8ajhIBCPa3annaC1WiYjAd21EobyER0A8vPQ=
-github.com/golang-jwt/jwt/v5 v5.2.1/go.mod h1:pqcJWMy0g/QtEu2ySk57QNA2BvjXOfYVnA/P7Foq4i8=
-github.com/miekg/dns v1.1.60 h1:iMElt0J2CEk9cEbd5mT13jbmQ21peNx1vm38EFVFDtI=
-github.com/miekg/dns v1.1.60/go.mod h1:6Pv3vKcM08B/VmYkD+2Nd2wQpKcqxYd+hOmmNAWy1lQ=
-github.com/skip2/go-qrcode v1.2.0 h1:CBkVc7RalXAg13btAOLKRvHIscmJQ55yYydIRAIJbdk=
-github.com/skip2/go-qrcode v1.2.0/go.mod h1:JHP6T+teA2kuZ2+L1MX0r64QzxYtXi+y7YgRkggSXFg=
-
+github.com/golang-jwt/jwt/v5 v5.2.1 h1:OuVbFODueb089Lh128TAcimifWaLhJwVflnrgM17wHk=
+github.com/golang-jwt/jwt/v5 v5.2.1/go.mod h1:pqrtFR0X4osieyHYxtmOUWsAWrfe1Q5UVIyoH402zdk=
+github.com/miekg/dns v1.1.60 h1:zsls3m1iyuuHlUH0VZgVCVcKFFOdZyxM8EinEOdQnOQ=
+github.com/miekg/dns v1.1.60/go.mod h1:mnAarhS3nWaW+NVP2wTkYVIZyHNJ098SJZUki3eykwQ=
+github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e h1:MRM5ITcdelLK2j1vwZ3Je0FKVCfqOLp5zO6trqMLYs0=
+github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e/go.mod h1:XV66xRDqSt+GTGFMVlhk3ULuV0y9ZmzeVGR4mloJI3M=
+golang.org/x/mod v0.18.0 h1:5+9lSbEzPSdWkH32vYPBwEpX8KwDbM52Ud9xBUvNlb0=
+golang.org/x/mod v0.18.0/go.mod h1:hTbmBsO62+eylJbnUtE2MGJUyE7QWk4xUqPFrRgJ+7c=
+golang.org/x/net v0.26.0 h1:soB7SVo0PWrY4vPW/+ay0jKDNScG2X9wFeYlXIvJsOQ=
+golang.org/x/net v0.26.0/go.mod h1:5YKkiSynbBIh3p6iOc/vibscux0x38BZDkn8sCUPxHE=
+golang.org/x/sync v0.7.0 h1:YsImfSBoP9QPYL0xyKJPq0gcaJdG3rInoqxTWbfQu9M=
+golang.org/x/sync v0.7.0/go.mod h1:Czt+wKu1gCyEFDUtn0jG5QVvpJ6rzVqr5aXyt9drQfk=
+golang.org/x/sys v0.21.0 h1:rF+pYz3DAGSQAxAu1CbC7catZg4ebC4UIeIhKxBZvws=
+golang.org/x/sys v0.21.0/go.mod h1:/VUhepiaJMQUp4+oa/7Zr1D23ma6VTLIYjOOTFZPUcA=
+golang.org/x/tools v0.22.0 h1:gqSGLZqv+AI9lIQzniJ0nZDRG5GBPsSi+DRNHWNz6yA=
+golang.org/x/tools v0.22.0/go.mod h1:aCwcsjqvq7Yqt6TNyX7QMU2enbQ/Gt0bo6krSeEri+c=

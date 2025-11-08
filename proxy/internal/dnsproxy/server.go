@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"io"
-	"net"
 	"net/http"
 	"strings"
 	"time"
