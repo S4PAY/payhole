@@ -1,14 +1,18 @@
 import { NextResponse } from 'next/server';
 
-const PAYMENTS_BASE_URL = process.env.PAYMENTS_API_BASE_URL ?? 'http://localhost:4000';
+const PAYMENTS_BASE_URL =
+  process.env.PAYMENTS_INTERNAL_URL ?? process.env.PAYMENTS_API_BASE_URL ?? 'http://payments:4000';
 
 function normalize(url: string): string {
   return url.endsWith('/') ? url.slice(0, -1) : url;
 }
 
 export async function GET() {
+  const base = normalize(PAYMENTS_BASE_URL);
+  const analyticsBase = process.env.ANALYTICS_INTERNAL_URL ?? `${base}/analytics`;
+
   try {
-    const response = await fetch(`${normalize(PAYMENTS_BASE_URL)}/analytics/summary`, {
+    const response = await fetch(`${analyticsBase}/summary`, {
       method: 'GET',
       cache: 'no-store',
     });
@@ -25,4 +29,3 @@ export async function GET() {
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }
-

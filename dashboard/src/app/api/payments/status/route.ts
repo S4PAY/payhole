@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const PAYMENTS_BASE_URL = process.env.PAYMENTS_API_BASE_URL ?? 'http://localhost:4000';
+const PAYMENTS_BASE_URL =
+  process.env.PAYMENTS_INTERNAL_URL ?? process.env.PAYMENTS_API_BASE_URL ?? 'http://payments:4000';
 
 type PaymentsStatusResponse = {
   wallet?: string;
@@ -13,6 +14,15 @@ function normalizeBaseUrl(url: string): string {
   return url.endsWith('/') ? url.slice(0, -1) : url;
 }
 
+async function upstreamHealth(baseUrl: string) {
+  try {
+    const res = await fetch(`${baseUrl}/health`, { cache: 'no-store' });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(request: NextRequest) {
   const baseUrl = normalizeBaseUrl(PAYMENTS_BASE_URL);
 
@@ -21,13 +31,22 @@ export async function GET(request: NextRequest) {
   }
 
   const authHeader = request.headers.get('authorization');
+
   if (!authHeader) {
-    return NextResponse.json({ verified: false, error: 'Missing Authorization header' }, { status: 401 });
+    const healthy = await upstreamHealth(baseUrl);
+    const status = healthy ? 200 : 502;
+    return NextResponse.json(
+      {
+        verified: false,
+        health: healthy,
+        error: healthy ? 'Authorization required' : 'Payments service unavailable',
+      },
+      { status }
+    );
   }
 
   try {
     const upstreamResponse = await fetch(`${baseUrl}/status`, {
-      method: 'GET',
       headers: {
         Authorization: authHeader,
       },
@@ -39,7 +58,7 @@ export async function GET(request: NextRequest) {
 
     try {
       data = rawBody ? (JSON.parse(rawBody) as PaymentsStatusResponse) : undefined;
-    } catch (error) {
+    } catch {
       data = undefined;
     }
 
@@ -66,5 +85,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ verified: false, error: message }, { status: 502 });
   }
 }
-
-
