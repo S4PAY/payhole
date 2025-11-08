@@ -26,7 +26,8 @@ func TestPremiumDomainFlow(t *testing.T) {
 	secret := "abcdefghijklmnopqrstuvwxyz1234567890abcdef"
 	blocked := blocklist.New([]string{})
 	premium := blocklist.New([]string{"premium.test"})
-	authorizer, _ := auth.NewJWTAuthorizer(secret)
+	entitlements := auth.NewEntitlementCache()
+	authorizer, _ := auth.NewJWTAuthorizer(secret, entitlements)
 	ipCache := auth.NewIPCache()
 
 	client := analytics.NewClient("")

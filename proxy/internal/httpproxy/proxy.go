@@ -41,22 +41,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	handler := PremiumMiddleware(s.policy, http.HandlerFunc(s.forward))
+	handler.ServeHTTP(w, r)
+}
+
+func (s *Server) forward(w http.ResponseWriter, r *http.Request) {
 	host := targetHost(r)
 	if host == "" {
 		http.Error(w, "missing host", http.StatusBadRequest)
-		return
-	}
-
-	decision := s.policy.Decide(host, r.RemoteAddr, r.Header.Get("Authorization"))
-	if !decision.Allow {
-		switch decision.Reason {
-		case policy.ReasonPremiumPayment:
-			respondPremiumRequired(w, host, r.URL.String())
-		case policy.ReasonAdBlocked:
-			http.Error(w, "blocked by PayHole filter", http.StatusForbidden)
-		default:
-			http.Error(w, "request blocked", http.StatusForbidden)
-		}
 		return
 	}
 
@@ -77,6 +69,37 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if copyErr != nil && !errors.Is(copyErr, context.Canceled) {
 		// swallow copy errors to keep the proxy resilient
 	}
+}
+
+// PremiumMiddleware enforces premium unlock requirements before allowing traffic to continue.
+func PremiumMiddleware(p *policy.Policy, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if next == nil {
+			http.Error(w, "no handler configured", http.StatusInternalServerError)
+			return
+		}
+
+		host := targetHost(r)
+		if host == "" {
+			http.Error(w, "missing host", http.StatusBadRequest)
+			return
+		}
+
+		decision := p.Decide(host, r.RemoteAddr, r.Header.Get("Authorization"))
+		if !decision.Allow {
+			switch decision.Reason {
+			case policy.ReasonPremiumPayment:
+				respondPremiumRequired(w, host, r.URL.String())
+			case policy.ReasonAdBlocked:
+				http.Error(w, "blocked by PayHole filter", http.StatusForbidden)
+			default:
+				http.Error(w, "request blocked", http.StatusForbidden)
+			}
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 func targetHost(r *http.Request) string {
@@ -154,7 +177,7 @@ func respondPremiumRequired(w http.ResponseWriter, host, requestURL string) {
 	data := map[string]string{
 		"Host":        host,
 		"RequestURL":  requestURL,
-        "PayURL":      payURL,
+		"PayURL":      payURL,
 		"QRDataURI":   qrDataURI,
 		"PhantomURL":  phantomURL,
 		"SolflareURL": solflareURL,

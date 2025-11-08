@@ -10,16 +10,19 @@ import (
 
 // Config represents proxy runtime configuration.
 type Config struct {
-	HTTPProxyAddr string
-	DoHAddr       string
-	DNSProxyAddr  string
-	UpstreamDNS   string
-	BlocklistPath string
-	BlocklistURLs []string
-	PremiumDomains []string
-	JWTSecret     string
-	AnalyticsURL  string
-	UpstreamTimeout time.Duration
+	HTTPProxyAddr            string
+	DoHAddr                  string
+	DNSProxyAddr             string
+	SocksProxyAddr           string
+	UpstreamDNS              string
+	BlocklistPath            string
+	BlocklistCachePath       string
+	BlocklistURLs            []string
+	PremiumDomains           []string
+	JWTSecret                string
+	AnalyticsURL             string
+	UpstreamTimeout          time.Duration
+	BlocklistRefreshInterval time.Duration
 }
 
 // FromEnv loads configuration from environment variables.
@@ -31,17 +34,27 @@ func FromEnv() (Config, error) {
 		}
 	}
 
+	refresh := 12 * time.Hour
+	if raw := os.Getenv("BLOCKLIST_REFRESH_INTERVAL"); raw != "" {
+		if parsed, err := time.ParseDuration(raw); err == nil {
+			refresh = parsed
+		}
+	}
+
 	cfg := Config{
-		HTTPProxyAddr:  valueOrDefault("HTTP_PROXY_ADDR", ":8080"),
-		DoHAddr:        valueOrDefault("DOH_ADDR", ":8443"),
-		DNSProxyAddr:   valueOrDefault("DNS_PROXY_ADDR", ":5353"),
-		UpstreamDNS:    valueOrDefault("UPSTREAM_DNS_ADDR", "1.1.1.1:53"),
-		BlocklistPath:  valueOrDefault("BLOCKLIST_PATH", "data/blocklist.txt"),
-		BlocklistURLs:  splitList(os.Getenv("BLOCKLIST_URLS")),
-		PremiumDomains: splitList(os.Getenv("PREMIUM_DOMAINS")),
-		JWTSecret:      os.Getenv("PAYMENTS_JWT_SECRET"),
-		AnalyticsURL:   os.Getenv("ANALYTICS_URL"),
-		UpstreamTimeout: timeout,
+		HTTPProxyAddr:            valueOrDefault("HTTP_PROXY_ADDR", ":8080"),
+		DoHAddr:                  valueOrDefault("DOH_ADDR", ":8443"),
+		DNSProxyAddr:             valueOrDefault("DNS_PROXY_ADDR", ":5353"),
+		SocksProxyAddr:           valueOrDefault("SOCKS_PROXY_ADDR", ":1080"),
+		UpstreamDNS:              valueOrDefault("UPSTREAM_DNS_ADDR", "1.1.1.1:53"),
+		BlocklistPath:            valueOrDefault("BLOCKLIST_PATH", "data/blocklist.txt"),
+		BlocklistCachePath:       valueOrDefault("BLOCKLIST_CACHE_PATH", "data/blocklist.cache"),
+		BlocklistURLs:            splitList(os.Getenv("BLOCKLIST_URLS")),
+		PremiumDomains:           splitList(os.Getenv("PREMIUM_DOMAINS")),
+		JWTSecret:                os.Getenv("PAYMENTS_JWT_SECRET"),
+		AnalyticsURL:             os.Getenv("ANALYTICS_URL"),
+		UpstreamTimeout:          timeout,
+		BlocklistRefreshInterval: refresh,
 	}
 
 	if len(cfg.BlocklistURLs) == 0 {

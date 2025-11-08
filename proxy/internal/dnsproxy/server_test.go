@@ -44,7 +44,8 @@ func (m *mockWriter) Hijack()              {}
 func TestDNSBlockedUnauthorized(t *testing.T) {
 	blocked := blocklist.New([]string{"ads.example.com"})
 	premium := blocklist.New(nil)
-	authorizer, _ := auth.NewJWTAuthorizer("abcdefghijklmnopqrstuvwxyz1234567890abcdef")
+	entitlements := auth.NewEntitlementCache()
+	authorizer, _ := auth.NewJWTAuthorizer("abcdefghijklmnopqrstuvwxyz1234567890abcdef", entitlements)
 	p := policy.New(blocked, premium, authorizer, auth.NewIPCache(), analytics.NewClient(""))
 	server := NewServer(&stubResolver{}, p)
 
@@ -67,8 +68,10 @@ func TestDNSAllowsAuthorized(t *testing.T) {
 	blocked := blocklist.New(nil)
 	premium := blocklist.New(nil)
 	cache := auth.NewIPCache()
-	cache.Authorize("203.0.113.10:53000", time.Now().Add(time.Hour))
-	authorizer, _ := auth.NewJWTAuthorizer("abcdefghijklmnopqrstuvwxyz1234567890abcdef")
+	entitlements := auth.NewEntitlementCache()
+	entitlements.Grant("wallet123", time.Now().Add(time.Hour))
+	cache.Authorize("203.0.113.10:53000", "wallet123", time.Now().Add(time.Hour))
+	authorizer, _ := auth.NewJWTAuthorizer("abcdefghijklmnopqrstuvwxyz1234567890abcdef", entitlements)
 	p := policy.New(blocked, premium, authorizer, cache, analytics.NewClient(""))
 
 	upstream := &dns.Msg{}

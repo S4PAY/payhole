@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -106,6 +107,22 @@ func (s *Set) Merge(domains []string) {
 	}
 }
 
+// Entries returns a copy of the blocklisted domains for persistence or testing.
+func (s *Set) Entries() []string {
+	if s == nil {
+		return nil
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	out := make([]string, 0, len(s.domains))
+	for domain := range s.domains {
+		out = append(out, domain)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // AppendFromURLs downloads filter lists (e.g., EasyList) and merges them into the set.
 func (s *Set) AppendFromURLs(urls []string) error {
 	for _, u := range urls {
@@ -179,3 +196,7 @@ func parseFilterLine(line string) string {
 	return canonicalDomain(trimmed)
 }
 
+// ParseFilterLine converts a filter list rule into a canonical domain when possible.
+func ParseFilterLine(line string) string {
+	return parseFilterLine(line)
+}

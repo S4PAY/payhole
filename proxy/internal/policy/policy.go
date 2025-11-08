@@ -28,11 +28,12 @@ type Decision struct {
 
 // Policy orchestrates blocklist, premium access, and analytics decisions.
 type Policy struct {
-	blocklist blocklist.List
-	premium   blocklist.List
-	authorizer *auth.JWTAuthorizer
-	ipCache    *auth.IPCache
-	analytics  *analytics.Client
+	blocklist    blocklist.List
+	premium      blocklist.List
+	authorizer   *auth.JWTAuthorizer
+	ipCache      *auth.IPCache
+	entitlements *auth.EntitlementCache
+	analytics    *analytics.Client
 }
 
 // New constructs a Policy.
@@ -43,12 +44,18 @@ func New(
 	ipCache *auth.IPCache,
 	client *analytics.Client,
 ) *Policy {
+	var entitlements *auth.EntitlementCache
+	if authorizer != nil {
+		entitlements = authorizer.Entitlements()
+	}
+
 	return &Policy{
-		blocklist: blocklist,
-		premium:   premium,
-		authorizer: authorizer,
-		ipCache:    ipCache,
-		analytics:  client,
+		blocklist:    blocklist,
+		premium:      premium,
+		authorizer:   authorizer,
+		ipCache:      ipCache,
+		entitlements: entitlements,
+		analytics:    client,
 	}
 }
 
@@ -89,20 +96,27 @@ func (p *Policy) isAuthorized(remoteAddr, authHeader string) bool {
 		return false
 	}
 
-	if p.ipCache != nil && p.ipCache.IsAuthorized(remoteAddr) {
-		return true
+	if p.ipCache != nil {
+		if entry, ok := p.ipCache.Lookup(remoteAddr); ok {
+			if p.entitlements == nil || p.entitlements.Authorized(entry.Wallet) {
+				return true
+			}
+		}
 	}
 
 	token := auth.ExtractBearer(authHeader)
 	if token != "" {
 		if claims, err := p.authorizer.Verify(token); err == nil {
+			if p.entitlements != nil {
+				p.entitlements.Grant(claims.Wallet, auth.ExpiryFromClaims(claims))
+			}
 			if p.ipCache != nil {
 				expiry := auth.ExpiryFromClaims(claims)
 				cacheExpiry := time.Now().Add(30 * time.Second)
 				if cacheExpiry.Before(expiry) {
 					expiry = cacheExpiry
 				}
-				p.ipCache.Authorize(remoteAddr, expiry)
+				p.ipCache.Authorize(remoteAddr, claims.Wallet, expiry)
 			}
 			return true
 		}
@@ -124,4 +138,3 @@ func canonicalizeHost(host string) string {
 	}
 	return strings.TrimSuffix(strings.ToLower(h), ".")
 }
-

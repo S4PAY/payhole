@@ -24,7 +24,8 @@ func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) {
 func TestProxyBlocksPremiumWithoutToken(t *testing.T) {
 	blocked := blocklist.New([]string{})
 	premium := blocklist.New([]string{"premium.example.com"})
-	authorizer, _ := auth.NewJWTAuthorizer("abcdefghijklmnopqrstuvwxyz1234567890abcdef")
+	entitlements := auth.NewEntitlementCache()
+	authorizer, _ := auth.NewJWTAuthorizer("abcdefghijklmnopqrstuvwxyz1234567890abcdef", entitlements)
 	ipCache := auth.NewIPCache()
 	p := policy.New(blocked, premium, authorizer, ipCache, analytics.NewClient(""))
 	proxy := NewServer(p, nil)
@@ -49,7 +50,8 @@ func TestProxyAllowsPremiumWithValidToken(t *testing.T) {
 	blocked := blocklist.New([]string{})
 	premium := blocklist.New([]string{"premium.example.com"})
 	secret := "abcdefghijklmnopqrstuvwxyz1234567890abcdef"
-	authorizer, _ := auth.NewJWTAuthorizer(secret)
+	entitlements := auth.NewEntitlementCache()
+	authorizer, _ := auth.NewJWTAuthorizer(secret, entitlements)
 	ipCache := auth.NewIPCache()
 	p := policy.New(blocked, premium, authorizer, ipCache, analytics.NewClient(""))
 

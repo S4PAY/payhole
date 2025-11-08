@@ -8,7 +8,8 @@ import (
 )
 
 func TestJWTAuthorizerVerify(t *testing.T) {
-	authorizer, err := NewJWTAuthorizer("abcdefghijklmnopqrstuvwxyz123456")
+	entitlements := NewEntitlementCache()
+	authorizer, err := NewJWTAuthorizer("abcdefghijklmnopqrstuvwxyz123456", entitlements)
 	if err != nil {
 		t.Fatalf("init failed: %v", err)
 	}
@@ -33,6 +34,10 @@ func TestJWTAuthorizerVerify(t *testing.T) {
 	if parsed.Wallet != "wallet123" {
 		t.Fatalf("unexpected wallet: %s", parsed.Wallet)
 	}
+
+	if !entitlements.Authorized("wallet123") {
+		t.Fatalf("expected wallet to be cached")
+	}
 }
 
 func TestExtractBearer(t *testing.T) {
@@ -44,4 +49,3 @@ func TestExtractBearer(t *testing.T) {
 		t.Fatalf("expected empty token for non bearer")
 	}
 }
-

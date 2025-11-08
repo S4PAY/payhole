@@ -15,14 +15,18 @@ type UnlockClaims struct {
 }
 
 type JWTAuthorizer struct {
-	secret []byte
+	secret       []byte
+	entitlements *EntitlementCache
 }
 
-func NewJWTAuthorizer(secret string) (*JWTAuthorizer, error) {
+func NewJWTAuthorizer(secret string, cache *EntitlementCache) (*JWTAuthorizer, error) {
 	if len(secret) < 32 {
 		return nil, errors.New("JWT secret must be at least 32 characters")
 	}
-	return &JWTAuthorizer{secret: []byte(secret)}, nil
+	if cache == nil {
+		cache = NewEntitlementCache()
+	}
+	return &JWTAuthorizer{secret: []byte(secret), entitlements: cache}, nil
 }
 
 func (a *JWTAuthorizer) Verify(token string) (*UnlockClaims, error) {
@@ -53,7 +57,16 @@ func (a *JWTAuthorizer) Verify(token string) (*UnlockClaims, error) {
 		return nil, errors.New("token missing wallet claim")
 	}
 
+	if a.entitlements != nil && claims.ExpiresAt != nil {
+		a.entitlements.Grant(claims.Wallet, claims.ExpiresAt.Time)
+	}
+
 	return claims, nil
+}
+
+// Entitlements exposes the underlying wallet cache for policy enforcement.
+func (a *JWTAuthorizer) Entitlements() *EntitlementCache {
+	return a.entitlements
 }
 
 func ExtractBearer(header string) string {
@@ -76,4 +89,3 @@ func ExpiryFromClaims(claims *UnlockClaims) time.Time {
 	}
 	return claims.ExpiresAt.Time
 }
-
