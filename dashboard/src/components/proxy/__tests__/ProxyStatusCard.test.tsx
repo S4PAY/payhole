@@ -38,7 +38,7 @@ describe('ProxyStatusCard', () => {
     await waitFor(() => {
       expect(screen.getByText(/Proxy Status: ✅ Secured/)).toBeInTheDocument();
     });
-    expect(screen.getByText(/Blocked Requests/)).toBeInTheDocument();
+    expect(screen.getByText(/Blocked requests/i)).toBeInTheDocument();
     expect(screen.getByText('42')).toBeInTheDocument();
     expect(screen.getByText(/Download auto-config script/)).toBeInTheDocument();
   });

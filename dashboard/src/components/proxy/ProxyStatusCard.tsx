@@ -56,85 +56,95 @@ export default function ProxyStatusCard() {
 
   const statusLabel = useMemo(() => {
     if (health === 'secured' && paymentStatus.verified) {
-      return { label: 'Proxy Status: ✅ Secured', tone: 'text-emerald-500' };
+      return { label: 'Proxy Status: \u2705 Secured', badge: 'bg-emerald-500/20 text-emerald-100' };
     }
     if (paymentStatus.verified) {
-      return { label: 'Proxy Status: ⚠️ Payment Verified — Connect device', tone: 'text-amber-500' };
+      return {
+        label: 'Proxy Status: Payment Verified — Connect device',
+        badge: 'bg-amber-500/20 text-amber-100',
+      };
     }
     if (healthError) {
-      return { label: 'Proxy Status: ❌ Not Protected', tone: 'text-rose-500' };
+      return { label: 'Proxy Status: Not Protected', badge: 'bg-rose-500/20 text-rose-100' };
     }
-    return { label: 'Proxy Status: ❓ Unknown', tone: 'text-slate-500' };
+    return { label: 'Proxy Status: Unknown', badge: 'bg-white/10 text-slate-100' };
   }, [health, paymentStatus.verified, healthError]);
 
   return (
-    <section className="grid gap-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm md:grid-cols-2">
-      <div className="flex flex-col gap-4">
-        <div>
-          <h2 className="text-xl font-semibold text-slate-900">{statusLabel.label}</h2>
-          <p className="mt-1 text-sm text-slate-600">
+    <section
+      id="proxy"
+      className="surface-glass relative grid gap-8 p-8 text-slate-100 md:grid-cols-2"
+    >
+      <div className="flex flex-col gap-5">
+        <div className="space-y-2">
+          <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${statusLabel.badge}`}>
+            {statusLabel.label}
+          </span>
+          <h2 className="text-2xl font-semibold text-white">Monitor and enroll every device</h2>
+          <p className="text-sm text-slate-100/80">
             {paymentStatus.verified
-              ? 'Route DNS + HTTP traffic through PayHole to stay protected.'
-              : 'Verify your wallet to unlock the PayHole proxy and remove intrusive ads.'}
+              ? 'Route DNS + HTTP traffic through PayHole to remain protected across the entire estate.'
+              : 'Verify your wallet to unlock the PayHole proxy, populate analytics, and remove intrusive ads.'}
           </p>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Blocked Requests</h3>
-          <p className="mt-2 text-2xl font-semibold text-slate-900">{totalBlocked.toLocaleString()}</p>
-          <ul className="mt-2 space-y-1 text-xs text-slate-600">
+        <div className="surface-panel space-y-3 p-5">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-200/70">Blocked requests</h3>
+          <p className="text-3xl font-semibold text-white">{totalBlocked.toLocaleString()}</p>
+          <ul className="space-y-1 text-xs text-slate-100/80">
             {Object.entries(blockedByReason).map(([reason, count]) => (
               <li key={reason} className="flex items-center justify-between">
-                <span>{reason.replace(/_/g, ' ')}</span>
-                <span>{count}</span>
+                <span className="capitalize text-slate-200/70">{reason.replace(/_/g, ' ')}</span>
+              <span className="font-semibold text-white">{count}</span>
               </li>
             ))}
             {updatedAt ? (
-              <li className="text-[11px] text-slate-500">Updated {new Date(updatedAt).toLocaleTimeString()}</li>
+              <li className="text-[11px] text-slate-200/60">Updated {new Date(updatedAt).toLocaleTimeString()}</li>
             ) : null}
           </ul>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Setup Steps</h3>
-          <ol className="mt-2 space-y-2 text-sm text-slate-600">
+        <div className="surface-panel space-y-3 p-5">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-200/70">Setup steps</h3>
+          <ol className="space-y-2 text-sm text-slate-100/80">
             <li>
-              <strong>DNS:</strong> Set your resolver to <code className="rounded bg-slate-200 px-1 py-0.5 text-xs">{PROXY_DNS_ADDR}</code>
+              <strong className="text-white">DNS:</strong> Set your resolver to{' '}
+              <code className="rounded bg-white/20 px-1 py-0.5 text-xs text-white">{PROXY_DNS_ADDR}</code>
             </li>
             <li>
-              <strong>HTTP Proxy:</strong>{' '}
+              <strong className="text-white">HTTP Proxy:</strong>{' '}
               <a
-                className="text-indigo-600 underline hover:text-indigo-500"
+                className="text-indigo-200 underline decoration-dotted underline-offset-4 hover:text-indigo-100"
                 href={`${PROXY_HTTP_URL.replace(/\/$/, '')}/auto-config`}
               >
                 Download auto-config script
               </a>
             </li>
             <li>
-              <strong>Mobile:</strong> Scan the QR code or open the configuration profile on your device.
+              <strong className="text-white">Mobile:</strong> Scan the QR code or open the configuration profile on your device.
             </li>
           </ol>
         </div>
 
-        {healthError ? <p className="text-sm text-rose-500">Proxy unreachable: {healthError}</p> : null}
+        {healthError ? <p className="text-sm text-rose-200">Proxy unreachable: {healthError}</p> : null}
       </div>
 
-      <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-slate-200 bg-slate-50 p-6">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Mobile Onboarding</h3>
+      <div className="surface-panel flex flex-col items-center justify-center gap-4 p-6">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-200/70">Mobile Onboarding</h3>
         {qrDataUrl ? (
           <img
             src={qrDataUrl}
             alt="PayHole proxy QR code"
-            className="rounded-lg border border-slate-200 bg-white p-2 shadow-sm"
+            className="rounded-3xl border border-white/10 bg-white/90 p-4 shadow-lg"
             width={220}
             height={220}
           />
         ) : (
-          <div className="flex h-[220px] w-[220px] items-center justify-center rounded-lg border border-dashed border-slate-300 text-sm text-slate-400">
+          <div className="flex h-[220px] w-[220px] items-center justify-center rounded-3xl border border-dashed border-white/20 text-sm text-slate-200/70">
             Generating QR…
           </div>
         )}
-        <p className="text-xs text-slate-600 text-center">
+        <p className="text-xs text-slate-100/70 text-center">
           Scan on iOS or Android to install the PayHole DNS + proxy profile instantly.
         </p>
       </div>
