@@ -1,0 +1,52 @@
+version: "3.9"
+
+services:
+  dashboard:
+    image: ghcr.io/your-org/payhole/dashboard:latest
+    environment:
+      PAYMENTS_API_BASE_URL: http://payments:4000
+      NEXT_PUBLIC_PROXY_HTTP_URL: http://proxy:8080
+      NEXT_PUBLIC_PROXY_DNS_ADDR: proxy:5353
+      NEXT_PUBLIC_PROXY_HEALTH_URL: http://proxy:8080/health
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
+      ANALYTICS_API_BASE_URL: ${ANALYTICS_API_BASE_URL:-}
+    depends_on:
+      - payments
+      - proxy
+    ports:
+      - "80:3000"
+    restart: always
+
+  payments:
+    image: ghcr.io/your-org/payhole/payments:latest
+    environment:
+      HELIUS_RPC_URL: ${HELIUS_RPC_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      UNLOCK_DB_PATH: /data/unlocks.json
+      USDC_MINT_ADDRESS: ${USDC_MINT_ADDRESS}
+    volumes:
+      - payments-data:/data
+    ports:
+      - "4000:4000"
+    restart: always
+
+  proxy:
+    image: ghcr.io/your-org/payhole/proxy:latest
+    environment:
+      HTTP_PROXY_ADDR: ":8080"
+      DNS_PROXY_ADDR: ":5353"
+      UPSTREAM_DNS_ADDR: ${UPSTREAM_DNS_ADDR:-1.1.1.1:53}
+      BLOCKLIST_PATH: /data/blocklist.txt
+      PAYMENTS_JWT_SECRET: ${JWT_SECRET}
+    volumes:
+      - proxy-blocklists:/data
+    ports:
+      - "8080:8080"
+      - "5353:5353"
+      - "5353:5353/udp"
+    restart: always
+
+volumes:
+  payments-data:
+  proxy-blocklists:
+

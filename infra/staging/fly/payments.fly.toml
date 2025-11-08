@@ -1,0 +1,27 @@
+# fly.toml app configuration file for PayHole payments staging
+
+app = "payhole-payments-staging"
+primary_region = "iad"
+
+[build]
+  image = "ghcr.io/your-org/payhole/payments:latest"
+
+[env]
+  PORT = "4000"
+  NODE_ENV = "production"
+  HELIUS_RPC_URL = "https://api.helius.dev"
+  JWT_SECRET = "set-in-fly-secrets"
+  UNLOCK_DB_PATH = "/data/unlocks.json"
+  USDC_MINT_ADDRESS = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZeh9Bx"
+
+[mounts]
+  source = "payhole_payment_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 4000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+

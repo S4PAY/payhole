@@ -1,0 +1,38 @@
+# fly.toml app configuration file for PayHole proxy staging
+
+app = "payhole-proxy-staging"
+primary_region = "iad"
+
+[build]
+  image = "ghcr.io/your-org/payhole/proxy:latest"
+
+[env]
+  HTTP_PROXY_ADDR = ":8080"
+  DNS_PROXY_ADDR = ":5353"
+  UPSTREAM_DNS_ADDR = "1.1.1.1:53"
+  BLOCKLIST_PATH = "/data/blocklist.txt"
+  PAYMENTS_JWT_SECRET = "set-in-fly-secrets"
+
+[mounts]
+  source = "payhole_proxy_data"
+  destination = "/data"
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+  [services.concurrency]
+    type = "connections"
+    hard_limit = 100
+    soft_limit = 80
+  [[services.ports]]
+    handlers = ["http"]
+    port = 80
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
+
+[[services]]
+  internal_port = 5353
+  protocol = "udp"
+
+

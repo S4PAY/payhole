@@ -1,0 +1,5 @@
+# Default PayHole advertising blocklist
+# Extend with additional domains as required
+ads.paywall.example
+trackers.example
+

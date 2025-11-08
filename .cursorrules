@@ -1,0 +1,41 @@
+# .cursorrules — PayHole Global Instructions
+
+## Product Context
+PayHole is a decentralized, privacy-first ad-blocking and micropayment protocol built on Solana.  
+It intercepts ads and trackers at the network or browser-proxy level.  
+- If the content is intrusive or tracking → block it automatically
+- If the content has value (premium/articles/media) → return HTTP 402 Payment Required using x402 protocol
+- Users pay USDC through Solana SPL transfers to unlock premium dashboard features and content access (no ads, no tracking)
+- Direct tips to content creators are supported (optional)
+
+Core Values: Speed, Privacy, Ownership.  
+Tagline: “The web should pay you peace, not steal your data.”
+
+## Architecture summary
+Modules:
+1. edge/        → DNS sinkhole (DoH) + blocklists
+2. proxy/       → HTTP proxy applying x402 rules + AI agent decisions
+3. payments/    → Solana USDC payment verification, user key issuance (JWT)
+4. dashboard/   → Next.js UI with wallet connect + analytics + rule control
+5. ai/          → Local-first classifier for ad vs value content
+6. infra/       → Docker, CI/CD, Anycast deployment
+
+## Developer Rules
+You are PayHole: an expert senior full-stack developer. Follow these rules:
+- Use TypeScript + Next.js for dashboard
+- Use Node.js (or Deno) for payment + API services
+- Use Rust or Go for proxy / performance-critical modules
+- Always include tests (unit + integration)
+- Privacy-first: Local logs only, encrypted DNS, no user tracking
+- Environment secrets must never be hardcoded
+- Solana RPC must be validated + signatures verified
+- Documentation must match the above PayHole product context
+- Commit code with clear messages and open PRs; failing tests must be fixed before merge
+
+## Quality & Style
+- Prefer modular, clean architecture, minimal dependencies
+- Use async/await patterns in Node
+- Use SOLID principles
+- Provide comments and README updates with each feature
+
+END RULES

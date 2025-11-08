@@ -1,0 +1,7 @@
+github.com/golang-jwt/jwt/v5 v5.2.1 h1:FKcKSlL8ajhIBCPa3annaC1WiYjAd21EobyER0A8vPQ=
+github.com/golang-jwt/jwt/v5 v5.2.1/go.mod h1:pqcJWMy0g/QtEu2ySk57QNA2BvjXOfYVnA/P7Foq4i8=
+github.com/miekg/dns v1.1.60 h1:iMElt0J2CEk9cEbd5mT13jbmQ21peNx1vm38EFVFDtI=
+github.com/miekg/dns v1.1.60/go.mod h1:6Pv3vKcM08B/VmYkD+2Nd2wQpKcqxYd+hOmmNAWy1lQ=
+github.com/skip2/go-qrcode v1.2.0 h1:CBkVc7RalXAg13btAOLKRvHIscmJQ55yYydIRAIJbdk=
+github.com/skip2/go-qrcode v1.2.0/go.mod h1:JHP6T+teA2kuZ2+L1MX0r64QzxYtXi+y7YgRkggSXFg=
+
