@@ -64,10 +64,10 @@ func TestDNSBlockedUnauthorized(t *testing.T) {
 }
 
 func TestDNSAllowsAuthorized(t *testing.T) {
-	blocked := blocklist.New([]string{"premium.example.com"})
-	premium := blocklist.New([]string{"premium.example.com"})
+	blocked := blocklist.New(nil)
+	premium := blocklist.New(nil)
 	cache := auth.NewIPCache()
-	cache.Authorize("203.0.113.10", time.Now().Add(time.Hour))
+	cache.Authorize("203.0.113.10:53000", time.Now().Add(time.Hour))
 	authorizer, _ := auth.NewJWTAuthorizer("abcdefghijklmnopqrstuvwxyz1234567890abcdef")
 	p := policy.New(blocked, premium, authorizer, cache, analytics.NewClient(""))
 
