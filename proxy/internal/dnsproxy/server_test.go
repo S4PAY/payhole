@@ -32,11 +32,14 @@ func (m *mockWriter) WriteMsg(msg *dns.Msg) error {
 }
 
 func (m *mockWriter) Write([]byte) (int, error) { return 0, nil }
-func (m *mockWriter) Close() error             { return nil }
-func (m *mockWriter) TsigStatus() error        { return nil }
-func (m *mockWriter) TsigTimersOnly(bool)      {}
-func (m *mockWriter) LocalAddr() net.Addr      { return &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5353} }
-func (m *mockWriter) RemoteAddr() net.Addr     { return m.remote }
+func (m *mockWriter) Close() error              { return nil }
+func (m *mockWriter) TsigStatus() error         { return nil }
+func (m *mockWriter) TsigTimersOnly(bool)       {}
+func (m *mockWriter) LocalAddr() net.Addr {
+	return &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: 5353}
+}
+func (m *mockWriter) RemoteAddr() net.Addr { return m.remote }
+func (m *mockWriter) Hijack()              {}
 
 func TestDNSBlockedUnauthorized(t *testing.T) {
 	blocked := blocklist.New([]string{"ads.example.com"})

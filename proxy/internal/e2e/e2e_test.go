@@ -3,6 +3,7 @@ package e2e
 import (
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -80,4 +81,3 @@ func TestPremiumDomainFlow(t *testing.T) {
 		}
 	})
 }
-
