@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 
 import PaymentVerification from '@/components/dashboard/PaymentVerification';
 import { usePaymentStatusContext } from '@/components/providers/PaymentStatusProvider';
-import { resetPaymentConfigForTests } from '../../../lib/paymentConfig';
+import { resetPaymentConfigForTests } from '@/lib/paymentConfig';
 
 jest.mock('@/components/providers/PaymentStatusProvider', () => ({
   usePaymentStatusContext: jest.fn(),

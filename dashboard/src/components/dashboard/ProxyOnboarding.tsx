@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { usePaymentStatusContext } from '@/components/providers/PaymentStatusProvider';
 import { getConfig } from '@/lib/config';
 
@@ -24,7 +26,9 @@ const steps = {
     'Enable Use a proxy server and enter the HTTP endpoint.',
     'Update adapter DNS settings to the PayHole DNS address.',
   ],
-};
+} as const;
+
+const onboardingDocsHref = '/docs/proxy-onboarding';
 
 export default function ProxyOnboarding() {
   const { verified } = usePaymentStatusContext();
@@ -32,9 +36,9 @@ export default function ProxyOnboarding() {
 
   if (!verified) {
     return (
-      <section className="rounded-xl border border-slate-200 bg-white p-6">
-        <h3 className="text-lg font-semibold text-slate-900">Proxy Setup Locked</h3>
-        <p className="mt-2 text-sm text-slate-600">
+      <section className="surface-panel p-8 text-slate-100">
+        <h3 className="text-lg font-semibold text-white">Proxy setup locked</h3>
+        <p className="mt-2 text-sm text-slate-100/80">
           Submit your Solana payment signature to unlock proxy configuration steps and begin browsing ad-free.
         </p>
       </section>
@@ -42,29 +46,39 @@ export default function ProxyOnboarding() {
   }
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+    <section className="surface-glass p-8 text-slate-100">
       <header className="flex flex-col gap-2">
-        <h3 className="text-lg font-semibold text-slate-900">Proxy Onboarding</h3>
-        <p className="text-sm text-slate-600">
+        <span className="badge-soft">Deployment guide</span>
+        <h3 className="text-2xl font-semibold text-white">Roll out the PayHole profile everywhere</h3>
+        <p className="text-sm text-slate-100/80">
           Configure PayHole at the network layer for cross-device protection. Use the endpoints below when updating your
           device settings.
         </p>
-      </header>
-      <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-          <dt className="text-xs uppercase tracking-wide text-slate-500">HTTP Proxy Endpoint</dt>
-          <dd className="mt-1 font-mono text-sm text-slate-900">{proxyHttpUrl}</dd>
+        <div className="mt-4">
+          <Link
+            href={onboardingDocsHref}
+            className="inline-flex items-center gap-2 rounded-full border border-white/30 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white transition hover:bg-white/10"
+          >
+            Open proxy tutorial
+            <span aria-hidden>→</span>
+          </Link>
         </div>
-        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
-          <dt className="text-xs uppercase tracking-wide text-slate-500">DNS Sinkhole Address</dt>
-          <dd className="mt-1 font-mono text-sm text-slate-900">{proxyDnsAddress}</dd>
+      </header>
+      <dl className="mt-6 grid gap-4 sm:grid-cols-2">
+        <div className="surface-panel px-4 py-3">
+          <dt className="text-xs uppercase tracking-wide text-slate-200/70">HTTP Proxy Endpoint</dt>
+          <dd className="mt-2 font-mono text-sm text-white">{proxyHttpUrl}</dd>
+        </div>
+        <div className="surface-panel px-4 py-3">
+          <dt className="text-xs uppercase tracking-wide text-slate-200/70">DNS Sinkhole Address</dt>
+          <dd className="mt-2 font-mono text-sm text-white">{proxyDnsAddress}</dd>
         </div>
       </dl>
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         {Object.entries(steps).map(([key, instructions]) => (
-          <article key={key} className="rounded-lg border border-slate-200 p-4">
-            <h4 className="text-sm font-semibold capitalize text-slate-800">{key}</h4>
-            <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm text-slate-600">
+          <article key={key} className="surface-panel p-5">
+            <h4 className="text-sm font-semibold capitalize text-white">{key}</h4>
+            <ol className="mt-3 list-decimal space-y-2 pl-5 text-sm text-slate-100/80">
               {instructions.map((instruction) => (
                 <li key={instruction}>{instruction}</li>
               ))}

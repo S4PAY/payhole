@@ -32,6 +32,7 @@ describe('UnlockStore', () => {
     const updatedExpiry = new Date('2030-02-01T00:00:00.000Z');
 
     const first = await store.upsert('wallet-xyz', 'sig-initial', initialExpiry);
+    await new Promise((resolve) => setTimeout(resolve, 10));
     const second = await store.upsert('wallet-xyz', 'sig-updated', updatedExpiry);
 
     expect(second.createdAt).toBe(first.createdAt);

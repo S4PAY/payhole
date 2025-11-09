@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const PAYMENTS_BASE_URL = process.env.PAYMENTS_API_BASE_URL ?? 'http://localhost:4000';
+const PAYMENTS_BASE_URL =
+  process.env.PAYMENTS_INTERNAL_URL ?? process.env.PAYMENTS_API_BASE_URL ?? 'http://payments:4000';
 
 type PaymentsPayResponse = {
   token?: string;

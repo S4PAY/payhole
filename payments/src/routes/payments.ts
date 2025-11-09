@@ -24,7 +24,14 @@ export function createPaymentsRouter({
     }
 
     try {
-      await verifySolanaPayment(wallet, signature);
+      console.info('[payments] verifying signature', { wallet, signature });
+      const verification = await verifySolanaPayment(wallet, signature);
+      console.info('[payments] verification success', {
+        wallet,
+        signature,
+        amount: verification.amount,
+        slot: verification.slot,
+      });
       const { token, expiresAt } = issueUnlockToken(wallet);
       const record = await unlockStore.upsert(wallet, signature, expiresAt);
       const clientIp =
@@ -40,9 +47,13 @@ export function createPaymentsRouter({
         token,
         expiresAt: record.expiresAt,
         wallet: record.wallet,
+        amount: verification.amount,
+        mint: verification.mint,
+        slot: verification.slot,
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
+      console.error('[payments] verification failed', { wallet, signature, error: message });
       return res.status(400).json({ error: message });
     }
   });

@@ -92,7 +92,7 @@ export default function Hero() {
                 href={link.href}
                 target="_blank"
                 rel="noreferrer"
-                className="group inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/30 bg-white/10 backdrop-blur transition hover:-translate-y-0.5 hover:bg-white hover:text-slate-900 hover:shadow-lg"
+                className="group inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white backdrop-blur transition hover:-translate-y-0.5 hover:bg-white hover:text-slate-900 hover:shadow-lg"
                 aria-label={link.name}
               >
                 {link.icon}

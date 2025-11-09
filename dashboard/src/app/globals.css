@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 html,
@@ -13,7 +13,14 @@ body {
 
 body {
   margin: 0;
-  background-color: #f8fafc;
+  min-height: 100%;
+  color: rgb(226 232 240);
+  background-color: rgb(2 6 23);
+  background-image:
+    radial-gradient(circle at 12% 18%, rgba(30, 64, 175, 0.45), transparent 40%),
+    radial-gradient(circle at 82% 12%, rgba(14, 116, 144, 0.35), transparent 45%),
+    radial-gradient(circle at 18% 82%, rgba(91, 33, 182, 0.4), transparent 50%),
+    linear-gradient(180deg, rgba(2, 6, 23, 0.98) 0%, rgba(2, 6, 23, 0.92) 50%, rgba(2, 6, 23, 1) 100%);
 }
 
 a {
@@ -21,6 +28,18 @@ a {
   text-decoration: none;
 }
 
+.surface-glass {
+  @apply rounded-[32px] border border-white/10 bg-white/10 shadow-[0_20px_45px_rgba(15,23,42,0.55)] backdrop-blur-2xl;
+}
+
+.surface-panel {
+  @apply rounded-2xl border border-white/10 bg-white/10 shadow-[0_12px_35px_rgba(15,23,42,0.45)] backdrop-blur-xl;
+}
+
+.badge-soft {
+  @apply inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1 text-xs font-medium uppercase tracking-wide text-slate-50/80;
+}
+
 .btn-wallet {
-  @apply inline-flex items-center gap-2 rounded-full bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400;
+  @apply inline-flex items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-slate-900 shadow-xl transition hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-400;
 }

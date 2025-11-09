@@ -4,18 +4,18 @@ import { z } from 'zod';
 config();
 
 const schema = z.object({
-  HELIUS_RPC_URL: z
-    .string()
-    .url({ message: 'HELIUS_RPC_URL must be a valid URL' }),
-  JWT_SECRET: z
-    .string()
-    .min(32, { message: 'JWT_SECRET must be at least 32 characters' }),
+  HELIUS_RPC_URL: z.string().url({ message: 'HELIUS_RPC_URL must be a valid URL' }),
+  JWT_SECRET: z.string().min(32, { message: 'JWT_SECRET must be at least 32 characters' }),
   PORT: z.coerce.number().int().positive().default(4000),
   UNLOCK_DB_PATH: z.string().default('data/unlocks.json'),
   USDC_MINT_ADDRESS: z
     .string()
     .min(32)
-    .default('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZeh9Bx'),
+    .default('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'),
+  TREASURY_WALLET: z
+    .string()
+    .min(32, { message: 'TREASURY_WALLET must be at least 32 characters' }),
+  MIN_PAYMENT_USDC: z.coerce.number().positive().default(5),
   PROXY_UNLOCK_WEBHOOK: z
     .string()
     .url()
@@ -48,4 +48,3 @@ export function getEnv(): Env {
 export function resetEnvCache() {
   cachedEnv = null;
 }
-
