@@ -17,7 +17,7 @@ beforeEach(() => {
   process.env.USDC_MINT_ADDRESS =
     process.env.USDC_MINT_ADDRESS ?? 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
   process.env.TREASURY_WALLET =
-    process.env.TREASURY_WALLET ?? 'PayholeTreasury11111111111111111111111111111';
+    process.env.TREASURY_WALLET ?? '4p4iHhfg9wyPRcu1WnNxBrAaraiKUN1fYe5XnjTQd3M2';
   process.env.MIN_PAYMENT_USDC = process.env.MIN_PAYMENT_USDC ?? '5';
   resetEnvCache();
   if (fs.existsSync(defaultDbPath)) {

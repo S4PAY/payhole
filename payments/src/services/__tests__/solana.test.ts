@@ -15,11 +15,32 @@ describe('verifySolanaPayment', () => {
           slot: 12345,
           meta: {
             err: null,
+            preTokenBalances: [
+              {
+                accountIndex: 1,
+                mint: env.USDC_MINT_ADDRESS,
+                owner: wallet,
+                uiTokenAmount: { uiAmount: 10 },
+              },
+              {
+                accountIndex: 2,
+                mint: env.USDC_MINT_ADDRESS,
+                owner: env.TREASURY_WALLET,
+                uiTokenAmount: { uiAmount: 1 },
+              },
+            ],
             postTokenBalances: [
               {
+                accountIndex: 1,
                 mint: env.USDC_MINT_ADDRESS,
                 owner: wallet,
                 uiTokenAmount: { uiAmount: 5 },
+              },
+              {
+                accountIndex: 2,
+                mint: env.USDC_MINT_ADDRESS,
+                owner: env.TREASURY_WALLET,
+                uiTokenAmount: { uiAmount: 6 },
               },
             ],
           },
@@ -35,7 +56,7 @@ describe('verifySolanaPayment', () => {
     const result = await verifySolanaPayment(wallet, signature, fetchMock);
 
     expect(result.signature).toBe(signature);
-    expect(result.amount).toBe(5);
+    expect(result.amount).toBeCloseTo(5);
     expect(fetchMock).toHaveBeenCalledWith(env.HELIUS_RPC_URL, expect.any(Object));
   });
 
@@ -55,6 +76,11 @@ describe('verifySolanaPayment', () => {
                 owner: 'another-wallet',
                 uiTokenAmount: { uiAmount: 5 },
               },
+              {
+                mint: env.USDC_MINT_ADDRESS,
+                owner: env.TREASURY_WALLET,
+                uiTokenAmount: { uiAmount: 5 },
+              },
             ],
           },
           transaction: {
@@ -71,6 +97,55 @@ describe('verifySolanaPayment', () => {
     );
   });
 
+  it('throws when treasury does not receive the minimum amount', async () => {
+    const env = getEnv();
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        result: {
+          slot: 12345,
+          meta: {
+            err: null,
+            preTokenBalances: [
+              {
+                mint: env.USDC_MINT_ADDRESS,
+                owner: wallet,
+                uiTokenAmount: { uiAmount: 10 },
+              },
+              {
+                mint: env.USDC_MINT_ADDRESS,
+                owner: env.TREASURY_WALLET,
+                uiTokenAmount: { uiAmount: 1 },
+              },
+            ],
+            postTokenBalances: [
+              {
+                mint: env.USDC_MINT_ADDRESS,
+                owner: wallet,
+                uiTokenAmount: { uiAmount: 9.5 },
+              },
+              {
+                mint: env.USDC_MINT_ADDRESS,
+                owner: env.TREASURY_WALLET,
+                uiTokenAmount: { uiAmount: 1.5 },
+              },
+            ],
+          },
+          transaction: {
+            message: {
+              accountKeys: [{ pubkey: wallet }],
+            },
+          },
+        },
+      }),
+    } as unknown as Response);
+
+    await expect(verifySolanaPayment(wallet, signature, fetchMock)).rejects.toThrow(
+      'Treasury did not receive required USDC amount'
+    );
+  });
+
   it('throws when the RPC returns an error', async () => {
     const fetchMock = jest.fn().mockResolvedValue({
       ok: false,
@@ -83,4 +158,3 @@ describe('verifySolanaPayment', () => {
     );
   });
 });
-

@@ -29,11 +29,32 @@ describe('payments routes', () => {
           slot: 123,
           meta: {
             err: null,
+            preTokenBalances: [
+              {
+                accountIndex: 1,
+                mint: env.USDC_MINT_ADDRESS,
+                owner: wallet,
+                uiTokenAmount: { uiAmount: 6 },
+              },
+              {
+                accountIndex: 2,
+                mint: env.USDC_MINT_ADDRESS,
+                owner: env.TREASURY_WALLET,
+                uiTokenAmount: { uiAmount: 2 },
+              },
+            ],
             postTokenBalances: [
               {
+                accountIndex: 1,
                 mint: env.USDC_MINT_ADDRESS,
                 owner: wallet,
                 uiTokenAmount: { uiAmount: 1 },
+              },
+              {
+                accountIndex: 2,
+                mint: env.USDC_MINT_ADDRESS,
+                owner: env.TREASURY_WALLET,
+                uiTokenAmount: { uiAmount: 7 },
               },
             ],
           },
@@ -56,6 +77,7 @@ describe('payments routes', () => {
       .expect(200);
 
     expect(payResponse.body.token).toBeDefined();
+    expect(payResponse.body.amount).toBeCloseTo(5);
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     const token = payResponse.body.token as string;
@@ -88,4 +110,3 @@ describe('payments routes', () => {
     expect(response.status).toBe(401);
   });
 });
-
