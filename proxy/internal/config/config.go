@@ -20,6 +20,8 @@ type Config struct {
 	JWTSecret     string
 	AnalyticsURL  string
 	UpstreamTimeout time.Duration
+	AutoConfigProxyURL string
+	SetupDocsURL       string
 }
 
 // FromEnv loads configuration from environment variables.
@@ -42,6 +44,8 @@ func FromEnv() (Config, error) {
 		JWTSecret:      os.Getenv("PAYMENTS_JWT_SECRET"),
 		AnalyticsURL:   os.Getenv("ANALYTICS_URL"),
 		UpstreamTimeout: timeout,
+		AutoConfigProxyURL: os.Getenv("AUTOCONFIG_PROXY_URL"),
+		SetupDocsURL:       os.Getenv("SETUP_DOCS_URL"),
 	}
 
 	if len(cfg.BlocklistURLs) == 0 {
