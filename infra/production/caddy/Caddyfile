@@ -1,0 +1,46 @@
+{
+  email {$CADDY_ADMIN_EMAIL}
+  auto_https on
+}
+
+{$DASHBOARD_DOMAIN} {
+  encode gzip zstd
+
+  @healthz path /healthz
+  handle @healthz {
+    reverse_proxy dashboard:3000
+  }
+
+  handle_path /api/* {
+    reverse_proxy dashboard:3000
+  }
+
+  handle {
+    reverse_proxy dashboard:3000
+  }
+}
+
+{$PAYMENTS_DOMAIN} {
+  encode gzip zstd
+
+  @payments_health path /healthz
+  handle @payments_health {
+    reverse_proxy payments:4000
+  }
+
+  handle {
+    reverse_proxy payments:4000
+  }
+}
+
+{$PROXY_DOMAIN} {
+  encode gzip zstd
+
+  handle_path /healthz {
+    reverse_proxy proxy:8080
+  }
+
+  handle {
+    reverse_proxy proxy:8080
+  }
+}

@@ -21,8 +21,22 @@ export function createApp(deps: AppDeps = {}) {
   app.disable('x-powered-by');
   app.use(express.json());
 
-  app.get('/health', (_req, res) => {
-    res.status(200).json({ status: 'ok' });
+  const bootStartedAt = new Date();
+
+  app.get(['/health', '/healthz'], async (_req, res) => {
+    try {
+      await unlockStore.all();
+      res.status(200).json({
+        status: 'ok',
+        uptime: process.uptime(),
+        bootedAt: bootStartedAt.toISOString(),
+      });
+    } catch (error) {
+      res.status(503).json({
+        status: 'error',
+        message: error instanceof Error ? error.message : 'unknown error',
+      });
+    }
   });
 
   app.use('/analytics', createAnalyticsRouter({ store: analyticsStore }));

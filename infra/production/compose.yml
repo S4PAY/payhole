@@ -1,0 +1,115 @@
+version: '3.9'
+
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '5'
+
+services:
+  dashboard:
+    image: ${IMAGE_PREFIX:-ghcr.io/example/payhole}/dashboard:${IMAGE_TAG:-latest}
+    env_file:
+      - ../.env.production
+    environment:
+      NODE_ENV: production
+    depends_on:
+      payments:
+        condition: service_healthy
+    networks:
+      - payhole
+    logging: *default-logging
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://localhost:3000/api/healthz || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  payments:
+    image: ${IMAGE_PREFIX:-ghcr.io/example/payhole}/payments:${IMAGE_TAG:-latest}
+    env_file:
+      - ../.env.production
+    environment:
+      NODE_ENV: production
+    volumes:
+      - payments-unlocks:/app/data
+    networks:
+      - payhole
+    logging: *default-logging
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://localhost:4000/healthz || exit 1']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  proxy:
+    image: ${IMAGE_PREFIX:-ghcr.io/example/payhole}/proxy:${IMAGE_TAG:-latest}
+    env_file:
+      - ../.env.production
+    environment:
+      HTTP_PROXY_ADDR: :8080
+      DNS_PROXY_ADDR: :5353
+    networks:
+      - payhole
+    logging: *default-logging
+
+  caddy:
+    image: caddy:2.7-alpine
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      DASHBOARD_DOMAIN: ${DASHBOARD_DOMAIN:-dashboard.payhole.example.com}
+      PAYMENTS_DOMAIN: ${PAYMENTS_DOMAIN:-api.payhole.example.com}
+      PROXY_DOMAIN: ${PROXY_DOMAIN:-proxy.payhole.example.com}
+      CADDY_ADMIN_EMAIL: ${CADDY_ADMIN_EMAIL:-admin@payhole.example.com}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      dashboard:
+        condition: service_healthy
+      payments:
+        condition: service_healthy
+      proxy:
+        condition: service_started
+    networks:
+      - payhole
+    logging: *default-logging
+
+  loki:
+    image: grafana/loki:2.9.2
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki-data:/loki
+    networks:
+      - payhole
+    logging: *default-logging
+
+  promtail:
+    image: grafana/promtail:2.9.2
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - /var/log:/var/log
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - promtail-positions:/tmp
+      - ./logging/promtail-config.yml:/etc/promtail/config.yml:ro
+    depends_on:
+      loki:
+        condition: service_started
+    networks:
+      - payhole
+    logging: *default-logging
+
+networks:
+  payhole:
+    driver: bridge
+
+volumes:
+  payments-unlocks:
+    name: payhole-payments-unlocks
+  caddy-data:
+  caddy-config:
+  loki-data:
+  promtail-positions:

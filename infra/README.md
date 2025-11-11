@@ -44,7 +44,28 @@ PREMIUM_DOMAINS=premium.payhole.news,exclusive.payhole.media
 ANALYTICS_URL=http://payments:4000/analytics/events
 ```
 
-Secrets must never be committed; prefer GitHub/Cloud secret stores in production.
+Secrets must never be committed; prefer GitHub/Cloud secret stores in production. A production-oriented template lives at `.env.production` with placeholders for Helius, Solana, JWT, and webhook credentials that should be set via your secret store before deploying.
+
+## Production Stack
+
+`infra/production/compose.yml` defines a hardened stack for the VPS rollout:
+
+- **Caddy** terminates HTTPS for `${DASHBOARD_DOMAIN}`, `${PAYMENTS_DOMAIN}`, and `${PROXY_DOMAIN}`, forwarding `/healthz` probes to each upstream.
+- **Dashboard**, **Payments**, and **Proxy** containers pull from GHCR images and expose runtime health checks.
+- **Persistent unlocks storage** mounts a named Docker volume (`payhole-payments-unlocks`) at `/app/data` so `payments/data/unlocks.json` survives restarts.
+- **Loki + Promtail** ship container logs into Loki for auditability.
+
+Set the image prefix, release tag, and TLS domains via environment variables (or an `.env` file) before starting the stack:
+
+```bash
+IMAGE_PREFIX=ghcr.io/your-org/payhole \
+IMAGE_TAG=$(git rev-parse --short HEAD) \
+DASHBOARD_DOMAIN=payhole.example.com \
+PAYMENTS_DOMAIN=api.payhole.example.com \
+PROXY_DOMAIN=proxy.payhole.example.com \
+CADDY_ADMIN_EMAIL=ops@example.com \
+docker compose -f infra/production/compose.yml up -d
+```
 
 ## CI/CD
 
