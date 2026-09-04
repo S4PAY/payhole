@@ -47,13 +47,36 @@ input:focus{border-color:var(--accent)!important}
 .ph-layer[data-layer="0"]{opacity:1;pointer-events:auto}
 .ph-empty{padding:18px 24px;border-top:1px solid var(--border);font:400 14px Inter;color:var(--muted)}
 .ph-hidden{display:none!important}
+@media (max-width:720px){
+[data-r=split]>*,[data-r=three]>*,[data-r=four]>*{min-width:0}
+[data-r=table]{min-width:0;max-width:100%;overflow-x:auto!important}
+[data-r=foot]{flex-wrap:wrap}
+pre,code{overflow-wrap:anywhere}
+.ph-nav[style*="2fr 1fr 1fr 1fr"]{grid-template-columns:1fr 1fr!important}
+.ph-nav[style*="2fr 1fr 1fr 1fr"]>div:first-child{grid-column:1/-1}
+.ph-nav a{overflow-wrap:anywhere}
+input,textarea,select{box-sizing:border-box;max-width:100%}
+#burned-note,#feed-note{white-space:normal!important}
+[style*="grid-template-columns:1.4fr 3fr;"]{grid-template-columns:1fr!important;gap:4px!important}
+[style*="linear-gradient(90deg,var(--bg) 0%"]{background:linear-gradient(180deg,var(--bg) 0%,rgba(0,0,0,.9) 45%,rgba(0,0,0,.4) 70%,transparent 90%)!important}
+}
+@media (max-width:860px){[data-r~=four]{grid-template-columns:repeat(2,minmax(0,1fr))!important}[data-r~=arch]{padding:24px!important}}
+@media (max-width:720px){[style*="grid-template-columns:minmax(0,1fr) minmax(0,1fr)"]{grid-template-columns:1fr!important}[style*="display:flex;gap:12px"],[style*="grid-column:1 / -1;display:flex;align-items:center;gap:16px"]{flex-wrap:wrap}}
+@media (max-width:520px){[data-r~=four]{grid-template-columns:minmax(0,1fr)!important}}
 """
 open(os.path.join(S, "styles.css"), "w").write(shared + "\n")
 
 FONTS = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">'
 IMPORTMAP = '<script type="importmap">{"imports":{"three":"/js/vendor/three/build/three.module.js","three/addons/":"/js/vendor/three/examples/jsm/"}}</script>'
-def head(title, desc, script=None, scene=False):
-    s = f'<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>{title}</title>\n<meta name="description" content="{desc}">\n<meta property="og:title" content="{title}"><meta property="og:description" content="{desc}"><meta property="og:type" content="website"><meta name="theme-color" content="#000000">\n<link rel="icon" href="/favicon.svg" type="image/svg+xml">\n{FONTS}\n<link rel="stylesheet" href="/styles.css">\n'
+def social(title, desc, name):
+    url = "https://payhole.org/" + ("" if name == "index.html" else name)
+    return (f'<meta property="og:title" content="{title}"><meta property="og:description" content="{desc}"><meta property="og:type" content="website"><meta property="og:site_name" content="PayHole"><meta property="og:url" content="{url}">'
+            f'<meta property="og:image" content="https://payhole.org/og.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="PayHole. It pays itself.">'
+            f'<meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@payhole_x402"><meta name="twitter:title" content="{title}"><meta name="twitter:description" content="{desc}"><meta name="twitter:image" content="https://payhole.org/og.jpg">'
+            f'<link rel="me" href="https://x.com/payhole_x402"><link rel="canonical" href="{url}">')
+
+def head(title, desc, script=None, scene=False, name="index.html"):
+    s = f'<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>{title}</title>\n<meta name="description" content="{desc}">\n{social(title, desc, name)}<meta name="theme-color" content="#000000">\n<link rel="icon" href="/favicon.svg" type="image/svg+xml">\n{FONTS}\n<link rel="stylesheet" href="/styles.css">\n'
     if scene:
         # The design's hero is the aperture-scene element from aperture.js (three.js), served from this origin.
         s += IMPORTMAP + "\n"
@@ -65,6 +88,8 @@ def common(body):
     for a, b in HREFS: body = body.replace(f'href="{a}"', f'href="{b}"')
     body = body.replace('<a class="ph-lava" style=', '<a href="/extension.html" class="ph-lava" style=')
     body = body.replace("<a>Extension</a>", '<a href="/extension.html">Extension</a>')
+    body = body.replace('<span>payhole.org</span></div>', '<span style="display:flex;gap:16px"><a href="https://x.com/payhole_x402" rel="me">x.com/payhole_x402</a><span>payhole.org</span></span></div>')
+    body = body.replace('display:flex;justify-content:space-between;gap:16px;border-top:1px solid var(--border);padding-top:24px;font:400 13px', 'display:flex;justify-content:space-between;gap:16px;border-top:1px solid var(--border);padding-top:24px;font:400 13px').replace("<div style=\"max-width:1200px;margin:0 auto;padding:32px 24px;display:flex;justify-content:space-between;gap:16px;font:400 13px 'JetBrains Mono';color:var(--muted)\">", "<div data-r=\"foot\" style=\"max-width:1200px;margin:0 auto;padding:32px 24px;display:flex;justify-content:space-between;gap:16px;font:400 13px 'JetBrains Mono';color:var(--muted)\">").replace("<div style=\"display:flex;justify-content:space-between;gap:16px;border-top:1px solid var(--border);padding-top:24px;font:400 13px 'JetBrains Mono';color:var(--muted)\">", "<div data-r=\"foot\" style=\"display:flex;justify-content:space-between;gap:16px;border-top:1px solid var(--border);padding-top:24px;font:400 13px 'JetBrains Mono';color:var(--muted)\">")
     body = body.replace("<a>@payhole/sdk</a>", '<a href="/docs.html#sdk">@payhole/sdk</a>')
     body = body.replace("<a>verifier.payhole.org</a>", '<a href="/api/healthz">verifier.payhole.org</a>')
     body = body.replace("<a>robinhoodchain.blockscout.com</a>", '<a href="https://robinhoodchain.blockscout.com">robinhoodchain.blockscout.com</a>')
@@ -89,7 +114,7 @@ BS = lambda a: f"https://robinhoodchain.blockscout.com/address/{a}"
 CONTRACTS = [("BudgetAccountFactory", "0x68b5bb42fec83db9582758bbcb1fc43f748970d6"), ("BurnVault", "0x298712ca3a1367bbd8caabd5269b05985228eedf"), ("CreatorRegistry", "0x5d483aec0735d550d09018a2e89c49c190962deb")]
 
 def write(name, title, desc, body, script=None, scene=False):
-    open(os.path.join(S, name), "w").write(head(title, desc, script, scene) + body + "\n</body>\n</html>\n")
+    open(os.path.join(S, name), "w").write(head(title, desc, script, scene, name) + body + "\n</body>\n</html>\n")
 
 # ---- Home
 b = common(bodies["index"])
