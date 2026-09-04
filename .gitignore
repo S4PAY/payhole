@@ -24,3 +24,6 @@ packages/contracts/broadcast/**/dry-run/
 .idea/
 .vscode/
 *.swp
+
+# website download artifacts
+packages/website/static/downloads/*.zip

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Token · PayHole</title>
+<meta name="description" content="The PayHole token is fixed supply and only ever bought and burned. Live total burned, tiers, and the burn feed.">
+<meta property="og:title" content="Token · PayHole">
+<meta property="og:description" content="The PayHole token is fixed supply and only ever bought and burned. Live total burned, tiers, and the burn feed.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<script type="module" src="/js/pages/token.js"></script>
+</head>
+<body>
+<header class="nav"><div class="wrap">
+  <a class="brand" href="/">PayH<span class="mark"></span>le</a>
+  <nav class="links"><a href="/creators.html">Creators</a><a href="/developers.html">Developers</a><a href="/token.html" aria-current="page">Token</a><a href="/#sinkhole">Sinkhole</a><a href="/trust.html">Trust</a></nav>
+  <a class="btn sm lava" href="/extension.html">Get the extension</a>
+</div></header>
+
+<main>
+<section style="position:relative;overflow:hidden">
+  <div class="halo" style="top:-200px;width:1400px;height:1400px;background:radial-gradient(circle,transparent 0%,transparent 40%,rgba(255,106,0,.18) 50%,rgba(255,158,61,.03) 64%,transparent 76%)"></div>
+  <div class="halo" style="top:160px;width:760px;height:760px;border:1px solid var(--border)"></div>
+  <div class="wrap stack" style="padding:clamp(72px,10vw,128px) 24px 112px;align-items:center;text-align:center;position:relative">
+    <div class="eyebrow ember">Total burned</div>
+    <div class="big-number lava-text ember" id="burned" style="font-size:clamp(64px,10vw,136px)">—</div>
+    <div class="live"><i></i><span id="burned-note">live · PAYHOLE · fixed supply</span></div>
+    <h2 class="h2" style="font-size:clamp(28px,3.4vw,40px);max-width:720px;padding-top:24px">The token pays no one. It is bought and burned.</h2>
+    <p class="copy" style="max-width:560px">No staking. No yield. No cashback. No airdrop. Fixed supply. The only thing burning does is raise your tier.</p>
+    <p class="small" id="token-address">Token address: not set yet. The Safe sets it once after the launch.</p>
+  </div>
+</section>
+
+<section class="wrap stack" style="gap:40px;padding-bottom:clamp(64px,9vw,112px)">
+  <h2 class="h2">Burn mechanics</h2>
+  <div class="three">
+    <div class="card" style="padding:32px;gap:16px"><div class="mono" style="font-size:14px;color:var(--ember)">burnWith(usdg or eth)</div><h3 class="h3">Burn with USDG or ETH</h3><p class="small" style="font-size:15px">Send USDG or ETH to the vault. It buys PAYHOLE through the pool and burns it in the same transaction. You never hold the token. The extension routes its top-up fee here.</p></div>
+    <div class="card" style="padding:32px;gap:16px"><div class="mono" style="font-size:14px;color:var(--ember)">burnDirect(amount)</div><h3 class="h3">Burn what you hold</h3><p class="small" style="font-size:15px">Already hold PAYHOLE. Approve the vault and burn it. Gone in one transaction.</p></div>
+    <div class="card" style="padding:32px;gap:16px"><div class="mono" style="font-size:14px;color:var(--ember)">unlock(tier)</div><h3 class="h3">Unlock a tier</h3><p class="small" style="font-size:15px">Burn the tier's price and the vault records the tier for your address. Upgrades only, full price each time. The extension raises your limits from that record.</p></div>
+  </div>
+</section>
+
+<section class="surface"><div class="rule"></div><div class="glow"></div><div class="wrap section split narrow">
+  <div class="stack" style="gap:20px"><h2 class="h2">Tiers</h2><p class="copy">Prices are set in BurnVault by the Safe and read live from chain. Limits are enforced by the extension.</p></div>
+  <div class="table" style="background:var(--bg)">
+    <div class="thead" style="grid-template-columns:1fr 1.2fr 1.2fr 1fr 1.4fr"><span>Tier</span><span>Burned to unlock</span><span>Global cap</span><span>Per site</span><span>Agent keys</span></div>
+    <div class="tr" style="grid-template-columns:1fr 1.2fr 1.2fr 1fr 1.4fr"><span style="font:600 15px var(--display)">Tier 0</span><span class="mono" style="color:var(--muted)">none</span><span class="mono">25 USDG</span><span class="mono">5 USDG</span><span class="mono">3</span></div>
+    <div class="tr" style="grid-template-columns:1fr 1.2fr 1.2fr 1fr 1.4fr"><span style="font:600 15px var(--display)">Tier 1</span><span class="mono" style="color:var(--ember)" data-tier="1">—</span><span class="mono">100 USDG</span><span class="mono">20 USDG</span><span class="mono">10</span></div>
+    <div class="tr" style="grid-template-columns:1fr 1.2fr 1.2fr 1fr 1.4fr"><span style="font:600 15px var(--display)">Tier 2</span><span class="mono" style="color:var(--ember)" data-tier="2">—</span><span class="mono">1,000 USDG</span><span class="mono">100 USDG</span><span class="mono">100</span></div>
+  </div>
+</div></section>
+
+<section class="wrap section stack" style="gap:40px">
+  <div class="row" style="justify-content:space-between;align-items:flex-end"><h2 class="h2">Burn feed</h2><div class="live"><i></i><span id="feed-note">live from BurnVault</span></div></div>
+  <div class="table" id="feed">
+    <div class="thead" style="grid-template-columns:1.2fr 1.6fr 1.4fr 2fr"><span>Block</span><span>Input</span><span class="right">Amount burned</span><span class="right">Transaction</span></div>
+    <div class="empty" id="feed-empty">No burns in the most recent blocks.</div>
+  </div>
+  <div class="two">
+    <div class="card flat" style="padding:24px;gap:8px"><div class="eyebrow muted">Burn vault</div><a class="mono" style="font-size:14px;word-break:break-all" href="https://robinhoodchain.blockscout.com/address/0x298712ca3a1367bbd8caabd5269b05985228eedf">0x298712ca3a1367bbd8caabd5269b05985228eedf</a><p class="small">Verified on Sourcify · owned by the Safe</p></div>
+    <div class="card flat" style="padding:24px;gap:8px"><div class="eyebrow muted">No payout</div><p style="font:400 15px/1.5 var(--body);margin:0">Holding PAYHOLE earns nothing. Burning it raises your tier. There is no other function.</p></div>
+  </div>
+</section>
+</main>
+<footer class="footer"><div class="wrap" style="padding:32px 24px;display:flex;justify-content:space-between;gap:16px;font:400 13px var(--mono);color:var(--muted);flex-wrap:wrap"><span>Robinhood Chain, chain id 4663, settlement in USDG only</span><span>payhole.org</span></div></footer>
+</body>
+</html>

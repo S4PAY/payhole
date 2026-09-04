@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PayHole</title>
+<meta name="description" content="A capped spending pocket on Robinhood Chain that pays websites, tools, and agents over x402 while you browse.">
+<meta property="og:title" content="PayHole">
+<meta property="og:description" content="A capped spending pocket on Robinhood Chain that pays websites, tools, and agents over x402 while you browse.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<script type="module" src="/js/pages/home.js"></script>
+</head>
+<body>
+<header class="nav"><div class="wrap">
+  <a class="brand" href="/">PayH<span class="mark"></span>le</a>
+  <nav class="links"><a href="/creators.html">Creators</a><a href="/developers.html">Developers</a><a href="/token.html">Token</a><a href="/#sinkhole">Sinkhole</a><a href="/trust.html">Trust</a></nav>
+  <a class="btn sm lava" href="/extension.html">Get the extension</a>
+</div></header>
+
+<main>
+<div class="track" id="track">
+  <div class="pin">
+    <canvas id="aperture" aria-hidden="true"></canvas>
+    <div class="layers">
+      <div class="layer hero" data-layer="0">
+        <div class="stack" style="gap:28px;animation:fade .9s ease both">
+          <h1 class="h1" style="font-size:clamp(56px,7vw,96px);line-height:.96">It pays <span class="lava-text">itself.</span></h1>
+          <p class="lead" style="max-width:520px">A capped spending pocket on Robinhood Chain that pays websites, tools, and agents over x402 while you browse.</p>
+          <div class="row"><a class="btn lava" href="/extension.html">Get the extension</a><a class="btn" href="/developers.html">Read the docs</a></div>
+          <div class="mono" style="font-size:13px;color:var(--muted)">Scroll to open the pocket</div>
+        </div>
+        <div class="hero-card-wrap" style="display:flex;justify-content:flex-end"><div class="hero-card">
+          <div class="top"><span style="font:600 15px var(--display);letter-spacing:-.02em">PayHole</span><span class="mono" style="font-size:18px;font-weight:500">24.88 <span style="font-size:11px;color:var(--muted)">USDG</span></span></div>
+          <div class="body">
+            <div class="site-card"><div class="ring" id="hero-ring"><span>2%</span></div><div style="display:flex;flex-direction:column;gap:3px;flex:1"><div style="font:600 14px var(--body)">example.com</div><div class="mono" style="font-size:12px;color:var(--muted)">spent <span style="color:var(--accent)">0.12</span> of 5 USDG</div></div><span class="badge ok">Registered</span></div>
+            <div class="line"><span>/article/402</span><span style="color:var(--accent)">0.02 paid</span></div>
+            <div class="line"><span>tracker.adnet.example</span><span style="color:var(--danger)">blocked</span></div>
+          </div>
+        </div></div>
+      </div>
+      <div class="layer" data-layer="1"><div class="stepbody"><div class="mono" style="font-size:13px;color:var(--accent)">01 / 04</div><h2 class="big">Fund a pocket.</h2><p class="desc">Put a small USDG budget in a smart-contract pocket. That is the most it can ever spend.</p></div></div>
+      <div class="layer" data-layer="2"><div class="stepbody"><div class="mono" style="font-size:13px;color:var(--accent)">02 / 04</div><h2 class="big">Every site gets its own address.</h2><p class="desc">Each website, tool, and agent gets a capped address derived from your seed. None can see the others.</p></div></div>
+      <div class="layer" data-layer="3"><div class="stepbody"><div class="mono" style="font-size:13px;color:var(--accent)">03 / 04</div><h2 class="big">Pages pay themselves over x402.</h2><p class="desc">A 402 comes back, the pocket settles it in USDG, the page loads. Under the cap, you never see it. Over the cap, one prompt.</p></div></div>
+      <div class="layer" data-layer="4"><div class="stepbody"><div class="mono" style="font-size:13px;color:var(--danger)">04 / 04</div><h2 class="big">Trackers die at DNS.</h2><p class="desc">Sinkhole runs on your machine, syncs your blocklist, and shares scam flags with a peer swarm. Drainer domains get no answer.</p></div></div>
+    </div>
+    <div class="dots" id="dots"><span class="on"></span><span></span><span></span><span></span><span></span></div>
+  </div>
+</div>
+
+<section class="section"><div class="wrap stack" style="gap:56px">
+  <div class="row" style="justify-content:space-between;align-items:flex-end"><h2 class="h2">Everything the pocket does</h2><div class="eyebrow muted">Capped · Automatic · Private · Fair · Burned</div></div>
+  <div class="four">
+    <div class="card"><div class="dot"></div><h3 class="h3" style="font-size:19px">Caps</h3><p class="small">One number per site. Nothing above it moves without you.</p></div>
+    <div class="card"><div class="dot"></div><h3 class="h3" style="font-size:19px">Silent payments</h3><p class="small">HTTP 402 settled in USDG. Gasless for you. No popups under the cap.</p></div>
+    <div class="card"><div class="dot"></div><h3 class="h3" style="font-size:19px">Per-site addresses</h3><p class="small">Derived from your seed, one per origin. A site sees one address and nothing else.</p></div>
+    <div class="card"><div class="dot"></div><h3 class="h3" style="font-size:19px">Agent session keys</h3><p class="small">Give a tool or agent its own key with its own cap. Revoke it any time, or all at once.</p></div>
+    <div class="card"><div class="dot"></div><h3 class="h3" style="font-size:19px">Creator tips</h3><p class="small">Registered domains get tipped per visit from your pocket. Once a day by default, or off.</p></div>
+    <div class="card"><div class="dot danger"></div><h3 class="h3" style="font-size:19px">Sinkhole</h3><p class="small">Self-hosted DNS. Blocks trackers and drainers. Shares scam flags in a peer swarm.</p></div>
+    <div class="card"><div class="dot ember"></div><h3 class="h3" style="font-size:19px">Unlock tiers</h3><p class="small">Burn to raise your limits. Two tiers above the default. Nothing else changes.</p></div>
+    <div class="card"><div class="dot ember"></div><h3 class="h3" style="font-size:19px">Token burns</h3><p class="small">Fixed supply. Only ever bought and burned. Pays no one.</p></div>
+  </div>
+</div></section>
+
+<section id="creators" class="surface"><div class="rule"></div><div class="glow"></div><div class="wrap section split">
+  <div class="stack"><div class="eyebrow">Creators</div><h2 class="h2">Get tipped for every visit.</h2><p class="copy">One DNS record and one attestation. No platform, no account, no cut.</p><div class="row"><a class="btn lava" href="/creators.html">Register your domain</a></div></div>
+  <div class="three">
+    <div class="step" style="padding-top:20px"><div class="n">1</div><h3 class="h3" style="font-size:18px">TXT record</h3><p class="small">Add <code>_payhole</code> to your DNS with your wallet.</p></div>
+    <div class="step" style="padding-top:20px"><div class="n">2</div><h3 class="h3" style="font-size:18px">Attestation</h3><p class="small">The verifier reads the record and signs. Any wallet submits the claim to the registry.</p></div>
+    <div class="step" style="padding-top:20px"><div class="n">3</div><h3 class="h3" style="font-size:18px">Tipped per visit</h3><p class="small">Visitors' pockets tip your wallet in USDG. You see it on the explorer.</p></div>
+  </div>
+</div></section>
+
+<section class="wrap section split" style="align-items:center">
+  <div class="stack"><div class="eyebrow">Developers</div><h2 class="h2">One fetch. Paid.</h2><p class="copy">Drop in <code>payholeFetch</code> and any 402 is handled under the key's cap. The CLI gives agents the same pocket.</p><div class="row"><a class="btn" href="/developers.html">Read the docs</a></div></div>
+  <div class="stack" style="gap:16px;min-width:0">
+<pre><span class="c">import</span> { payholeFetch } <span class="c">from</span> <span class="s">"@payhole/sdk"</span>;
+
+<span class="c">const</span> fetchPaid = payholeFetch({
+  sessionKey: process.env.PAYHOLE_SESSION_KEY,
+  budgetAccount: <span class="s">"0xYourBudgetAccount"</span>,
+  maxAmount: <span class="s">500_000n</span>, <span class="c">// refuse anything above 0.50 USDG</span>
+});
+<span class="c">const</span> res = <span class="c">await</span> fetchPaid(<span class="s">"https://api.example.com/report"</span>);</pre>
+<pre><span class="c">$ </span>payhole key create
+<span class="c">$ </span>payhole status
+<span class="c">$ </span>payhole pay https://example.com/article --max 0.05</pre>
+  </div>
+</section>
+
+<section style="border-top:1px solid var(--border);position:relative;overflow:hidden">
+  <div class="halo" style="top:-360px;width:1200px;height:1200px;background:radial-gradient(circle,transparent 0%,transparent 44%,rgba(255,106,0,.16) 56%,rgba(255,158,61,.03) 72%,transparent 84%)"></div>
+  <div class="wrap section stack" style="gap:64px;position:relative">
+    <div class="stack" style="align-items:center;gap:16px;text-align:center">
+      <div class="eyebrow ember">Total burned</div>
+      <div class="big-number lava-text ember" id="burned">—</div>
+      <div class="live"><i></i><span id="burned-note">live · PAYHOLE · fixed supply</span></div>
+    </div>
+    <div class="split rev">
+      <div class="table" id="tiers">
+        <div class="thead" style="grid-template-columns:1fr 1.2fr 2fr"><span>Tier</span><span>Burned to unlock</span><span>Unlocks</span></div>
+        <div class="tr" style="grid-template-columns:1fr 1.2fr 2fr"><span style="font:600 15px var(--display)">Tier 0</span><span class="mono" style="color:var(--muted)">none</span><span style="color:var(--muted)">3 agent keys. Global cap 25 USDG. 5 USDG per site.</span></div>
+        <div class="tr" style="grid-template-columns:1fr 1.2fr 2fr"><span style="font:600 15px var(--display)">Tier 1</span><span class="mono" style="color:var(--ember)" data-tier="1">—</span><span style="color:var(--muted)">10 agent keys. Global cap 100 USDG. 20 USDG per site.</span></div>
+        <div class="tr" style="grid-template-columns:1fr 1.2fr 2fr"><span style="font:600 15px var(--display)">Tier 2</span><span class="mono" style="color:var(--ember)" data-tier="2">—</span><span style="color:var(--muted)">100 agent keys. Global cap 1,000 USDG. 100 USDG per site.</span></div>
+      </div>
+      <div class="stack" style="gap:20px"><h3 class="h2" style="font-size:32px;line-height:1.15">The token pays no one. It is bought and burned.</h3><p class="copy" style="font-size:16px">No staking. No yield. No cashback. No airdrop. Burning raises your tier and nothing else.</p><div class="row"><a class="btn lava ember" href="/token.html">Token details</a></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="sinkhole" class="surface"><div class="rule"></div><div class="glow"></div><div class="wrap section split">
+  <div class="stack"><div class="eyebrow muted">Trust</div><h2 class="h2">Open source. Tested.</h2><p class="copy">Three contracts on Robinhood Chain, all owned by one Safe, all verified on Sourcify. Read them before you fund a pocket.</p><div class="stack" style="gap:6px"><div class="eyebrow muted">Safe</div><div class="mono" style="font-size:13px;word-break:break-all">0xfCeB8905E316D383Cd90Aa1Ab04ab1650611445b</div></div><div class="row"><a class="btn" href="/trust.html">Architecture and disclosure</a></div></div>
+  <div class="table" style="background:var(--bg)">
+    <div class="thead" style="grid-template-columns:1.2fr 2.6fr .7fr"><span>Name</span><span>Address</span><span class="right">Verified</span></div>
+    <div class="tr" style="grid-template-columns:1.2fr 2.6fr .7fr"><span style="font-weight:600">BudgetAccountFactory</span><span class="mono" style="color:var(--muted);word-break:break-all">0x68b5bb42fec83db9582758bbcb1fc43f748970d6</span><a class="right" style="color:var(--accent);font-weight:500" href="https://repo.sourcify.dev/contracts/full_match/4663/0x68b5bb42fec83db9582758bbcb1fc43f748970d6/">Sourcify</a></div>
+    <div class="tr" style="grid-template-columns:1.2fr 2.6fr .7fr"><span style="font-weight:600">BurnVault</span><span class="mono" style="color:var(--muted);word-break:break-all">0x298712ca3a1367bbd8caabd5269b05985228eedf</span><a class="right" style="color:var(--accent);font-weight:500" href="https://repo.sourcify.dev/contracts/full_match/4663/0x298712ca3a1367bbd8caabd5269b05985228eedf/">Sourcify</a></div>
+    <div class="tr" style="grid-template-columns:1.2fr 2.6fr .7fr"><span style="font-weight:600">CreatorRegistry</span><span class="mono" style="color:var(--muted);word-break:break-all">0x5d483aec0735d550d09018a2e89c49c190962deb</span><a class="right" style="color:var(--accent);font-weight:500" href="https://repo.sourcify.dev/contracts/full_match/4663/0x5d483aec0735d550d09018a2e89c49c190962deb/">Sourcify</a></div>
+  </div>
+</div></section>
+
+<section class="wrap section split narrow">
+  <h2 class="h2">Questions</h2>
+  <div class="faq">
+    <div><div class="q">What happens when a site goes over its cap?</div><div class="a">You get one prompt. Approve this payment or decline. Caps change in the dashboard, never from a prompt.</div></div>
+    <div><div class="q">Can a site see my other addresses?</div><div class="a">No. Each address is derived for one origin. A site sees its own address and what that address paid it.</div></div>
+    <div><div class="q">Who pays gas?</div><div class="a">x402 settlement is gasless for the payer; the facilitator submits it. Moving USDG from your pocket to a per-site address is a small transaction paid by your owner address.</div></div>
+    <div><div class="q">Does the token earn anything?</div><div class="a">No. It is bought and burned. There is no staking, yield, cashback, or airdrop.</div></div>
+    <div><div class="q">Is Sinkhole a VPN?</div><div class="a">No. It is a DNS resolver you run yourself. Blocked domains get no answer. Your traffic goes where it always went.</div></div>
+    <div><div class="q">Can I read the contracts?</div><div class="a">Yes. They are open source, tested, verified on Sourcify, and not audited. Read them before you fund a pocket.</div></div>
+  </div>
+</section>
+</main>
+<footer class="footer"><div class="wrap" style="padding-top:64px;padding-bottom:40px;display:flex;flex-direction:column;gap:40px">
+  <div class="grid">
+    <div class="col"><span style="font:600 20px var(--display);letter-spacing:-.03em">PayHole</span><span style="color:var(--muted)">It pays itself.</span></div>
+    <div class="col"><b>Product</b><a href="/extension.html">Extension</a><a href="/#sinkhole">Sinkhole</a><a href="/token.html">Token</a></div>
+    <div class="col"><b>Build</b><a href="/developers.html">Developers</a><a href="/creators.html">Creators</a><a href="/docs.html">Documentation</a></div>
+    <div class="col"><b>Trust</b><a href="/trust.html">Contracts</a><a href="/api/healthz">Verifier status</a><a href="https://robinhoodchain.blockscout.com">robinhoodchain.blockscout.com</a></div>
+  </div>
+  <div class="bottom"><span>Robinhood Chain, chain id 4663, settlement in USDG only</span><span>payhole.org</span></div>
+</div></footer>
+</body>
+</html>

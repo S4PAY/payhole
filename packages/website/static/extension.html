@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Get the extension · PayHole</title>
+<meta name="description" content="Load the PayHole extension in Chromium, create your pocket, and pay the web under a cap.">
+<meta property="og:title" content="Get the extension · PayHole">
+<meta property="og:description" content="Load the PayHole extension in Chromium, create your pocket, and pay the web under a cap.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="nav"><div class="wrap">
+  <a class="brand" href="/">PayH<span class="mark"></span>le</a>
+  <nav class="links"><a href="/creators.html">Creators</a><a href="/developers.html">Developers</a><a href="/token.html">Token</a><a href="/#sinkhole">Sinkhole</a><a href="/trust.html">Trust</a></nav>
+  <a class="btn sm lava" href="/extension.html">Get the extension</a>
+</div></header>
+
+<main>
+<section class="wrap" style="padding:clamp(64px,9vw,112px) 24px 80px"><div class="stack"><div class="eyebrow">Extension</div><h1 class="h1" style="max-width:820px">Load it unpacked. Chromium only, for now.</h1><p class="lead">Until the store listing exists, the extension ships as a zip. It is Manifest V3 and runs in Chrome, Brave, Edge, and other Chromium browsers.</p><div class="row"><a class="btn lava" href="/downloads/payhole-extension.zip" download>Download payhole-extension.zip</a><a class="btn" href="/trust.html">What it can and cannot see</a></div></div></section>
+<section class="wrap four" style="padding-bottom:clamp(64px,9vw,112px)">
+  <div class="step"><div class="n">01</div><h3 class="h3">Unzip</h3><p class="small">Extract the zip into a folder you keep. The browser loads it from there on every start.</p></div>
+  <div class="step"><div class="n">02</div><h3 class="h3">Load unpacked</h3><p class="small">Open <code>chrome://extensions</code>, turn on Developer mode, choose Load unpacked, pick the folder. Pin PayHole to the toolbar.</p></div>
+  <div class="step"><div class="n">03</div><h3 class="h3">Create the vault</h3><p class="small">Open the popup, set a password, write down the seed phrase. The seed stays encrypted on your machine and never leaves the extension.</p></div>
+  <div class="step"><div class="n">04</div><h3 class="h3">Fund the pocket</h3><p class="small">Send a little ETH for gas and some USDG to the owner address shown in the dashboard, create the BudgetAccount, set your caps. Done.</p></div>
+</section>
+<section class="surface"><div class="rule"></div><div class="wrap section split">
+  <div class="stack"><h2 class="h2">Try it</h2><p class="copy">Naven runs a public x402 test endpoint on Robinhood Chain priced at 0.0001 USDG. Visit it with the extension unlocked and a funded pocket; the page loads and the ledger shows the payment.</p></div>
+  <pre>https://api.naven.network/x402-test/ping</pre>
+</div></section>
+</main>
+<footer class="footer"><div class="wrap" style="padding:32px 24px;display:flex;justify-content:space-between;gap:16px;font:400 13px var(--mono);color:var(--muted);flex-wrap:wrap"><span>Robinhood Chain, chain id 4663, settlement in USDG only</span><span>payhole.org</span></div></footer>
+</body>
+</html>

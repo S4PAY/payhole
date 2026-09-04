@@ -1,0 +1,18 @@
+{
+  "name": "@payhole/website",
+  "version": "0.0.0",
+  "private": true,
+  "description": "payhole.org: static site built from the design artboards, served from the VPS behind Caddy.",
+  "type": "module",
+  "scripts": {
+    "sync-config": "node scripts/sync-config.mjs",
+    "build": "node scripts/sync-config.mjs && node scripts/build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "vitest": "^5.0.0"
+  }
+}

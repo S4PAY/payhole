@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trust · PayHole</title>
+<meta name="description" content="Every part that touches your money, what each one can see, and where to read the code.">
+<meta property="og:title" content="Trust · PayHole">
+<meta property="og:description" content="Every part that touches your money, what each one can see, and where to read the code.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<header class="nav"><div class="wrap">
+  <a class="brand" href="/">PayH<span class="mark"></span>le</a>
+  <nav class="links"><a href="/creators.html">Creators</a><a href="/developers.html">Developers</a><a href="/token.html">Token</a><a href="/#sinkhole">Sinkhole</a><a href="/trust.html" aria-current="page">Trust</a></nav>
+  <a class="btn sm lava" href="/extension.html">Get the extension</a>
+</div></header>
+
+<main>
+<section class="wrap" style="padding:clamp(64px,9vw,112px) 24px 80px"><div class="stack"><div class="eyebrow muted">Trust</div><h1 class="h1" style="max-width:900px">Open source. Tested.</h1><p class="lead">Here is every part that touches your money, what each one can see, and where to read the code.</p></div></section>
+
+<section class="wrap stack" style="gap:40px;padding-bottom:clamp(64px,9vw,112px)">
+  <h2 class="h2" style="font-size:32px">Architecture</h2>
+  <div class="four" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:48px;gap:40px 32px">
+    <div class="stack" style="gap:12px"><div class="eyebrow muted" style="font-size:11px">Your machine</div><div class="card flat" style="background:var(--bg);padding:20px;gap:6px"><h3 class="h3" style="font-size:17px">Extension</h3><p class="small" style="font-size:13px">Manifest V3. Holds the encrypted seed. Sees every 402.</p></div><div style="height:24px;width:1px;border-left:1px dashed var(--muted);margin-left:24px"></div><div class="card flat" style="background:var(--bg);padding:20px;gap:6px;border-color:rgba(255,77,77,.5)"><h3 class="h3" style="font-size:17px">Sinkhole</h3><p class="small" style="font-size:13px">Self-hosted DNS. Blocks trackers and drainers. Peer swarm for scam flags.</p></div></div>
+    <div class="stack" style="gap:12px"><div class="eyebrow muted" style="font-size:11px">Derived</div><div class="card flat" style="background:var(--bg);padding:20px;gap:6px"><h3 class="h3" style="font-size:17px">Per-site addresses</h3><p class="small" style="font-size:13px">One per origin, from the seed. Each with its own cap.</p></div><div style="height:24px;width:1px;border-left:1px dashed var(--muted);margin-left:24px"></div><div class="card flat" style="background:var(--bg);padding:20px;gap:6px;border-color:var(--accent)"><h3 class="h3" style="font-size:17px">BudgetAccount</h3><p class="small" style="font-size:13px">Your pocket. Enforces caps on chain. Created by BudgetAccountFactory. Only you can move its funds.</p></div></div>
+    <div class="stack" style="gap:12px"><div class="eyebrow muted" style="font-size:11px">Settlement</div><div class="card flat" style="background:var(--bg);padding:20px;gap:6px"><h3 class="h3" style="font-size:17px">Facilitator</h3><p class="small" style="font-size:13px">Submits x402 settlements and pays gas. Can only settle what a per-site address signed.</p></div><div style="height:24px;width:1px;border-left:1px dashed var(--muted);margin-left:24px"></div><div class="card flat" style="background:var(--bg);padding:20px;gap:6px;border-color:rgba(255,158,61,.6)"><h3 class="h3" style="font-size:17px;color:var(--ember)">Burn vault</h3><p class="small" style="font-size:13px">Buys and burns PAYHOLE. Records tiers for addresses that burn through unlock.</p></div></div>
+    <div class="stack" style="gap:12px"><div class="eyebrow muted" style="font-size:11px">Creators</div><div class="card flat" style="background:var(--bg);padding:20px;gap:6px"><h3 class="h3" style="font-size:17px">Verifier</h3><p class="small" style="font-size:13px">payhole.org/api. Reads TXT records and signs attestations. Holds no funds.</p></div><div style="height:24px;width:1px;border-left:1px dashed var(--muted);margin-left:24px"></div><div class="card flat" style="background:var(--bg);padding:20px;gap:6px"><h3 class="h3" style="font-size:17px">Registry</h3><p class="small" style="font-size:13px">CreatorRegistry. Domain to wallet. Tips go straight to the wallet.</p></div></div>
+    <div style="grid-column:1 / -1;display:flex;align-items:center;gap:16px;border-top:1px dashed var(--border);padding-top:24px;font:400 13px var(--mono);color:var(--muted);flex-wrap:wrap"><span>Extension</span><span style="flex:1;border-top:1px dashed var(--muted)"></span><span>per-site address</span><span style="flex:1;border-top:1px dashed var(--muted)"></span><span>BudgetAccount</span><span style="flex:1;border-top:1px dashed var(--muted)"></span><span>facilitator</span><span style="flex:1;border-top:1px dashed var(--muted)"></span><span style="color:var(--accent)">site paid in USDG</span></div>
+  </div>
+</section>
+
+<section class="surface"><div class="rule"></div><div class="glow"></div><div class="wrap section stack" style="gap:40px;position:relative">
+  <h2 class="h2">What a page can and cannot see</h2>
+  <div class="two">
+    <div class="card flat" style="background:var(--bg);padding:32px;gap:20px"><div class="eyebrow">Can see</div><div class="list"><div><i></i>The one address derived for its origin</div><div><i></i>The payments that address made to it</div><div><i></i>Whether a 402 was settled or declined</div><div><i></i>That the address was funded from a BudgetAccount, if it traces the chain</div></div></div>
+    <div class="card flat" style="background:var(--bg);padding:32px;gap:20px"><div class="eyebrow" style="color:var(--danger)">Cannot see</div><div class="list"><div><i class="no"></i>Your seed or any other site's address</div><div><i class="no"></i>Your pocket balance or its caps</div><div><i class="no"></i>Where else you have paid</div><div><i class="no"></i>Your blocklist, your swarm peers, or your DNS queries</div></div></div>
+  </div>
+</div></section>
+
+<section class="wrap section stack" style="gap:40px">
+  <div class="row" style="justify-content:space-between;align-items:flex-end"><h2 class="h2">Contracts</h2><div class="mono" style="font-size:13px;color:var(--muted)">Robinhood Chain · chain id 4663</div></div>
+  <div class="table">
+    <div class="thead" style="grid-template-columns:1.4fr 3fr 1fr 1fr"><span>Name</span><span>Address</span><span>Verified</span><span class="right">Explorer</span></div>
+    <div class="tr" style="grid-template-columns:1.4fr 3fr 1fr 1fr"><span style="font-weight:600">BudgetAccountFactory</span><span class="mono" style="color:var(--muted);word-break:break-all">0x68b5bb42fec83db9582758bbcb1fc43f748970d6</span><a style="color:var(--accent);font-weight:500" href="https://repo.sourcify.dev/contracts/full_match/4663/0x68b5bb42fec83db9582758bbcb1fc43f748970d6/">Sourcify</a><a class="right" style="color:var(--muted);font-weight:500" href="https://robinhoodchain.blockscout.com/address/0x68b5bb42fec83db9582758bbcb1fc43f748970d6">Blockscout</a></div>
+    <div class="tr" style="grid-template-columns:1.4fr 3fr 1fr 1fr"><span style="font-weight:600">BudgetAccount implementation</span><span class="mono" style="color:var(--muted);word-break:break-all">0x1Cc03Bab3B6d9a5059cEC6a1BEFa86982D492C23</span><a style="color:var(--accent);font-weight:500" href="https://repo.sourcify.dev/contracts/full_match/4663/0x1Cc03Bab3B6d9a5059cEC6a1BEFa86982D492C23/">Sourcify</a><a class="right" style="color:var(--muted);font-weight:500" href="https://robinhoodchain.blockscout.com/address/0x1Cc03Bab3B6d9a5059cEC6a1BEFa86982D492C23">Blockscout</a></div>
+    <div class="tr" style="grid-template-columns:1.4fr 3fr 1fr 1fr"><span style="font-weight:600">BurnVault</span><span class="mono" style="color:var(--muted);word-break:break-all">0x298712ca3a1367bbd8caabd5269b05985228eedf</span><a style="color:var(--accent);font-weight:500" href="https://repo.sourcify.dev/contracts/full_match/4663/0x298712ca3a1367bbd8caabd5269b05985228eedf/">Sourcify</a><a class="right" style="color:var(--muted);font-weight:500" href="https://robinhoodchain.blockscout.com/address/0x298712ca3a1367bbd8caabd5269b05985228eedf">Blockscout</a></div>
+    <div class="tr" style="grid-template-columns:1.4fr 3fr 1fr 1fr"><span style="font-weight:600">CreatorRegistry</span><span class="mono" style="color:var(--muted);word-break:break-all">0x5d483aec0735d550d09018a2e89c49c190962deb</span><a style="color:var(--accent);font-weight:500" href="https://repo.sourcify.dev/contracts/full_match/4663/0x5d483aec0735d550d09018a2e89c49c190962deb/">Sourcify</a><a class="right" style="color:var(--muted);font-weight:500" href="https://robinhoodchain.blockscout.com/address/0x5d483aec0735d550d09018a2e89c49c190962deb">Blockscout</a></div>
+    <div class="tr" style="grid-template-columns:1.4fr 3fr 1fr 1fr;background:var(--bg)"><span style="font-weight:600">Owner Safe</span><span class="mono" style="color:var(--muted);word-break:break-all">0xfCeB8905E316D383Cd90Aa1Ab04ab1650611445b</span><span style="color:var(--muted)">Owns all three</span><a class="right" style="color:var(--muted);font-weight:500" href="https://robinhoodchain.blockscout.com/address/0xfCeB8905E316D383Cd90Aa1Ab04ab1650611445b">Blockscout</a></div>
+  </div>
+  <div class="two">
+    <div class="card flat" style="padding:32px;gap:12px"><div class="eyebrow muted">Disclosure</div><h3 class="h2" style="font-size:24px">Open source and tested. Not audited.</h3><p class="small" style="font-size:15px">Unit, fuzz, invariant, and mainnet-fork suites pass and Slither reports no high or medium findings. No third party has audited the code. Fund a pocket with what you can afford to lose. Read the code first.</p></div>
+    <div class="card flat" style="padding:32px;gap:12px"><div class="eyebrow muted">Read the code</div><div class="stack" style="gap:10px;font:400 15px var(--body)"><a href="https://repo.sourcify.dev/contracts/full_match/4663/0x298712ca3a1367bbd8caabd5269b05985228eedf/">Contract sources on Sourcify</a><a href="/docs.html">Documentation</a><a href="/extension.html">Extension package</a><a href="/api/healthz">Verifier status</a></div></div>
+  </div>
+</section>
+</main>
+<footer class="footer"><div class="wrap" style="padding:32px 24px;display:flex;justify-content:space-between;gap:16px;font:400 13px var(--mono);color:var(--muted);flex-wrap:wrap"><span>Robinhood Chain, chain id 4663, settlement in USDG only</span><span>payhole.org</span></div></footer>
+</body>
+</html>
