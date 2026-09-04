@@ -1,6 +1,6 @@
 import { createPublicClient, http, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { customChain, readClaimNonce, robinhoodChain } from "@payhole/sdk";
+import { USDG_ADDRESS, customChain, readClaimNonce, robinhoodChain } from "@payhole/sdk";
 import { attest } from "./attest.js";
 import { loadConfig } from "./config.js";
 import { systemResolver } from "./dns.js";
@@ -27,7 +27,13 @@ const server = createServer({
     ),
   limiter: new RateLimiter(config.rateLimitPerMinute, 60_000),
   trustProxy: config.trustProxy,
-  health: () => ({ verifier: signer.address, registry: config.registry, chainId: config.chainId }),
+  health: () => ({
+    verifier: signer.address,
+    registry: config.registry,
+    chainId: config.chainId,
+    demo: config.demo ? { price: config.demo.price.toString(), payTo: config.demo.payTo, facilitators: config.demo.facilitators } : null,
+  }),
+  ...(config.demo ? { demo: { config: { ...config.demo, asset: USDG_ADDRESS, network: `eip155:${config.chainId}` } } } : {}),
 });
 
 server.listen(config.port, config.host, () => {

@@ -51,3 +51,15 @@ pnpm lint
 ```
 
 The integration test deploys `CreatorRegistry` from the Foundry artifacts (`forge build` in `packages/contracts` first), attests with a fake DNS resolver, claims on-chain, proves the same attestation cannot be replayed, and rotates the wallet with a fresh attestation.
+
+## Paid demo article
+
+Set `DEMO_PAY_TO` and the service also serves `GET /demo/article`, a real x402 resource used by payhole.org/try.html. An unpaid request gets 402 with `PAYMENT-REQUIRED`; a request carrying `PAYMENT-SIGNATURE` is verified and settled through the first facilitator that answers, then served with `PAYMENT-RESPONSE`. Only paid attempts count against the rate limit.
+
+| Variable | Meaning |
+| --- | --- |
+| `DEMO_PAY_TO` | Wallet that receives every payment. Unset disables the route (404). |
+| `DEMO_PRICE` | Price in USDG base units, default `10000` (0.01 USDG). |
+| `FACILITATOR_URLS` | Comma-separated facilitator base URLs tried in order, default Naven then Primer. |
+| `DEMO_RESOURCE_URL` | Public URL echoed in the payment request, default `https://payhole.org/api/demo/article`. |
+| `FACILITATOR_TIMEOUT_MS` | Timeout per facilitator call, default `30000`. |

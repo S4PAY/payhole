@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Try it · PayHole</title>
+<meta name="description" content="A real article behind a real 402. With PayHole installed, the page pays 0.01 USDG for it and loads.">
+<meta property="og:title" content="Try it · PayHole"><meta property="og:description" content="A real article behind a real 402. With PayHole installed, the page pays 0.01 USDG for it and loads."><meta property="og:type" content="website"><meta property="og:site_name" content="PayHole"><meta property="og:url" content="https://payhole.org/try.html"><meta property="og:image" content="https://payhole.org/og.jpg"><meta property="og:image:secure_url" content="https://payhole.org/og.jpg"><meta property="og:image:type" content="image/jpeg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="PayHole. It pays itself."><meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@payhole_x402"><meta name="twitter:title" content="Try it · PayHole"><meta name="twitter:description" content="A real article behind a real 402. With PayHole installed, the page pays 0.01 USDG for it and loads."><meta name="twitter:image" content="https://payhole.org/og.jpg"><link rel="me" href="https://x.com/payhole_x402"><link rel="canonical" href="https://payhole.org/try.html"><meta name="theme-color" content="#000000">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/styles.css">
+<script type="module" src="/js/pages/try.js"></script>
+</head>
+<body>
+<div style="width:100%">
+<div style="position:sticky;top:0;z-index:20;background:rgba(0,0,0,.45);backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%);border-bottom:1px solid rgba(255,255,255,.08)">
+  <div class="ph-nav" style="max-width:1200px;margin:0 auto;padding:0 24px;height:68px;display:flex;align-items:center;justify-content:space-between;gap:24px">
+    <a href="/" style="display:inline-flex;align-items:center;font:600 22px 'Space Grotesk';letter-spacing:-0.03em;color:var(--text)">PayH<span class="ph-mark" style="display:inline-block;width:17px;height:17px;border-radius:50%;margin:0 1px"></span>le</a>
+    <div data-r="navlinks" style="display:flex;gap:28px;font:500 15px Inter"><a href="/creators.html">Creators</a><a href="/developers.html">Developers</a><a href="/token.html">Token</a><a href="/#sinkhole">Sinkhole</a><a href="/trust.html">Trust</a></div>
+    <div style="display:flex;gap:10px;align-items:center"><a href="/extension.html" class="ph-lava" style="font:600 14px Inter;padding:10px 16px;border-radius:8px;white-space:nowrap">Get the extension</a></div>
+  </div>
+</div>
+
+
+
+<div style="max-width:820px;margin:0 auto;padding:clamp(64px,9vw,112px) 24px;display:flex;flex-direction:column;gap:40px">
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <div style="font:500 12px 'JetBrains Mono';color:var(--muted);letter-spacing:0.06em;text-transform:uppercase">Try it</div>
+    <div style="font:600 clamp(36px,5vw,56px) 'Space Grotesk';letter-spacing:-0.03em;line-height:1.05">This article costs 0.01 USDG.</div>
+    <p style="font:400 16px/1.7 Inter;color:var(--muted);margin:0">With PayHole installed, click the button and the page pays for it. Without the extension you get what every paying page starts with: a 402 and a price. Either way, nothing here is faked.</p>
+    <div style="display:flex;gap:12px;flex-wrap:wrap"><button id="load" type="button" class="ph-lava" style="font:600 15px Inter;padding:12px 18px;border-radius:8px;border:0;cursor:pointer">Load the article</button><a class="ph-ghost" href="/extension.html" style="font:600 15px Inter;padding:12px 18px;border-radius:8px">Get the extension</a></div>
+    <div id="state" style="font:400 13px 'JetBrains Mono';color:var(--muted)">Nothing paid yet.</div>
+  </div>
+  <div id="offer" class="ph-glass ph-hidden" style="border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:14px">
+    <div style="font:500 11px Inter;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase">402 Payment Required</div>
+    <div id="offer-rows" style="display:flex;flex-direction:column;gap:8px;font:400 13px 'JetBrains Mono'"></div>
+    <div id="offer-note" style="font:400 14px/1.6 Inter;color:var(--muted)"></div>
+  </div>
+  <div id="article" class="ph-glass ph-hidden" style="border-radius:12px;padding:32px;display:flex;flex-direction:column;gap:16px">
+    <div id="a-title" style="font:600 28px 'Space Grotesk';letter-spacing:-0.02em;line-height:1.15"></div>
+    <div id="a-body" style="display:flex;flex-direction:column;gap:12px;font:400 16px/1.7 Inter;color:var(--text)"></div>
+    <div id="paid" style="border-top:1px solid var(--border);padding-top:16px;font:400 13px 'JetBrains Mono';color:var(--muted);display:flex;flex-direction:column;gap:6px"></div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:20px">
+    <div style="font:500 11px Inter;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase">What happens when you click</div>
+    <div style="display:flex;gap:16px;align-items:flex-start"><div style="font:400 13px 'JetBrains Mono';color:var(--accent-text);padding-top:3px;min-width:28px">01</div><div style="display:flex;flex-direction:column;gap:4px"><div style="font:600 17px 'Space Grotesk';letter-spacing:-0.02em">The server says 402</div><div style="font:400 14px/1.6 Inter;color:var(--muted)">payhole.org/api/demo/article answers with status 402 and a PAYMENT-REQUIRED header: 0.01 USDG on Robinhood Chain to the payhole.org creator wallet.</div></div></div>
+    <div style="display:flex;gap:16px;align-items:flex-start"><div style="font:400 13px 'JetBrains Mono';color:var(--accent-text);padding-top:3px;min-width:28px">02</div><div style="display:flex;flex-direction:column;gap:4px"><div style="font:600 17px 'Space Grotesk';letter-spacing:-0.02em">The extension signs</div><div style="font:400 14px/1.6 Inter;color:var(--muted)">PayHole checks the price against your cap for payhole.org, then signs a USDG transfer authorization from this site's own address. Nothing leaves your seed.</div></div></div>
+    <div style="display:flex;gap:16px;align-items:flex-start"><div style="font:400 13px 'JetBrains Mono';color:var(--accent-text);padding-top:3px;min-width:28px">03</div><div style="display:flex;flex-direction:column;gap:4px"><div style="font:600 17px 'Space Grotesk';letter-spacing:-0.02em">A facilitator settles</div><div style="font:400 14px/1.6 Inter;color:var(--muted)">The page sends the request again with the signature. The server hands it to a public facilitator, which puts the transfer on chain.</div></div></div>
+    <div style="display:flex;gap:16px;align-items:flex-start"><div style="font:400 13px 'JetBrains Mono';color:var(--accent-text);padding-top:3px;min-width:28px">04</div><div style="display:flex;flex-direction:column;gap:4px"><div style="font:600 17px 'Space Grotesk';letter-spacing:-0.02em">The article loads</div><div style="font:400 14px/1.6 Inter;color:var(--muted)">The server answers 200 with the article and a PAYMENT-RESPONSE header carrying the transaction hash. Every load pays again.</div></div></div>
+  </div>
+</div>
+<div style="border-top:1px solid var(--border)"><div data-r="foot" style="max-width:1200px;margin:0 auto;padding:32px 24px;display:flex;justify-content:space-between;gap:16px;font:400 13px 'JetBrains Mono';color:var(--muted)"><span>Robinhood Chain, chain id 4663, settlement in USDG only</span><span style="display:flex;gap:16px"><a href="/privacy.html">Privacy</a><a href="https://github.com/S4PAY/payhole">github.com/S4PAY/payhole</a><a href="https://www.npmjs.com/package/@payhole/sdk">npm @payhole/sdk</a><a href="https://x.com/payhole_x402" rel="me">x.com/payhole_x402</a><span>payhole.org</span></span></div></div>
+</div>
+</body>
+</html>

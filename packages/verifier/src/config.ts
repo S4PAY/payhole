@@ -12,6 +12,16 @@ export interface VerifierConfig {
   rateLimitPerMinute: number;
   trustProxy: boolean;
   dnsServers: string[] | undefined;
+  /** Paid demo article; absent when DEMO_PAY_TO is not set. */
+  demo: DemoSettings | undefined;
+}
+
+export interface DemoSettings {
+  payTo: Address;
+  price: bigint;
+  facilitators: string[];
+  resourceUrl: string;
+  timeoutMs: number;
 }
 
 function integer(value: string | undefined, fallback: number, name: string): number {
@@ -28,6 +38,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): VerifierConfig
   const registry = env["REGISTRY_ADDRESS"];
   if (!registry || !isAddress(registry)) throw new Error("REGISTRY_ADDRESS must be the CreatorRegistry address");
   const dns = env["DNS_SERVERS"];
+  const payTo = env["DEMO_PAY_TO"];
+  if (payTo && !isAddress(payTo)) throw new Error("DEMO_PAY_TO must be a wallet address");
+  const facilitators = (env["FACILITATOR_URLS"] ?? "https://facilitator.naven.network,https://x402.primer.systems")
+    .split(",")
+    .map((s) => s.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
   return {
     host: env["HOST"] ?? "0.0.0.0",
     port: integer(env["PORT"], 8787, "PORT"),
@@ -39,5 +55,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): VerifierConfig
     rateLimitPerMinute: integer(env["RATE_LIMIT_PER_MINUTE"], 10, "RATE_LIMIT_PER_MINUTE"),
     trustProxy: env["TRUST_PROXY"] === "1" || env["TRUST_PROXY"] === "true",
     dnsServers: dns ? dns.split(",").map((s) => s.trim()).filter(Boolean) : undefined,
+    demo: payTo
+      ? {
+          payTo: payTo as Address,
+          price: BigInt(integer(env["DEMO_PRICE"], 10_000, "DEMO_PRICE")),
+          facilitators,
+          resourceUrl: env["DEMO_RESOURCE_URL"] ?? "https://payhole.org/api/demo/article",
+          timeoutMs: integer(env["FACILITATOR_TIMEOUT_MS"], 30_000, "FACILITATOR_TIMEOUT_MS"),
+        }
+      : undefined,
   };
 }
