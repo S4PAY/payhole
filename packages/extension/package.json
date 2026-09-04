@@ -1,0 +1,39 @@
+{
+  "name": "@payhole/extension",
+  "version": "0.0.0",
+  "private": true,
+  "description": "PayHole browser extension: per-site capped addresses paying x402 resources on Robinhood Chain from a BudgetAccount.",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "postinstall": "wxt prepare",
+    "typecheck": "wxt prepare && tsc --noEmit -p tsconfig.json",
+    "lint": "eslint .",
+    "pretest": "pnpm --filter @payhole/contracts build",
+    "test": "vitest run",
+    "icons": "node scripts/make-icons.mjs"
+  },
+  "dependencies": {
+    "@payhole/sdk": "workspace:*",
+    "@scure/bip39": "^1.6.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "viem": "^2.56.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@webext-core/fake-browser": "^2.0.1",
+    "@wxt-dev/module-react": "^1.2.2",
+    "playwright": "^1.62.1",
+    "vitest": "^5.0.0",
+    "wxt": "^0.21.4"
+  }
+}

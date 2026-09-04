@@ -22,7 +22,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "pretest": "tsc -p tsconfig.build.json",
+    "pretest": "pnpm --filter @payhole/contracts build && tsc -p tsconfig.build.json",
     "test": "vitest run",
     "lint": "eslint .",
     "sync-abi": "node scripts/sync-abi.mjs"

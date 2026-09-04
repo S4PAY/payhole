@@ -42,6 +42,10 @@ export default defineConfig(
     },
   },
   {
+    files: ["packages/extension/**/*.{ts,tsx,js,mjs}"],
+    languageOptions: { globals: { ...globals.browser, ...globals.webextensions } },
+  },
+  {
     files: ["**/*.{js,mjs,cjs}"],
     extends: [js.configs.recommended],
     languageOptions: { globals: { ...globals.node } },
