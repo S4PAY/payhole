@@ -23,6 +23,12 @@ export interface SinkholeConfig {
   probe: { allowPrivate: boolean };
   queryLog: { enabled: boolean };
   lists: { urls: string[]; refreshHours: number };
+  /** DNS over HTTPS on plain HTTP, meant to sit behind a TLS-terminating reverse proxy. */
+  doh: { enabled: boolean; listen: string; port: number };
+  /** DNS over TLS with the node's own certificate files. */
+  dot: { enabled: boolean; listen: string; port: number; certFile: string | undefined; keyFile: string | undefined };
+  /** Queries per minute per client address, shared by both encrypted transports. */
+  dnsRateLimitPerMinute: number;
 }
 
 function integer(value: string | undefined, fallback: number, name: string, min = 1): number {
@@ -76,6 +82,15 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): SinkholeConfig
   const vault = optional(env["BURN_VAULT_ADDRESS"]);
   if (vault !== undefined && !isAddress(vault)) throw new Error("BURN_VAULT_ADDRESS must be an EVM address");
 
+  const dohListen = env["DOH_LISTEN"] ?? "0.0.0.0";
+  if (isIP(dohListen) === 0) throw new Error("DOH_LISTEN must be an IP address");
+  const dotListen = env["DOT_LISTEN"] ?? "0.0.0.0";
+  if (isIP(dotListen) === 0) throw new Error("DOT_LISTEN must be an IP address");
+  const dotEnabled = flag(env["DOT_ENABLED"]);
+  const certFile = optional(env["DOT_CERT_FILE"]);
+  const keyFile = optional(env["DOT_KEY_FILE"]);
+  if (dotEnabled && (!certFile || !keyFile)) throw new Error("DOT_ENABLED=1 needs DOT_CERT_FILE and DOT_KEY_FILE");
+
   const extensionUrl = optional(env["EXTENSION_BLOCKLIST_URL"]);
   if (extensionUrl !== undefined && !/^https?:\/\//i.test(extensionUrl)) throw new Error("EXTENSION_BLOCKLIST_URL must be an http(s) URL");
 
@@ -119,5 +134,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): SinkholeConfig
     probe: { allowPrivate: flag(env["PROBE_ALLOW_PRIVATE"]) },
     queryLog: { enabled: flag(env["QUERY_LOG_ENABLED"], true) },
     lists: { urls: list(env["BLOCKLIST_URLS"]), refreshHours: integer(env["BLOCKLIST_REFRESH_HOURS"], 24, "BLOCKLIST_REFRESH_HOURS") },
+    doh: { enabled: flag(env["DOH_ENABLED"]), listen: dohListen, port: integer(env["DOH_PORT"], 8054, "DOH_PORT") },
+    dot: { enabled: dotEnabled, listen: dotListen, port: integer(env["DOT_PORT"], 853, "DOT_PORT"), certFile, keyFile },
+    dnsRateLimitPerMinute: integer(env["DNS_RATE_LIMIT_PER_MINUTE"], 300, "DNS_RATE_LIMIT_PER_MINUTE"),
   };
 }

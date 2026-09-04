@@ -89,9 +89,45 @@ configuration. It loads only from this origin (fonts,
 logo, and script are bundled under `/admin/`), keeps the token in the browser's local storage, and refreshes every 30
 seconds. Preview it with seeded data and no resolver: `pnpm exec tsx scripts/demo-admin.ts 18053`, token `demo`.
 
+## Encrypted DNS for phones
+
+A phone cannot use a plain resolver on someone else's network, but every recent phone can use an encrypted one
+anywhere, on Wi-Fi and on cellular. Sinkhole serves both standard forms:
+
+- **DNS over TLS** (RFC 7858), what Android calls Private DNS. `DOT_ENABLED=1` with `DOT_CERT_FILE` and
+  `DOT_KEY_FILE` pointing at a certificate for the node's public hostname. The listener speaks TLS 1.2 or newer on
+  `DOT_PORT` (853), keeps several queries in flight per connection, closes idle connections after ten seconds, and
+  re-reads the certificate files when they change and once an hour, so a renewal needs no restart. If the new files do
+  not parse, the old certificate stays in use and the log says so.
+- **DNS over HTTPS** (RFC 8484). `DOH_ENABLED=1` serves `GET /dns-query?dns=<base64url>` and `POST /dns-query`
+  with `application/dns-message` on plain HTTP at `DOH_PORT` (8054), plus `GET /healthz` for the proxy's health check.
+  It is plain HTTP by design: a reverse proxy that already holds the hostname's certificate terminates TLS and
+  forwards to it. The `cache-control: max-age` on each answer is the lowest TTL in it.
+
+Both transports hand the query to the local dnsmasq over UDP, repeat it over TCP when the answer was truncated,
+share one rate limit per client address (`DNS_RATE_LIMIT_PER_MINUTE`, 300 by default) and answer SERVFAIL beyond
+it, and count under the upstreams of the statistics as `doh` and `dot`, so the dashboard shows how much traffic
+each transport carries. With `QUERY_LOG_ENABLED=0` the per-transport counters on `/api/status` still work; only the
+query log and the charts are off.
+
+Set it up on a phone:
+
+- Android: Settings, Network and internet, Private DNS, "Private DNS provider hostname", enter the node's
+  hostname, for example `dns.payhole.org`. Applies to every app, on every network.
+- iPhone and iPad: DoH and DoT are configured through a profile. Install a profile that names either
+  `https://dns.payhole.org/dns-query` (DoH) or `dns.payhole.org` on port 853 (DoT); Apple's Configuration Profile
+  reference describes the `DNSSettings` payload, and open-source profile generators exist for both.
+
+How the public node is wired on the PayHole VPS: Caddy already terminates TLS for the site, so it also serves
+`dns.payhole.org` and proxies `/dns-query` and `/healthz` to the container's DoH port on loopback; for DoT the
+container gets Caddy's certificate directory mounted read-only and `DOT_CERT_FILE` and `DOT_KEY_FILE` point at the
+files inside it, and TCP 853 is opened in the firewall. Operators running their own node do the same with any
+certificate for their hostname, for example from Let's Encrypt on the host, mounted into the container as in
+`docker-compose.home.yml`.
+
 ## Ports and the firewall
 
-Docker publishes container ports by inserting its own iptables rules ahead of ufw, so a `0.0.0.0` port mapping is reachable from the internet even when ufw denies incoming traffic. The compose file therefore binds every port to `127.0.0.1`: DNS (53), the admin API (8053), and the swarm (4001). Exposing a port is a deliberate two-step change: edit the mapping in `docker-compose.yml` to the interface you want (`0.0.0.0:53:53/udp` for a resolver clients can reach, `0.0.0.0:4001:4001/tcp` for swarm peers), then allow only the sources that need it in ufw, for example `ufw allow from 203.0.113.0/24 to any port 53` or `ufw allow 4001/tcp`. Never expose 8053; reach the admin API and push blocklists through an SSH tunnel (`ssh -L 8053:127.0.0.1:8053 host`). `scripts/container-test.sh` maps its test ports to localhost only.
+Docker publishes container ports by inserting its own iptables rules ahead of ufw, so a `0.0.0.0` port mapping is reachable from the internet even when ufw denies incoming traffic. The compose file therefore binds every port to `127.0.0.1`: DNS (53), the admin API (8053), and the swarm (4001). The encrypted listeners, DoH on 8054 and DoT on 853, are off by default and only exist to be reached from the internet; see "Encrypted DNS for phones" before exposing them. Exposing a port is a deliberate two-step change: edit the mapping in `docker-compose.yml` to the interface you want (`0.0.0.0:53:53/udp` for a resolver clients can reach, `0.0.0.0:4001:4001/tcp` for swarm peers), then allow only the sources that need it in ufw, for example `ufw allow from 203.0.113.0/24 to any port 53` or `ufw allow 4001/tcp`. Never expose 8053; reach the admin API and push blocklists through an SSH tunnel (`ssh -L 8053:127.0.0.1:8053 host`). `scripts/container-test.sh` maps its test ports to localhost only.
 
 ## Setup on a host with Docker
 
@@ -127,6 +163,15 @@ Data lives in the `sinkhole-data` volume: `state.json` (flags, manual entries, d
 | `BLOCKLIST_URLS` | unset | Public blocklists to subscribe to, comma separated |
 | `BLOCKLIST_REFRESH_HOURS` | `24` | How often subscribed lists are refetched |
 | `QUERY_LOG_ENABLED` | `1` | `0` disables the query log and the statistics |
+| `DOH_ENABLED` | `0` | `1` serves DNS over HTTPS on plain HTTP for a TLS-terminating proxy |
+| `DOH_LISTEN` | `0.0.0.0` | Address of the DoH listener |
+| `DOH_PORT` | `8054` | Port of the DoH listener |
+| `DOT_ENABLED` | `0` | `1` serves DNS over TLS with the node's own certificate |
+| `DOT_LISTEN` | `0.0.0.0` | Address of the DoT listener |
+| `DOT_PORT` | `853` | Port of the DoT listener |
+| `DOT_CERT_FILE` | unset | PEM certificate chain for DoT; required with `DOT_ENABLED=1` |
+| `DOT_KEY_FILE` | unset | PEM private key for DoT; required with `DOT_ENABLED=1` |
+| `DNS_RATE_LIMIT_PER_MINUTE` | `300` | Queries per minute per client address over DoH and DoT; more gets SERVFAIL |
 | `FLAG_THRESHOLD` | `5` | Distinct reporters needed to block a swarm-flagged domain |
 | `FLAG_TTL_DAYS` | `30` | Flag lifetime |
 | `FLAG_REANNOUNCE_MINUTES` | `30` | Re-announcement interval for own flags |
@@ -189,6 +234,10 @@ To run the agent outside Docker, dnsmasq must be installed (`DNSMASQ_BINARY` if 
 `scripts/container-test.sh` needs Docker, `dig` and `curl`. It builds the image, starts a container with a temporary data directory holding a manual blocklist with `blocked.example`, waits for `/healthz`, pushes a blocklist with `tracker.example`, then checks that `tracker.example`, `sub.tracker.example` and `blocked.example` resolve to `0.0.0.0` while `example.com` gets a real answer, that the export lists both domains, and that the API refuses requests without the token. Ports default to 5553 (DNS) and 18053 (admin) on localhost; `TEST_DNS_PORT`, `TEST_ADMIN_PORT`, `TEST_UPSTREAM_DNS`, `SKIP_BUILD=1` and `TEST_SWARM_ENABLED=1` adjust it. The swarm is off in the test by default because it needs no peers to prove the resolver path.
 
 ## Known limitations
+
+- DoH answers over plain HTTP; a TLS-terminating proxy in front is required for real clients, and a proxy must forward
+  the client address in `X-Forwarded-For` for the per-client rate limit to see individual phones (the listener trusts
+  that header only from loopback).
 
 - dnsmasq is restarted, not reloaded, when the blocklist changes. `address=` rules cannot be reloaded with SIGHUP; the restart takes milliseconds and changes are coalesced, but a query arriving in that window is retried by the client.
 - A node without `NODE_OPERATOR_KEY` cannot sign announcements: the message format requires the reporter wallet's signature over the body. Delegated signing keys would need an extension of the proof text.

@@ -24,7 +24,7 @@ ENV NODE_ENV=production \
 WORKDIR /app
 COPY --from=build /out .
 VOLUME ["/data"]
-EXPOSE 53/udp 53/tcp 8053/tcp 4001/tcp
+EXPOSE 53/udp 53/tcp 8053/tcp 4001/tcp 853/tcp 8054/tcp
 HEALTHCHECK --interval=30s --timeout=3s --start-period=20s CMD wget -qO- "http://127.0.0.1:${ADMIN_PORT}/healthz" || exit 1
 # The agent is PID 1: it spawns dnsmasq, handles SIGTERM, and restarts dnsmasq when the blocklist changes.
 ENTRYPOINT ["node", "dist/main.js"]

@@ -23,8 +23,15 @@ services:
       - "${DNS_BIND:-0.0.0.0}:${DNS_HOST_PORT:-53}:53/tcp"
       - "${ADMIN_BIND:-127.0.0.1}:8053:8053/tcp"
       - "${SWARM_BIND:-0.0.0.0}:4001:4001/tcp"
+      # Encrypted DNS for phones, off unless DOH_ENABLED or DOT_ENABLED is set in .env (see "Encrypted DNS for phones"
+      # in the README). DoH is plain HTTP for a TLS-terminating proxy; DoT needs the certificate files mounted below.
+      # - "0.0.0.0:8054:8054/tcp"
+      # - "0.0.0.0:853:853/tcp"
     volumes:
       - sinkhole-data:/data
+      # For DoT, mount the directory holding the certificate and key read-only and point DOT_CERT_FILE and
+      # DOT_KEY_FILE at them, for example:
+      # - /etc/letsencrypt/live/dns.example:/certs:ro
 
 volumes:
   sinkhole-data:

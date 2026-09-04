@@ -43,6 +43,7 @@ interface Status {
     membership: { minTier: number; vault: string | null };
     extension: { url: string | null; pullMinutes: number };
     flags: { threshold: number; ttlDays: number; reannounceMinutes: number };
+    encryptedDns?: { doh: { enabled: boolean; listen: string; port: number }; dot: { enabled: boolean; listen: string; port: number }; rateLimitPerMinute: number };
     queryLog?: { enabled: boolean };
     lists?: { refreshHours: number };
   };
@@ -763,6 +764,11 @@ function renderNode(status: Status): void {
       ["Extension pull", cfg.extension.url ? `${cfg.extension.url} every ${cfg.extension.pullMinutes} min` : "not configured; the extension pushes instead"],
       ["Flags", `${cfg.flags.threshold} reporters, kept ${cfg.flags.ttlDays} days, re-announced every ${cfg.flags.reannounceMinutes} min`],
     );
+    const enc = cfg.encryptedDns;
+    if (enc) {
+      const parts = [enc.doh.enabled ? `DoH on ${enc.doh.listen}:${enc.doh.port}` : "DoH off", enc.dot.enabled ? `DoT on ${enc.dot.listen}:${enc.dot.port}` : "DoT off"];
+      right.push(["Encrypted DNS", `${parts.join(", ")}, ${enc.rateLimitPerMinute} queries per minute per client`]);
+    }
   }
   const dns = status.dnsmasq;
   if (dns) {

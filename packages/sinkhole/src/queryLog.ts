@@ -339,6 +339,14 @@ export class QueryStats {
     this.pending.set(line.id, { id: line.id, client, domain: line.domain, type: line.type, t: now, minute, hour, forwarded: null, answer: null, status: null });
   }
 
+  /** Counts a query that arrived over an encrypted transport under the upstreams, keyed by the transport name. */
+  countTransport(transport: string, now = this.clock()): void {
+    const slot = this.slot(Math.floor(now / HOUR), true);
+    if (!slot) return;
+    bump(slot.upstreams, transport, 32);
+    this.dirty = true;
+  }
+
   private onForwarded(line: ForwardedLine, now: number): void {
     const upstream = line.upstream.replace(/#53$/, "");
     if (line.id === null) {

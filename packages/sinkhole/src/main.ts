@@ -8,7 +8,9 @@ import { getAddress, type Address } from "viem";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { Blocklist, parseExtensionPush, type BlocklistState } from "./blocklist.js";
 import { loadConfig, type SinkholeConfig } from "./config.js";
+import { DnsForwarder } from "./dnsForwarder.js";
 import { DnsmasqSupervisor } from "./dnsmasq.js";
+import { createDohServer, DotServer, type EncryptedDnsCounters } from "./encryptedDns.js";
 import { QueryStats, type QueryStatsState } from "./queryLog.js";
 import { RateLimiter } from "./rateLimit.js";
 import { createAdminServer } from "./server.js";
@@ -198,6 +200,28 @@ async function run(config: SinkholeConfig): Promise<void> {
   await dnsmasq.start(blockSets());
   log(`dnsmasq listening on ${config.dns.listen}:${config.dns.port}, upstream ${config.dns.upstream.join(", ")}, ${blocklist.domains().size} domains blocked, query log ${config.queryLog.enabled ? "on" : "off"}`);
 
+  let doh: (Server & { counters: EncryptedDnsCounters }) | null = null;
+  let dot: DotServer | null = null;
+  if (config.doh.enabled || config.dot.enabled) {
+    const forwarder = new DnsForwarder({ host: config.dns.listen === "0.0.0.0" ? "127.0.0.1" : config.dns.listen === "::" ? "::1" : config.dns.listen, port: config.dns.port });
+    const shared = {
+      forwarder,
+      limiter: new RateLimiter(config.dnsRateLimitPerMinute, MINUTE),
+      log,
+      onQuery: (transport: string) => statsRef?.countTransport(transport),
+    };
+    if (config.doh.enabled) {
+      doh = createDohServer(shared);
+      await listen(doh, config.doh.port, config.doh.listen);
+      log(`dns over https on http://${config.doh.listen}:${config.doh.port}/dns-query, forwarding to ${forwarder.target}`);
+    }
+    if (config.dot.enabled && config.dot.certFile && config.dot.keyFile) {
+      dot = new DotServer({ ...shared, certFile: config.dot.certFile, keyFile: config.dot.keyFile });
+      await dot.listen(config.dot.port, config.dot.listen);
+      log(`dns over tls on ${config.dot.listen}:${config.dot.port} with ${dot.certificate?.subject ?? "a certificate"}, valid to ${dot.certificate?.validTo ?? "?"}`);
+    }
+  }
+
   let swarm: Swarm | null = null;
   let identity: Identity | null = null;
   if (config.swarm.enabled) {
@@ -316,6 +340,11 @@ async function run(config: SinkholeConfig): Promise<void> {
       lastSync: { extension: blocklist.localMeta(), swarm: swarm?.lastMessageAt ?? null },
       swarm: swarm ? { received: swarm.received, accepted: swarm.accepted, dropped: swarm.dropped } : null,
       dnsmasq: dnsmasq.status(),
+      encryptedDns: {
+        doh: doh ? { listen: config.doh.listen, port: config.doh.port, ...doh.counters } : null,
+        dot: dot ? { listen: config.dot.listen, port: config.dot.port, certificate: dot.certificate, ...dot.counters } : null,
+        rateLimitPerMinute: config.dnsRateLimitPerMinute,
+      },
       uptimeSeconds: (Date.now() - startedAt) / 1000,
       node: { hostname: hostname(), version: VERSION, startedAt },
       config: {
@@ -327,6 +356,11 @@ async function run(config: SinkholeConfig): Promise<void> {
         flags: { threshold: config.flags.threshold, ttlDays: config.flags.ttlDays, reannounceMinutes: config.flags.reannounceMinutes },
         queryLog: { enabled: config.queryLog.enabled },
         lists: { refreshHours: config.lists.refreshHours },
+        encryptedDns: {
+          doh: { enabled: config.doh.enabled, listen: config.doh.listen, port: config.doh.port },
+          dot: { enabled: config.dot.enabled, listen: config.dot.listen, port: config.dot.port },
+          rateLimitPerMinute: config.dnsRateLimitPerMinute,
+        },
       },
     }),
     ...(stats ? { stats: { snapshot: () => stats.snapshot(), queries: (filter) => stats.queries(filter) } } : {}),
@@ -393,6 +427,8 @@ async function run(config: SinkholeConfig): Promise<void> {
     for (const timer of timers) clearTimeout(timer);
     void (async () => {
       await new Promise<void>((resolve) => server.close(() => resolve()));
+      if (doh) await new Promise<void>((resolve) => doh?.close(() => resolve()));
+      if (dot) await dot.close();
       if (swarm) await swarm.stop().catch((error: unknown) => log(`swarm stop failed: ${errorText(error)}`));
       await dnsmasq.stop();
       await persist.flush();
