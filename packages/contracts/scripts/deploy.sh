@@ -34,6 +34,7 @@ RPC="$RPC_URL_4663"
 USDG="$(jq -r .usdg config/4663.json)"
 WETH="$(jq -r .weth config/4663.json)"
 POOL_MANAGER="$(jq -r .uniswapV4.poolManager config/4663.json)"
+SWAP_ROUTER="$(jq -r .uniswapV3.swapRouter02 config/4663.json)"
 DEPLOYER="$(cast wallet address --private-key "$DEPLOYER_PRIVATE_KEY")"
 echo "deployer $DEPLOYER balance $(cast balance "$DEPLOYER" --rpc-url "$RPC" --ether) ETH"
 echo "safe     $SAFE_ADDRESS threshold $(cast call "$SAFE_ADDRESS" 'getThreshold()(uint256)' --rpc-url "$RPC")"
@@ -118,7 +119,7 @@ while IFS=$'\t' read -r name addr hash; do
         || echo "verification of the BudgetAccount implementation failed; upload manually" >&2
       assert_owner "$name" "$addr" ;;
     BurnVault)
-      args="$(cast abi-encode 'constructor(address,address,address,address)' "$POOL_MANAGER" "$USDG" "$WETH" "$SAFE_ADDRESS")"
+      args="$(cast abi-encode 'constructor(address,address,address,address,address)' "$POOL_MANAGER" "$SWAP_ROUTER" "$USDG" "$WETH" "$SAFE_ADDRESS")"
       record "$name" "$addr" "$hash" "$args"
       verify "$name" "$addr" "$args" src/BurnVault.sol:BurnVault
       assert_owner "$name" "$addr" ;;

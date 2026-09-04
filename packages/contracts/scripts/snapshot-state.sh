@@ -28,8 +28,9 @@ if [ -f "$DEPLOYMENTS" ]; then
       "$name" "$addr" "$(call "$addr" 'owner()(address)')" "$(codehash "$addr")"
     case "$name" in
       BurnVault)
-        printf ',\n      "token": "%s",\n      "ethRouteUsesWeth": "%s",\n      "tierCost": {"1": "%s", "2": "%s", "3": "%s"}' \
+        printf ',\n      "token": "%s",\n      "ethRouteUsesWeth": "%s",\n      "routeKind": {"usdg": "%s", "eth": "%s"},\n      "tierCost": {"1": "%s", "2": "%s", "3": "%s"}' \
           "$(call "$addr" 'token()(address)')" "$(call "$addr" 'ethRouteUsesWeth()(bool)')" \
+          "$(call "$addr" 'routeKind(address)(uint8)' "$(jq -r .usdg config/4663.json)")" "$(call "$addr" 'routeKind(address)(uint8)' 0x0000000000000000000000000000000000000000)" \
           "$(call "$addr" 'tierCost(uint8)(uint256)' 1)" "$(call "$addr" 'tierCost(uint8)(uint256)' 2)" "$(call "$addr" 'tierCost(uint8)(uint256)' 3)"
         ;;
       CreatorRegistry)

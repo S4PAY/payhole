@@ -8,7 +8,7 @@ Solidity contracts for PayHole on Robinhood Chain (chain id 4663). Foundry proje
 |---|---|---|
 | `BudgetAccountFactory` | Deploys `BudgetAccount` minimal proxies (EIP-1167) at deterministic addresses. | Safe (sweep only, no power over accounts) |
 | `BudgetAccount` | A user's spending pocket: USDG deposit and withdraw, session keys with per-key cap and expiry, a global cap across keys, one-call `revokeAll`, `pay` for keys, `fund` for per-site addresses with on-chain per-site caps. | The user, and only the user |
-| `BurnVault` | Swaps USDG or ETH into $PayHole through Uniswap V4 and sends the output to `0x...dEaD`. `burnWith` for anyone with their own funds, `burnHeld` (owner) for assets sent directly, `burnDirect`, and `unlock(tier)` which burns a configured amount and records the tier. | Safe |
+| `BurnVault` | Swaps USDG or ETH into $PayHole through Uniswap V4 (PoolManager) or Uniswap V3 (SwapRouter02), owner-selectable per input, and sends the output to `0x...dEaD`. `burnWith` for anyone with their own funds, `burnHeld` (owner) for assets sent directly, `burnDirect`, and `unlock(tier)` which burns a configured amount and records the tier. | Safe |
 | `CreatorRegistry` | Maps `keccak256(hostname)` to a creator wallet after an EIP-712 attestation from the verifier key; `tip` moves USDG straight to that wallet. | Safe |
 | `OwnerSweep` | Base for the protocol contracts: owner-only `sweep` and `sweepETH`. | |
 
@@ -52,7 +52,7 @@ pnpm slither     # slither with slither.config.json; fails on medium or worse
 
 Fuzz runs default to 1024 (`[fuzz]` in `foundry.toml`); `FOUNDRY_PROFILE=ci` raises them. The invariant suite drives a `BudgetAccount` through random owner and key actions and checks that global spend equals what keys paid, balances match the ledger, and no key outlives its epoch.
 
-Fork suites are skipped unless `FORK_RPC_URL` is set; `scripts/fork-test.sh` starts anvil and sets it. Because the $PayHole pool does not exist before launch, the vault fork suite creates hookless pools with a mock token on the real PoolManager and swaps real USDG and WETH through them.
+Fork suites are skipped unless `FORK_RPC_URL` is set; `scripts/fork-test.sh` starts anvil and sets it. Because the $PayHole pool does not exist before launch, the vault fork suite creates hookless pools with a mock token on the real PoolManager and swaps real USDG and WETH through them. `BurnVaultPons.fork.t.sol` additionally pins block 54015994 and burns through real Pons pools of both kinds (a V3 WETH pool and V4 pools carrying the live Pons hook), which needs the archive endpoint as the fork source.
 
 Slither triage: `BurnVault._requireNonZero` carries a `slither-disable-next-line incorrect-equality` because a `== 0` guard on a held balance cannot be exploited (a donation only lets the burn proceed). Remaining findings are low or informational: timestamp comparisons for expiries and deadlines, an external call inside the two-hop loop, and a benign write ordering in `createAccount`.
 
@@ -89,7 +89,9 @@ Set the token once (after the Pons launch):
 cast calldata "setToken(address)" <PAYHOLE_TOKEN>
 ```
 
-Configure the vault route after graduation. Pons graduates into a pool with fee 0, tick spacing 200, and the Pons hook; read the exact key from the PoolManager's `Initialize` event for the token:
+Configure the vault route once the token trades. Which route depends on how the token was launched on Pons: the app's default V2 flow graduates into a Uniswap V4 pool with fee 0, tick spacing 200, and the Pons meme hook; the app's v1 tab launches straight into a Uniswap V3 token/WETH pool with fee 10000. `config/4663.json` records both under `pons`.
+
+V4 pool (V2 graduation), reading the exact key from the PoolManager's `Initialize` event for the token:
 
 ```sh
 cast logs --rpc-url $RPC_URL_4663 --address <POOL_MANAGER> --from-block <GRADUATION_BLOCK> \
@@ -101,6 +103,15 @@ cast calldata "setRoute(address,(address,address,uint24,int24,address)[])" 0x000
 cast calldata "setRoute(address,(address,address,uint24,int24,address)[])" <USDG> "[(<C0>,<C1>,<FEE>,<SPACING>,<HOOKS>),(<C0>,<C1>,0,200,<PONS_HOOK>)]"
 ```
 
+V3 pool (v1 tab launch), as a packed SwapRouter02 path `token | fee | token ...` that must start at WETH for the ETH route and at USDG for the USDG route (the vault wraps ETH itself). Fee 10000 is `0x002710`, fee 100 is `0x000064`:
+
+```sh
+cast calldata "setRouteV3(address,bytes)" 0x0000000000000000000000000000000000000000 "$(cast concat-hex <WETH> 0x002710 <PAYHOLE_TOKEN>)"
+cast calldata "setRouteV3(address,bytes)" <USDG> "$(cast concat-hex <USDG> 0x000064 <WETH> 0x002710 <PAYHOLE_TOKEN>)"
+```
+
+Setting a route of one kind replaces the other kind for that input. `routeKind(tokenIn)` reports 0 (none), 1 (V4), or 2 (V3).
+
 Price unlock tiers, rotate the verifier, convert assets sent directly to the vault, recover stuck assets:
 
 ```sh
@@ -111,7 +122,7 @@ cast calldata "sweep(address,address,uint256)" <TOKEN> <TO> <AMOUNT>
 cast calldata "sweepETH(address,uint256)" <TO> <WEI>
 ```
 
-For `burnHeld` and `burnWith`, quote `minAmountOut` off-chain through the V4 Quoter (`config/4663.json`, `uniswapV4.quoter`, `quoteExactInputSingle` via `eth_call`) and subtract a tolerance that covers the Pons hook fee.
+For `burnHeld` and `burnWith`, quote `minAmountOut` off-chain (V4 routes: `uniswapV4.quoter` `quoteExactInputSingle`; V3 routes: `uniswapV3.quoterV2` `quoteExactInput` with the same packed path, both via `eth_call`) and subtract a tolerance that covers the Pons hook fee.
 
 ## Deployment record
 

@@ -40,13 +40,16 @@ abstract contract BurnVaultSuite is Test {
     PoolKey internal wethPool; // WETH / PAYHOLE
     PoolKey internal usdgEthPool; // USDG / native ETH
 
-    function _setUp(IPoolManager manager_, address usdg_, address weth_) internal {
+    address internal router;
+
+    function _setUp(IPoolManager manager_, address usdg_, address weth_, address router_) internal {
+        router = router_;
         manager = manager_;
         usdg = IERC20(usdg_);
         weth = IERC20(weth_);
         payhole = new MockERC20("PayHole", "PAYHOLE", 18);
         seeder = new LiquiditySeeder(manager);
-        vault = new BurnVault(address(manager), usdg_, weth_, safe);
+        vault = new BurnVault(address(manager), router_, usdg_, weth_, safe);
 
         usdgPool = _poolKey(usdg_, address(payhole), 3000, 60);
         ethPool = _poolKey(address(0), address(payhole), 3000, 60);
@@ -149,17 +152,21 @@ abstract contract BurnVaultSuite is Test {
         assertEq(address(vault.poolManager()), address(manager));
         assertEq(address(vault.usdg()), address(usdg));
         assertEq(address(vault.weth()), address(weth));
+        assertEq(address(vault.swapRouter()), router);
         assertEq(vault.token(), address(0));
         assertFalse(vault.ethRouteUsesWeth());
+        assertEq(uint8(vault.routeKind(address(usdg))), uint8(BurnVault.RouteKind.None));
     }
 
     function test_constructor_zeroAddressesRevert() public {
         vm.expectRevert(OwnerSweep.ZeroAddress.selector);
-        new BurnVault(address(0), address(usdg), address(weth), safe);
+        new BurnVault(address(0), router, address(usdg), address(weth), safe);
         vm.expectRevert(OwnerSweep.ZeroAddress.selector);
-        new BurnVault(address(manager), address(0), address(weth), safe);
+        new BurnVault(address(manager), address(0), address(usdg), address(weth), safe);
         vm.expectRevert(OwnerSweep.ZeroAddress.selector);
-        new BurnVault(address(manager), address(usdg), address(0), safe);
+        new BurnVault(address(manager), router, address(0), address(weth), safe);
+        vm.expectRevert(OwnerSweep.ZeroAddress.selector);
+        new BurnVault(address(manager), router, address(usdg), address(0), safe);
     }
 
     function test_setToken_onceAndOwnerOnly() public {
@@ -205,6 +212,7 @@ abstract contract BurnVaultSuite is Test {
         emit BurnVault.RouteSet(address(usdg), 2, false);
         vault.setRoute(address(usdg), _route(usdgEthPool, ethPool));
         assertEq(vault.route(address(usdg)).length, 2);
+        assertEq(uint8(vault.routeKind(address(usdg))), uint8(BurnVault.RouteKind.V4));
         vault.setRoute(address(usdg), _route(usdgPool));
         assertEq(vault.route(address(usdg)).length, 1);
         assertEq(Currency.unwrap(vault.route(address(usdg))[0].currency0), Currency.unwrap(usdgPool.currency0));

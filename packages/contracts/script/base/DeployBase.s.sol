@@ -18,6 +18,7 @@ abstract contract DeployBase is Script {
         address usdg;
         address weth;
         address poolManager;
+        address swapRouter02;
     }
 
     error WrongChain(uint256 chainId);
@@ -33,6 +34,7 @@ abstract contract DeployBase is Script {
         c.usdg = vm.parseJsonAddress(json, ".usdg");
         c.weth = vm.parseJsonAddress(json, ".weth");
         c.poolManager = vm.parseJsonAddress(json, ".uniswapV4.poolManager");
+        c.swapRouter02 = vm.parseJsonAddress(json, ".uniswapV3.swapRouter02");
     }
 
     /// @dev Broadcasts go through the official RPC only. The archive endpoint is for forks and reads.
@@ -68,7 +70,7 @@ abstract contract DeployBase is Script {
     }
 
     function _deployVault(Config memory c, address safe) internal returns (BurnVault vault) {
-        vault = new BurnVault(c.poolManager, c.usdg, c.weth, safe);
+        vault = new BurnVault(c.poolManager, c.swapRouter02, c.usdg, c.weth, safe);
         _assertOwner(address(vault), safe);
     }
 

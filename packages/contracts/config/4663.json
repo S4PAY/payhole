@@ -13,21 +13,44 @@
     "universalRouter": "0x8876789976decbfcbbbe364623c63652db8c0904",
     "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3"
   },
+  "uniswapV3": {
+    "factory": "0x1f7d7550B1b028f7571E69A784071F0205FD2EfA",
+    "swapRouter02": "0xCaf681a66D020601342297493863E78C959E5cb2",
+    "quoterV2": "0x33e885eD0Ec9bF04EcfB19341582aADCb4c8A9E7"
+  },
   "pons": {
-    "launchFactory": "0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e",
+    "v2LaunchFactory": "0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e",
+    "v15LaunchFactory": "0xF4fC0CD27fC8EcF17E55eE4c3f7201897dF3eb75",
     "memeHook": "0xE5e702641Ea86F4ae6cC3cDaeD2B886f976Be044",
-    "graduatedPool": { "fee": 0, "tickSpacing": 200 }
+    "graduatedV4Pool": {
+      "fee": 0,
+      "tickSpacing": 200
+    },
+    "v15V3Pool": {
+      "fee": 10000,
+      "quote": "WETH"
+    },
+    "notes": "The app defaults to the V2 factory (bonding curve, then a V4 pool with the meme hook); its v1 tab uses the v15 factory (direct V3 token/WETH pool). The factory the docs call active, 0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB, has launching disabled since 2026-08-12."
   },
   "x402": {
     "network": "eip155:4663",
     "asset": {
       "address": "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168",
       "decimals": 6,
-      "eip712": { "name": "Global Dollar", "version": "1" }
+      "eip712": {
+        "name": "Global Dollar",
+        "version": "1"
+      }
     },
     "facilitators": [
-      { "name": "Naven", "url": "https://facilitator.naven.network" },
-      { "name": "Primer", "url": "https://x402.primer.systems" }
+      {
+        "name": "Naven",
+        "url": "https://facilitator.naven.network"
+      },
+      {
+        "name": "Primer",
+        "url": "https://x402.primer.systems"
+      }
     ]
   }
 }

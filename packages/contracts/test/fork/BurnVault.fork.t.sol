@@ -18,6 +18,6 @@ contract BurnVaultForkTest is BurnVaultSuite {
         vm.createSelectFork(rpc);
         assertEq(block.chainid, 4663, "not Robinhood Chain");
         ChainConfig.Addresses memory a = ChainConfig.load(vm);
-        _setUp(IPoolManager(a.poolManager), a.usdg, a.weth);
+        _setUp(IPoolManager(a.poolManager), a.usdg, a.weth, a.swapRouter02);
     }
 }

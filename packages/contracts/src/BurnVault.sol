@@ -14,19 +14,27 @@ import {BalanceDelta} from "@uniswap/v4-core/src/types/BalanceDelta.sol";
 import {SwapParams} from "@uniswap/v4-core/src/types/PoolOperation.sol";
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {OwnerSweep} from "./base/OwnerSweep.sol";
+import {ISwapRouter02} from "./interfaces/ISwapRouter02.sol";
 import {IWETH9} from "./interfaces/IWETH9.sol";
 
 /// @title BurnVault
-/// @notice Turns USDG and ETH into $PayHole through Uniswap V4 and sends every unit to the burn address.
+/// @notice Turns USDG and ETH into $PayHole through Uniswap and sends every unit to the burn address.
 /// @dev The token never pays anyone; this contract only buys and burns. Anyone can call {burnWith} with
 ///      their own funds. Assets transferred to the vault directly can be converted by the owner through
-///      {burnHeld}. The owner (the protocol Safe) sets the token address once, configures swap routes
-///      after the launchpad creates the pool, prices unlock tiers, and can sweep stuck assets. Swaps run
-///      inside the PoolManager's unlock callback: exact input, one or two hops, output taken straight to
-///      the burn address. ETH is paid into V4 as native currency unless the configured ETH route starts
-///      in a WETH pool, in which case it is wrapped first.
+///      {burnHeld}. The owner (the protocol Safe) sets the token address once, configures one swap route
+///      per input after the launchpad creates the pool, prices unlock tiers, and can sweep stuck assets.
+///      A route is either Uniswap V4 (one or two pool keys, swapped inside the PoolManager's unlock
+///      callback with output taken straight to the burn address) or Uniswap V3 (a packed path swapped
+///      through SwapRouter02 with the burn address as recipient). ETH is paid into V4 as native currency
+///      unless the V4 route starts in a WETH pool; V3 routes always wrap ETH first.
 contract BurnVault is OwnerSweep, ReentrancyGuard, IUnlockCallback {
     using SafeERC20 for IERC20;
+
+    enum RouteKind {
+        None,
+        V4,
+        V3
+    }
 
     struct CallbackData {
         address routeKey;
@@ -38,26 +46,32 @@ contract BurnVault is OwnerSweep, ReentrancyGuard, IUnlockCallback {
     /// @notice Destination of every burned token.
     address public constant BURN_ADDRESS = 0x000000000000000000000000000000000000dEaD;
 
-    /// @notice Uniswap V4 singleton the vault swaps through.
+    /// @notice Uniswap V4 singleton used by V4 routes.
     IPoolManager public immutable poolManager;
+    /// @notice Uniswap V3 SwapRouter02 used by V3 routes.
+    ISwapRouter02 public immutable swapRouter;
     /// @notice Settlement asset accepted alongside native ETH.
     IERC20 public immutable usdg;
-    /// @notice Wrapped ETH, used only when the ETH route starts in a WETH pool.
+    /// @notice Wrapped ETH, used by V3 routes and by V4 routes that start in a WETH pool.
     IWETH9 public immutable weth;
 
     /// @notice The $PayHole token. Zero until the owner sets it once after launch.
     address public token;
-    /// @notice True when the configured ETH route starts in a WETH pool rather than a native one.
+    /// @notice Which kind of route is configured for each input (USDG address or zero for ETH).
+    mapping(address tokenIn => RouteKind kind) public routeKind;
+    /// @notice True when the configured ETH route needs incoming ETH wrapped to WETH before swapping.
     bool public ethRouteUsesWeth;
     /// @notice $PayHole burned by {unlock} for each tier. Zero means the tier is not offered.
     mapping(uint8 tier => uint256 cost) public tierCost;
     /// @notice Highest tier each address has unlocked.
     mapping(address user => uint8 tier) public tierOf;
 
-    mapping(address tokenIn => PoolKey[] hops) private _routes;
+    mapping(address tokenIn => PoolKey[] hops) private _v4Routes;
+    mapping(address tokenIn => bytes path) private _v3Paths;
 
     event TokenSet(address indexed token);
     event RouteSet(address indexed tokenIn, uint256 hops, bool viaWeth);
+    event RouteSetV3(address indexed tokenIn, bytes path);
     event TierCostSet(uint8 indexed tier, uint256 cost);
     event Burned(address indexed from, address indexed tokenIn, uint256 amountIn, uint256 tokensBurned);
     event Unlocked(address indexed user, uint8 tier);
@@ -80,12 +94,18 @@ contract BurnVault is OwnerSweep, ReentrancyGuard, IUnlockCallback {
     error SettleMismatch(uint256 paid, uint256 expected);
 
     /// @param poolManager_ Uniswap V4 PoolManager on this chain.
+    /// @param swapRouter_ Uniswap V3 SwapRouter02 on this chain.
     /// @param usdg_ USDG token.
     /// @param weth_ Wrapped ETH on this chain.
     /// @param initialOwner Owner of the vault (the protocol Safe).
-    constructor(address poolManager_, address usdg_, address weth_, address initialOwner) Ownable(initialOwner) {
-        if (poolManager_ == address(0) || usdg_ == address(0) || weth_ == address(0)) revert ZeroAddress();
+    constructor(address poolManager_, address swapRouter_, address usdg_, address weth_, address initialOwner)
+        Ownable(initialOwner)
+    {
+        if (poolManager_ == address(0) || swapRouter_ == address(0) || usdg_ == address(0) || weth_ == address(0)) {
+            revert ZeroAddress();
+        }
         poolManager = IPoolManager(poolManager_);
+        swapRouter = ISwapRouter02(swapRouter_);
         usdg = IERC20(usdg_);
         weth = IWETH9(weth_);
     }
@@ -104,10 +124,10 @@ contract BurnVault is OwnerSweep, ReentrancyGuard, IUnlockCallback {
         emit TokenSet(token_);
     }
 
-    /// @notice Configure the swap path from `tokenIn` (USDG, or the zero address for ETH) to $PayHole.
+    /// @notice Configure a Uniswap V4 route from `tokenIn` (USDG, or the zero address for ETH) to $PayHole.
     /// @dev One or two pool keys, each sharing a currency with the previous hop, ending at the token.
     ///      An ETH route may start in a native-currency pool or in a WETH pool; the vault wraps incoming
-    ///      ETH when it starts in WETH. Replaces any previous route for that input.
+    ///      ETH when it starts in WETH. Replaces any previous route of either kind for that input.
     /// @param tokenIn USDG address or zero for ETH.
     /// @param hops Pool keys in swap order, exactly as the pools were initialized (fee, spacing, hooks).
     function setRoute(address tokenIn, PoolKey[] calldata hops) external onlyOwner {
@@ -127,12 +147,35 @@ contract BurnVault is OwnerSweep, ReentrancyGuard, IUnlockCallback {
             else revert BadRoute();
         }
         if (Currency.unwrap(cur) != token_) revert BadRoute();
-        delete _routes[tokenIn];
+        delete _v4Routes[tokenIn];
+        delete _v3Paths[tokenIn];
         for (uint256 i = 0; i < hops.length; ++i) {
-            _routes[tokenIn].push(hops[i]);
+            _v4Routes[tokenIn].push(hops[i]);
         }
+        routeKind[tokenIn] = RouteKind.V4;
         if (tokenIn == address(0)) ethRouteUsesWeth = viaWeth;
         emit RouteSet(tokenIn, hops.length, viaWeth);
+    }
+
+    /// @notice Configure a Uniswap V3 route from `tokenIn` (USDG, or the zero address for ETH) to $PayHole.
+    /// @dev `path` is the packed SwapRouter02 path `tokenA | fee | tokenB | fee | ... | token`, one to
+    ///      three hops. It must start at USDG for the USDG route or at WETH for the ETH route (the vault
+    ///      wraps ETH first) and end at the token. Replaces any previous route of either kind for that input.
+    /// @param tokenIn USDG address or zero for ETH.
+    /// @param path Packed path as SwapRouter02 expects it.
+    function setRouteV3(address tokenIn, bytes calldata path) external onlyOwner {
+        address token_ = token;
+        if (token_ == address(0)) revert TokenNotSet();
+        _requireSupported(tokenIn);
+        if (path.length < 43 || path.length > 89 || (path.length - 20) % 23 != 0) revert BadRoute();
+        address start = tokenIn == address(0) ? address(weth) : tokenIn;
+        if (address(bytes20(path[0:20])) != start) revert BadRoute();
+        if (address(bytes20(path[path.length - 20:])) != token_) revert BadRoute();
+        delete _v4Routes[tokenIn];
+        _v3Paths[tokenIn] = path;
+        routeKind[tokenIn] = RouteKind.V3;
+        if (tokenIn == address(0)) ethRouteUsesWeth = true;
+        emit RouteSetV3(tokenIn, path);
     }
 
     /// @notice Price an unlock tier in $PayHole. Zero removes the tier.
@@ -228,15 +271,21 @@ contract BurnVault is OwnerSweep, ReentrancyGuard, IUnlockCallback {
 
     // ------------------------------------------------------------------------ views
 
-    /// @notice Configured swap path for `tokenIn` (USDG or zero for ETH).
+    /// @notice Configured Uniswap V4 pool keys for `tokenIn` (USDG or zero for ETH); empty for V3 routes.
     function route(address tokenIn) external view returns (PoolKey[] memory) {
         _requireSupported(tokenIn);
-        return _routes[tokenIn];
+        return _v4Routes[tokenIn];
+    }
+
+    /// @notice Configured Uniswap V3 packed path for `tokenIn` (USDG or zero for ETH); empty for V4 routes.
+    function routeV3(address tokenIn) external view returns (bytes memory) {
+        _requireSupported(tokenIn);
+        return _v3Paths[tokenIn];
     }
 
     // ------------------------------------------------------------- Uniswap V4 callback
 
-    /// @notice Entered only by the PoolManager during {burnWith} or {burnHeld}.
+    /// @notice Entered only by the PoolManager during a V4 {burnWith} or {burnHeld}.
     /// @dev Swaps hop by hop with exact input, checks slippage, pays the input currency, and takes the
     ///      output directly to the burn address. A two-hop route nets the middle currency to zero.
     /// @param rawData ABI-encoded {CallbackData}.
@@ -244,7 +293,7 @@ contract BurnVault is OwnerSweep, ReentrancyGuard, IUnlockCallback {
     function unlockCallback(bytes calldata rawData) external returns (bytes memory) {
         if (msg.sender != address(poolManager)) revert NotPoolManager();
         CallbackData memory d = abi.decode(rawData, (CallbackData));
-        PoolKey[] storage hops = _routes[d.routeKey];
+        PoolKey[] storage hops = _v4Routes[d.routeKey];
         uint256 n = hops.length;
         if (n == 0) revert RouteNotSet();
 
@@ -295,26 +344,39 @@ contract BurnVault is OwnerSweep, ReentrancyGuard, IUnlockCallback {
         amountOut = SafeCast.toUint256(received);
     }
 
-    /// @dev Wraps ETH when the ETH route starts in WETH, then runs the swap inside an unlock.
+    /// @dev Wraps ETH when the route needs WETH, then swaps through V4 (unlock) or V3 (SwapRouter02).
     function _swapAndBurn(address tokenIn, uint256 amountIn, uint256 minAmountOut)
         private
         returns (uint256 tokensBurned)
     {
         if (token == address(0)) revert TokenNotSet();
-        if (_routes[tokenIn].length == 0) revert RouteNotSet();
-        Currency currencyIn = Currency.wrap(tokenIn);
+        RouteKind kind = routeKind[tokenIn];
+        if (kind == RouteKind.None) revert RouteNotSet();
+        address asset = tokenIn;
         if (tokenIn == address(0) && ethRouteUsesWeth) {
             weth.deposit{value: amountIn}();
-            currencyIn = Currency.wrap(address(weth));
+            asset = address(weth);
         }
-        bytes memory result = poolManager.unlock(
-            abi.encode(
-                CallbackData({
-                    routeKey: tokenIn, currencyIn: currencyIn, amountIn: amountIn, minAmountOut: minAmountOut
+        if (kind == RouteKind.V4) {
+            bytes memory result = poolManager.unlock(
+                abi.encode(
+                    CallbackData({
+                        routeKey: tokenIn,
+                        currencyIn: Currency.wrap(asset),
+                        amountIn: amountIn,
+                        minAmountOut: minAmountOut
+                    })
+                )
+            );
+            tokensBurned = abi.decode(result, (uint256));
+        } else {
+            IERC20(asset).forceApprove(address(swapRouter), amountIn);
+            tokensBurned = swapRouter.exactInput(
+                ISwapRouter02.ExactInputParams({
+                    path: _v3Paths[tokenIn], recipient: BURN_ADDRESS, amountIn: amountIn, amountOutMinimum: minAmountOut
                 })
-            )
-        );
-        tokensBurned = abi.decode(result, (uint256));
+            );
+        }
         emit Burned(msg.sender, tokenIn, amountIn, tokensBurned);
     }
 

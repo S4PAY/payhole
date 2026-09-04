@@ -11,6 +11,8 @@ library ChainConfig {
         address poolManager;
         address v4Quoter;
         address permit2;
+        address swapRouter02;
+        address quoterV2;
     }
 
     function load(Vm vm) internal view returns (Addresses memory a) {
@@ -20,5 +22,7 @@ library ChainConfig {
         a.poolManager = vm.parseJsonAddress(json, ".uniswapV4.poolManager");
         a.v4Quoter = vm.parseJsonAddress(json, ".uniswapV4.quoter");
         a.permit2 = vm.parseJsonAddress(json, ".uniswapV4.permit2");
+        a.swapRouter02 = vm.parseJsonAddress(json, ".uniswapV3.swapRouter02");
+        a.quoterV2 = vm.parseJsonAddress(json, ".uniswapV3.quoterV2");
     }
 }
