@@ -10,10 +10,16 @@ optimizer = true
 optimizer_runs = 200
 deny = "warnings"
 ignored_warnings_from = ["lib"]
-fs_permissions = [{ access = "read-write", path = "./deployments" }]
+fs_permissions = [
+  { access = "read-write", path = "./deployments" },
+  { access = "read", path = "./config" },
+]
+# test/v4 deploys Uniswap's PoolManager, which pins solc 0.8.26; see [profile.v4].
+skip = ["test/v4/**"]
 remappings = [
   "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
   "forge-std/=lib/forge-std/src/",
+  "@uniswap/v4-core/=lib/v4-core/",
 ]
 gas_reports = ["BudgetAccount", "BudgetAccountFactory", "BurnVault", "CreatorRegistry"]
 
@@ -29,6 +35,12 @@ max_test_rejects = 131072
 runs = 256
 depth = 64
 fail_on_revert = false
+
+[profile.v4]
+solc_version = "0.8.26"
+skip = []
+out = "out/v4"
+cache_path = "cache/v4"
 
 [profile.ci]
 fuzz = { runs = 8192 }
