@@ -26,6 +26,8 @@ gas_reports = ["BudgetAccount", "BudgetAccountFactory", "BurnVault", "CreatorReg
 [lint]
 # Expiry and deadline checks compare against block.timestamp by design.
 exclude_lints = ["block-timestamp"]
+# Compiled only under the v4 profile; the default profile skips it, so the linter has no AST for it.
+ignore = ["test/v4/*"]
 
 [fuzz]
 runs = 1024
