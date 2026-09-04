@@ -225,7 +225,7 @@ b = b.replace("<a>Test reports</a>", '<a href="https://github.com/S4PAY/payhole/
 # "Read the code" card: Sinkhole points at the package; every other Sinkhole link stays on the home section
 i = b.index("Read the code"); j = b.index("Test reports", i)
 b = b[:i] + b[i:j].replace("<a>Sinkhole</a>", '<a href="https://github.com/S4PAY/payhole/tree/main/packages/sinkhole">Sinkhole</a>') + b[j:]
-b = b.replace("<a>Sinkhole</a>", '<a href="/#sinkhole">Sinkhole</a>')
+b = b.replace("<a>Sinkhole</a>", '<a href="/sinkhole.html">Sinkhole</a>')
 write("trust.html", "Trust · PayHole", "Every part that touches your money, what each one can see, and where to read the code.", b)
 
 for f in sorted(os.listdir(S)):
