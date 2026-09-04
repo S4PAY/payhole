@@ -35,6 +35,13 @@ if (existsSync(kit)) {
   );
 }
 
+// Brand assets for launchpads and profiles, served under /brand.
+const brand = join(root, "dist", "brand");
+mkdirSync(brand, { recursive: true });
+cpSync(join(root, "..", "extension", "assets", "brand", "vortex.png"), join(brand, "vortex-1245.png"));
+cpSync(join(root, "..", "extension", "assets", "brand", "banner.png"), join(brand, "banner-1731x909.png"));
+cpSync(join(root, "static", "logo.png"), join(brand, "logo-256.png"));
+
 // Stamp stylesheet and script URLs so browsers fetch new assets after every deploy.
 const stamp = Date.now().toString(36);
 for (const file of readdirSync(join(root, "dist")).filter((f) => f.endsWith(".html"))) {
