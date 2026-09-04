@@ -61,7 +61,7 @@ input,textarea,select{box-sizing:border-box;max-width:100%}
 [style*="linear-gradient(90deg,var(--bg) 0%"]{background:linear-gradient(180deg,var(--bg) 0%,rgba(0,0,0,.9) 45%,rgba(0,0,0,.4) 70%,transparent 90%)!important}
 }
 @media (max-width:860px){[data-r~=four]{grid-template-columns:repeat(2,minmax(0,1fr))!important}[data-r~=arch]{padding:24px!important}}
-@media (max-width:720px){[style*="grid-template-columns:minmax(0,1fr) minmax(0,1fr)"]{grid-template-columns:1fr!important}[style*="display:flex;gap:12px"],[style*="grid-column:1 / -1;display:flex;align-items:center;gap:16px"]{flex-wrap:wrap}}
+@media (max-width:720px){[style*="grid-template-columns:minmax(0,1fr) minmax(0,1fr)"]{grid-template-columns:1fr!important}[style*="display:flex;gap:12px;padding-top:4px"],[style*="grid-column:1 / -1;display:flex;align-items:center;gap:16px"]{flex-wrap:wrap}}
 @media (max-width:520px){[data-r~=four]{grid-template-columns:minmax(0,1fr)!important}}
 """
 open(os.path.join(S, "styles.css"), "w").write(shared + "\n")
