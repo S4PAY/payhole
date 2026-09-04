@@ -146,7 +146,7 @@ class ApertureScene extends HTMLElement {
     const asp = this.cam.aspect, wide = Math.min(1, Math.max(0, (asp - 0.9) / 0.6));
     const ang = 0.35 + this.t * 0.4 + this.mx * 0.25, dist = 3.2 - p * 0.4;
     this.cam.position.set(Math.sin(ang) * dist, 1 + this.my * -0.3 + p * 0.3, Math.cos(ang) * dist);
-    const cx = wide * (0.8 + p * 0.3) * Math.min(1, asp / 1.6);
+    const cx = wide * (0.6 + p * 0.3) * Math.min(1, asp / 1.6);
     this.group.position.set(0, -0.1, 0);
     this.cam.lookAt(0, 0.4, 0);
     // shift framing horizontally via view offset so the tornado sits in the right column
