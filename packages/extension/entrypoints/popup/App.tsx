@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { browser } from "wxt/browser";
 import { useAction, useApi } from "@/components/hooks";
-import { ActionStatus, Address, LedgerTable, Notice, Panel, Usdg } from "@/components/ui";
+import { ActionStatus, Address, Brand, LedgerTable, Notice, Panel, Usdg } from "@/components/ui";
 import { call } from "@/lib/rpc";
 import { formatUsdg, toBigint } from "@/lib/format";
 import type { SiteCard, VaultStatus } from "@/lib/messages";
@@ -71,7 +71,7 @@ function Onboarding({ onDone }: { onDone: () => void }) {
 
   return (
     <div className="popup-body">
-      <h1>PayHole</h1>
+      <div className="topbar"><Brand compact /></div>
       {mode === "choose" ? (
         <Panel>
           <p>Spending pocket for Robinhood Chain. Create a new seed or import one.</p>
@@ -140,7 +140,7 @@ function Unlock({ onDone }: { onDone: () => void }) {
   const action = useAction(onDone);
   return (
     <div className="popup-body">
-      <h1>PayHole</h1>
+      <div className="topbar"><Brand compact /></div>
       <Panel title="Unlock">
         <form
           className="stack"
@@ -198,8 +198,8 @@ function Main({ status, reload }: { status: VaultStatus; reload: () => void }) {
 
   return (
     <div className="popup-body">
-      <div className="row between" style={{ marginBottom: 8 }}>
-        <h1>PayHole</h1>
+      <div className="row between topbar">
+        <Brand compact />
         <div className="row">
           <button type="button" onClick={openDashboard}>Dashboard</button>
           <button type="button" onClick={() => action.run(async () => { await call("vault:lock", {}); })}>Lock</button>

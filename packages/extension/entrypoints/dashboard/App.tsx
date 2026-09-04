@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useAction, useApi } from "@/components/hooks";
-import { ActionStatus, Notice, Panel } from "@/components/ui";
+import { ActionStatus, Brand, Notice, Panel } from "@/components/ui";
 import { Budget } from "@/components/sections/Budget";
 import { Sites } from "@/components/sections/Sites";
 import { Agents } from "@/components/sections/Agents";
@@ -27,7 +27,7 @@ export function App() {
   if (!status.data.exists) {
     return (
       <div className="page">
-        <h1>PayHole</h1>
+        <div className="topbar"><Brand /></div>
         <Notice>No seed yet. Open the PayHole toolbar popup to create or import one.</Notice>
         <SettingsPanel />
       </div>
@@ -37,7 +37,7 @@ export function App() {
   if (!status.data.unlocked) {
     return (
       <div className="page">
-        <h1>PayHole</h1>
+        <div className="topbar"><Brand /></div>
         <Panel title="Unlock">
           <form
             className="stack"
@@ -66,8 +66,8 @@ export function App() {
 
   return (
     <div className="page">
-      <div className="row between">
-        <h1>PayHole</h1>
+      <div className="row between topbar">
+        <Brand />
         <button type="button" onClick={() => unlock.run(async () => { await call("vault:lock", {}); })}>Lock</button>
       </div>
       <nav className="tabs">

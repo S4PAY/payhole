@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useApi } from "@/components/hooks";
-import { Address, Notice, Panel, Usdg } from "@/components/ui";
+import { Address, Brand, Notice, Panel, Usdg } from "@/components/ui";
 import { formatUsdg, toBigint } from "@/lib/format";
 import { call } from "@/lib/rpc";
 
@@ -26,6 +26,7 @@ export function App() {
   if (!request) {
     return (
       <div className="page">
+        <div className="topbar"><Brand compact /></div>
         <Notice>This request is no longer pending.</Notice>
         <button type="button" onClick={() => window.close()}>Close</button>
       </div>
@@ -35,8 +36,9 @@ export function App() {
   const globalRemaining = toBigint(request.globalCap) - toBigint(request.globalSpent);
   return (
     <div className="page">
-      <h1>Payment over cap</h1>
+      <div className="topbar"><Brand compact /></div>
       <Panel>
+        <h1>Payment over cap</h1>
         <p className="big"><Usdg value={request.amount} /></p>
         <dl className="grid">
           <dt>Site</dt>

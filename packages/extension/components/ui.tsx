@@ -3,6 +3,17 @@ import { formatAmount, formatTimestamp, formatUsdg, shortAddress, toBigint } fro
 import type { LedgerEntry } from "@/lib/ledger";
 import type { Action } from "./hooks";
 
+/** Logo mark and wordmark, the way the site's nav shows them. */
+export function Brand({ compact = false }: { compact?: boolean }) {
+  const size = compact ? 24 : 28;
+  return (
+    <div className={compact ? "brand compact" : "brand"}>
+      <img src="/logo.png" alt="" width={size} height={size} />
+      <span className="brand-name">PayHole</span>
+    </div>
+  );
+}
+
 export function Panel({ title, children, actions }: { title?: string; children: ReactNode; actions?: ReactNode }) {
   return (
     <section className="panel">

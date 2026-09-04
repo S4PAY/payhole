@@ -119,6 +119,10 @@ Only on explicit go-ahead, because it spends real USDG. Naven serves a public 40
 
 Primer (`https://x402.primer.systems`) runs the same scheme; any resource whose 402 lists `eip155:4663` with USDG and `extra: {name: "Global Dollar", version: "1"}` works.
 
+## Brand assets
+
+The toolbar icons in `public/icon/` and the in-page logo `public/logo.png` are rendered from `assets/brand/vortex.png` by `pnpm icons` (Playwright draws the circular crops; the PNGs are committed so a build needs no browser). The pages bundle Inter, Space Grotesk, and JetBrains Mono as variable woff2 files under `assets/fonts/` so they render offline; see `assets/fonts/LICENSE.md`.
+
 ## Known limitations
 
 - Sub-frame document loads that answer 402 are observed but not retried; requests made from inside frames by `fetch` or XHR are handled.
