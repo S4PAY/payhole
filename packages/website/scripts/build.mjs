@@ -1,6 +1,6 @@
 // Copies static/ into dist/ and compiles src/ TypeScript into dist/js with tsc (no bundler).
 import { execFileSync } from "node:child_process";
-import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,13 +10,21 @@ mkdirSync(join(root, "dist"), { recursive: true });
 cpSync(join(root, "static"), join(root, "dist"), { recursive: true });
 execFileSync("tsc", ["-p", "tsconfig.build.json"], { cwd: root, stdio: "inherit" });
 
+// Serve three.js from this origin for the aperture scene (the page's CSP allows scripts from self only).
+const three = join(root, "node_modules", "three");
+if (existsSync(three)) {
+  const vendor = join(root, "dist", "js", "vendor", "three");
+  cpSync(join(three, "build", "three.module.js"), join(vendor, "build", "three.module.js"));
+  cpSync(join(three, "examples", "jsm"), join(vendor, "examples", "jsm"), { recursive: true });
+}
+
 // Stamp stylesheet and script URLs so browsers fetch new assets after every deploy.
 const stamp = Date.now().toString(36);
 for (const file of readdirSync(join(root, "dist")).filter((f) => f.endsWith(".html"))) {
   const path = join(root, "dist", file);
   const html = readFileSync(path, "utf8")
     .replace('href="/styles.css"', `href="/styles.css?v=${stamp}"`)
-    .replace(/src="(\/js\/pages\/[a-z]+\.js)"/g, `src="$1?v=${stamp}"`);
+    .replace(/src="(\/js\/(?:pages\/[a-z]+|aperture)\.js)"/g, `src="$1?v=${stamp}"`);
   writeFileSync(path, html);
 }
 console.log("built dist/ with asset stamp", stamp);

@@ -157,6 +157,10 @@ importers:
         version: 5.0.0(@types/node@26.4.1)(vite@8.2.2(@types/node@26.4.1)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.13))
 
   packages/website:
+    dependencies:
+      three:
+        specifier: 0.160.0
+        version: 0.160.0
     devDependencies:
       '@types/node':
         specifier: ^26.4.1
@@ -1676,6 +1680,9 @@ packages:
 
   tasuku@2.3.0:
     resolution: {integrity: sha512-9Jtk+XAnttslCw4i9RceSZGr2PT5TLn0vUyWnoP2SdlSYzkiYRY6kB5qnPi5IQ/Em8e4oBow1rpaA39iijTIrA==}
+
+  three@0.160.0:
+    resolution: {integrity: sha512-DLU8lc0zNIPkM7rH5/e1Ks1Z8tWCGRq6g8mPowdDJpw1CFBJMU7UoJjC6PefXW7z//SSl0b2+GCw14LB+uDhng==}
 
   thunky@1.1.0:
     resolution: {integrity: sha512-eHY7nBftgThBqOyHGVN+l8gF0BucP09fMo0oO/Lb0w1OF80dJv+lDVpXG60WMQvkcxAkNybKsrEIE3ZtKGmPrA==}
@@ -3521,6 +3528,8 @@ snapshots:
   supports-color@10.2.2: {}
 
   tasuku@2.3.0: {}
+
+  three@0.160.0: {}
 
   thunky@1.1.0: {}
 

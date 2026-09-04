@@ -9,6 +9,7 @@
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
+<script type="importmap">{"imports":{"three":"/js/vendor/three/build/three.module.js","three/addons/":"/js/vendor/three/examples/jsm/"}}</script>
 <script type="module" src="/js/pages/home.js"></script>
 </head>
 <body>
@@ -29,7 +30,7 @@
 <!-- scroll track: hero + 4 steps pinned over the aperture -->
 <div id="track" data-scroll-track style="height:520vh;position:relative">
   <div style="position:sticky;top:0;height:100vh;overflow:hidden">
-    <div style="position:absolute;inset:0"><canvas id="aperture" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%"></canvas></div><div style="position:absolute;inset:0;background:linear-gradient(90deg,var(--bg) 0%,rgba(0,0,0,0.85) 30%,rgba(0,0,0,0.35) 55%,transparent 75%);pointer-events:none"></div>
+    <div style="position:absolute;inset:0"><aperture-scene style="position:absolute;inset:0;display:block"><canvas id="aperture" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%"></canvas></aperture-scene></div><div style="position:absolute;inset:0;background:linear-gradient(90deg,var(--bg) 0%,rgba(0,0,0,0.85) 30%,rgba(0,0,0,0.35) 55%,transparent 75%);pointer-events:none"></div>
     <div style="position:absolute;inset:0;max-width:1200px;margin:0 auto;padding:0 24px">
       <!-- 0 hero -->
       <div class="ph-layer" data-layer="0">

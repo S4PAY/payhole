@@ -51,8 +51,13 @@ input:focus{border-color:var(--accent)!important}
 open(os.path.join(S, "styles.css"), "w").write(shared + "\n")
 
 FONTS = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">'
-def head(title, desc, script=None):
+IMPORTMAP = '<script type="importmap">{"imports":{"three":"/js/vendor/three/build/three.module.js","three/addons/":"/js/vendor/three/examples/jsm/"}}</script>'
+def head(title, desc, script=None, scene=False):
     s = f'<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>{title}</title>\n<meta name="description" content="{desc}">\n<meta property="og:title" content="{title}"><meta property="og:description" content="{desc}"><meta property="og:type" content="website"><meta name="theme-color" content="#000000">\n<link rel="icon" href="/favicon.svg" type="image/svg+xml">\n{FONTS}\n<link rel="stylesheet" href="/styles.css">\n'
+    if scene:
+        # The design's hero is the aperture-scene element from aperture.js (three.js), served from this origin.
+        s += IMPORTMAP + "\n"
+        if os.path.exists(os.path.join(S, "js", "aperture.js")): s += '<script type="module" src="/js/aperture.js"></script>\n'
     if script: s += f'<script type="module" src="/js/pages/{script}.js"></script>\n'
     return s + "</head>\n<body>\n"
 
@@ -83,12 +88,12 @@ SF = lambda a: f"https://repo.sourcify.dev/contracts/full_match/4663/{a}/"
 BS = lambda a: f"https://robinhoodchain.blockscout.com/address/{a}"
 CONTRACTS = [("BudgetAccountFactory", "0x68b5bb42fec83db9582758bbcb1fc43f748970d6"), ("BurnVault", "0x298712ca3a1367bbd8caabd5269b05985228eedf"), ("CreatorRegistry", "0x5d483aec0735d550d09018a2e89c49c190962deb")]
 
-def write(name, title, desc, body, script=None):
-    open(os.path.join(S, name), "w").write(head(title, desc, script) + body + "\n</body>\n</html>\n")
+def write(name, title, desc, body, script=None, scene=False):
+    open(os.path.join(S, name), "w").write(head(title, desc, script, scene) + body + "\n</body>\n</html>\n")
 
 # ---- Home
 b = common(bodies["index"])
-b = b.replace('<x-import component-from-global-scope="aperture-scene" hint-size="100%,100%"></x-import>', '<canvas id="aperture" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%"></canvas>')
+b = b.replace('<x-import component-from-global-scope="aperture-scene" hint-size="100%,100%"></x-import>', '<aperture-scene style="position:absolute;inset:0;display:block"><canvas id="aperture" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%"></canvas></aperture-scene>')
 b = b.replace('<div data-scroll-track style="height:520vh;position:relative">', '<div id="track" data-scroll-track style="height:520vh;position:relative">')
 for i in range(5):
     b = b.replace(f'<div style="{{{{ l{i} }}}}">', f'<div class="ph-layer" data-layer="{i}">')
@@ -122,7 +127,7 @@ b = expand(b, "faq", [
   {"q": "Is Sinkhole a VPN?", "a": "No. It is a DNS resolver you run yourself. Blocked domains get no answer. Your traffic goes where it always went."},
   {"q": "Can I read the contracts?", "a": "Yes. They are open source, tested, and verified on Sourcify. Read them before you fund a pocket."},
 ])
-write("index.html", "PayHole", "A capped spending pocket on Robinhood Chain that pays websites, tools, and agents over x402 while you browse.", b, "home")
+write("index.html", "PayHole", "A capped spending pocket on Robinhood Chain that pays websites, tools, and agents over x402 while you browse.", b, "home", scene=True)
 
 # ---- Creators
 b = common(bodies["creators"])

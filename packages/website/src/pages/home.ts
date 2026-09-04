@@ -23,6 +23,13 @@ function layerState(i: number, p: number): { vis: number; dy: number } {
 
 let lastP = -1;
 let start = performance.now();
+let fallback = true;
+
+// The design's hero is the aperture-scene element from aperture.js; the canvas only stands in until it is defined.
+void customElements.whenDefined("aperture-scene").then(() => {
+  fallback = false;
+  canvas?.remove();
+});
 
 function drawAperture(p: number, t: number): void {
   if (!canvas) return;
@@ -94,7 +101,7 @@ function frame(t: number): void {
   apply();
   if (track) {
     const r = track.getBoundingClientRect();
-    if (r.bottom > 0 && r.top < window.innerHeight) drawAperture(lastP < 0 ? 0 : lastP, t - start);
+    if (fallback && r.bottom > 0 && r.top < window.innerHeight) drawAperture(lastP < 0 ? 0 : lastP, t - start);
   }
   requestAnimationFrame(frame);
 }
