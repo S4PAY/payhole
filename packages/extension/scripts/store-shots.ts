@@ -107,7 +107,8 @@ async function main(): Promise<void> {
     await popup.reload();
     await popup.waitForSelector("text=settled", { timeout: 30_000 });
     await popup.waitForTimeout(500);
-    await popup.screenshot({ path: join(OUT, "popup.png") });
+    const popupHeight = await popup.evaluate(() => Math.ceil(document.body.getBoundingClientRect().height) + 12);
+    await popup.screenshot({ path: join(OUT, "popup.png"), clip: { x: 0, y: 0, width: 360, height: Math.min(640, popupHeight) } });
     console.log("popup captured");
 
     // Dashboard: budget and sites.

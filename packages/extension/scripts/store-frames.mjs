@@ -51,7 +51,7 @@ for (const s of shots) {
 
 // Promo tile 440x280 and marquee 1400x560 from the banner artwork.
 const banner = data(join(root, "assets", "brand", "banner.png"));
-for (const [name, w, h, pos] of [["promo-small-440x280.png", 440, 280, "38% 50%"], ["promo-marquee-1400x560.png", 1400, 560, "50% 45%"]]) {
+for (const [name, w, h, pos] of [["promo-small-440x280.png", 440, 280, "0% 50%"], ["promo-marquee-1400x560.png", 1400, 560, "50% 18%"]]) {
   await page.setViewportSize({ width: w, height: h });
   await page.setContent(`<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;background:#000}img{display:block;width:${w}px;height:${h}px;object-fit:cover;object-position:${pos}}</style></head><body><img src="${banner}"></body></html>`);
   await page.waitForTimeout(200);

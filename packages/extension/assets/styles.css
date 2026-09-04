@@ -422,7 +422,8 @@ body.popup td {
 }
 
 body.popup th {
-  letter-spacing: 0.06em;
+  font-size: 10px;
+  letter-spacing: 0.04em;
 }
 
 body.popup td:nth-child(2) {
