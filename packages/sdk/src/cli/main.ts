@@ -1,37 +1,40 @@
 #!/usr/bin/env node
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join } from "node:path";
-import { createPublicClient, erc20Abi, formatUnits, http, isAddress, parseUnits, type Address, type Hex } from "viem";
-import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
+import { createPublicClient, erc20Abi, http, isAddress, type Address, type Hex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { budgetAccountAbi, readSessionKey } from "../budget/index.js";
-import { chainConfig, customChain, robinhoodChain, USDG_ADDRESS, USDG_DECIMALS } from "../chain.js";
-import { NoAcceptableOfferError, PaymentRefusedError, X402ProtocolError } from "../errors.js";
+import { chainConfig, customChain, robinhoodChain, USDG_ADDRESS } from "../chain.js";
+import { NoAcceptableOfferError, PayholeError, PaymentRefusedError, X402ProtocolError } from "../errors.js";
 import { payholeFetch } from "../payholeFetch.js";
-import { createX402Fetch, type PaymentReceipt } from "../x402/index.js";
+import { formatUsdg, parseUsdg } from "../usdg.js";
+import { createX402Fetch, type PaymentOffer, type PaymentReceipt } from "../x402/index.js";
+import { defaultKeyStorePath, KeyStore, type StoredKey } from "./keystore.js";
 
-const USAGE = `payhole - pay x402 URLs from a BudgetAccount with a session key
+const USAGE = `payhole - pay x402 URLs from a PayHole pocket with capped session keys
 
 Usage:
-  payhole key create                 generate a session key and store it in the key file
-  payhole key import <private-key>   store an existing session key
-  payhole key address                print the session key address (give this to the account owner)
-  payhole key export                 print the private key
-  payhole status                     show the key's cap, spend, and balances on the BudgetAccount
-  payhole pay <url> [options]        fetch a URL, paying a 402 if the key's cap allows it
-      --method <GET|POST|...>        HTTP method (default GET)
-      --data <body>                  request body
-      --header <name:value>          extra request header, repeatable
-      --max <usdg>                   refuse offers above this amount, e.g. 0.05
-      --quiet                        print only the response body
+  payhole key create --name <name> --cap <usdg>      generate a session key with a local spending cap
+  payhole key import --name <name> --cap <usdg> <private-key>
+  payhole key list                                   every key: name, address, spent / cap
+  payhole key address [--key <name>]                 print a key's address (give it to the pocket owner)
+  payhole key export --key <name>                    print a key's private key
+  payhole status                                     pocket balance, every key's spend, sinkhole state
+  payhole pay <url> [options]                        fetch a URL, paying its 402 if the caps allow
+  payhole <url> [options]                            same as pay
+      --key <name>                                   which stored key pays (default: the only key)
+      --max <usdg>                                   refuse offers above this amount for this call, e.g. 0.05
+      --method <GET|POST|...>                        HTTP method (default GET)
+      --data <body>                                  request body
+      --header <name:value>                          extra request header, repeatable
+      --quiet                                        print only the response body
 
 Environment:
-  PAYHOLE_BUDGET_ACCOUNT   BudgetAccount address the key was issued on (required for status and pay)
-  PAYHOLE_KEY_FILE         key file path (default ~/.payhole/session-key.json)
-  PAYHOLE_SESSION_KEY      private key, overrides the key file
+  PAYHOLE_HOME             directory of the key file (default ~/.payhole, file keys.json, mode 600)
+  PAYHOLE_BUDGET_ACCOUNT   pocket (BudgetAccount) the keys were issued on; without it keys pay from their own USDG balance
+  PAYHOLE_SESSION_KEY      private key to use instead of the stored keys (no local cap)
   PAYHOLE_RPC_URL          RPC endpoint (default: the official Robinhood Chain RPC)
   PAYHOLE_CHAIN_ID         chain id (default 4663)
   PAYHOLE_USDG             USDG address override (tests only)
+  SINKHOLE_ADMIN_URL       Sinkhole admin API for the status line (default http://127.0.0.1:8053)
 
 Exit codes: 0 success, 1 error, 2 payment refused (cap, policy, or key not live), 3 no acceptable offer.
 `;
@@ -41,24 +44,25 @@ interface Settings {
   chainId: number;
   usdg: Address;
   budgetAccount: Address | undefined;
-  keyFile: string;
   sessionKey: Hex | undefined;
+  store: KeyStore;
+  sinkholeUrl: string;
 }
 
 function settings(): Settings {
-  const chainId = Number(process.env["PAYHOLE_CHAIN_ID"] ?? chainConfig.chainId);
-  const budgetAccount = process.env["PAYHOLE_BUDGET_ACCOUNT"];
+  const budgetAccount = process.env["PAYHOLE_BUDGET_ACCOUNT"] ?? process.env["PAYHOLE_ACCOUNT"];
   const usdg = process.env["PAYHOLE_USDG"];
   if (budgetAccount && !isAddress(budgetAccount)) fail("PAYHOLE_BUDGET_ACCOUNT is not an address");
   if (usdg && !isAddress(usdg)) fail("PAYHOLE_USDG is not an address");
   const sessionKey = process.env["PAYHOLE_SESSION_KEY"];
   return {
     rpcUrl: process.env["PAYHOLE_RPC_URL"] ?? chainConfig.rpc,
-    chainId,
+    chainId: Number(process.env["PAYHOLE_CHAIN_ID"] ?? chainConfig.chainId),
     usdg: (usdg as Address | undefined) ?? USDG_ADDRESS,
     budgetAccount: budgetAccount as Address | undefined,
-    keyFile: process.env["PAYHOLE_KEY_FILE"] ?? join(homedir(), ".payhole", "session-key.json"),
     sessionKey: sessionKey ? normalizeKey(sessionKey) : undefined,
+    store: new KeyStore(defaultKeyStorePath()),
+    sinkholeUrl: process.env["SINKHOLE_ADMIN_URL"] ?? "http://127.0.0.1:8053",
   };
 }
 
@@ -73,28 +77,18 @@ function normalizeKey(value: string): Hex {
   return key as Hex;
 }
 
-function loadKey(s: Settings): Hex {
-  if (s.sessionKey) return s.sessionKey;
-  if (!existsSync(s.keyFile)) fail(`no session key: run "payhole key create" or set PAYHOLE_SESSION_KEY (looked in ${s.keyFile})`);
-  const parsed = JSON.parse(readFileSync(s.keyFile, "utf8")) as { privateKey?: string };
-  if (!parsed.privateKey) fail(`key file ${s.keyFile} has no privateKey field`);
-  return normalizeKey(parsed.privateKey);
+/** `0x9c1e…4a2f`, the way addresses appear in the extension. */
+function short(address: string): string {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
-function saveKey(s: Settings, privateKey: Hex): Address {
-  const account = privateKeyToAccount(privateKey);
-  mkdirSync(dirname(s.keyFile), { recursive: true, mode: 0o700 });
-  writeFileSync(
-    s.keyFile,
-    JSON.stringify({ privateKey, address: account.address, createdAt: new Date().toISOString() }, null, 2) + "\n",
-    { mode: 0o600 },
-  );
-  chmodSync(s.keyFile, 0o600);
-  return account.address;
+/** Left column of every line the CLI prints, padded so values line up. */
+function row(label: string, value: string): string {
+  return `${label.padEnd(8)} ${value}`;
 }
 
-function usdgText(amount: bigint): string {
-  return `${formatUnits(amount, USDG_DECIMALS)} USDG`;
+function amount(value: bigint): string {
+  return `${formatUsdg(value)} USDG`;
 }
 
 function clients(s: Settings) {
@@ -102,74 +96,17 @@ function clients(s: Settings) {
   return { chain, publicClient: createPublicClient({ chain, transport: http(s.rpcUrl) }) };
 }
 
-function commandKey(s: Settings, args: string[]): void {
-  const [sub, value] = args;
-  switch (sub) {
-    case "create": {
-      if (existsSync(s.keyFile)) fail(`refusing to overwrite ${s.keyFile}; move it first`);
-      const address = saveKey(s, generatePrivateKey());
-      process.stdout.write(`created session key ${address}\nstored in ${s.keyFile}\n`);
-      return;
-    }
-    case "import": {
-      if (!value) fail("usage: payhole key import <private-key>");
-      if (existsSync(s.keyFile)) fail(`refusing to overwrite ${s.keyFile}; move it first`);
-      const address = saveKey(s, normalizeKey(value));
-      process.stdout.write(`imported session key ${address}\nstored in ${s.keyFile}\n`);
-      return;
-    }
-    case "address":
-      process.stdout.write(`${privateKeyToAccount(loadKey(s)).address}\n`);
-      return;
-    case "export":
-      process.stdout.write(`${loadKey(s)}\n`);
-      return;
-    case undefined:
-    default:
-      fail(USAGE);
-  }
-}
-
-async function commandStatus(s: Settings): Promise<void> {
-  if (!s.budgetAccount) fail("set PAYHOLE_BUDGET_ACCOUNT");
-  const key = privateKeyToAccount(loadKey(s)).address;
-  const { publicClient } = clients(s);
-  const [state, keyUsdg, keyEth, accountUsdg, globalCap, globalSpent, owner] = await Promise.all([
-    readSessionKey(publicClient, s.budgetAccount, key),
-    publicClient.readContract({ address: s.usdg, abi: erc20Abi, functionName: "balanceOf", args: [key] }),
-    publicClient.getBalance({ address: key }),
-    publicClient.readContract({ address: s.usdg, abi: erc20Abi, functionName: "balanceOf", args: [s.budgetAccount] }),
-    publicClient.readContract({ address: s.budgetAccount, abi: budgetAccountAbi, functionName: "globalCap" }),
-    publicClient.readContract({ address: s.budgetAccount, abi: budgetAccountAbi, functionName: "globalSpent" }),
-    publicClient.readContract({ address: s.budgetAccount, abi: budgetAccountAbi, functionName: "owner" }),
-  ]);
-  const expiry = state.expiry === 0 ? "-" : new Date(state.expiry * 1000).toISOString();
-  process.stdout.write(
-    [
-      `budget account   ${s.budgetAccount} (owner ${owner})`,
-      `account balance  ${usdgText(accountUsdg)}`,
-      `global cap       ${usdgText(globalSpent)} spent of ${usdgText(globalCap)}`,
-      `session key      ${key}`,
-      `key status       ${state.live ? "live" : "not live"} (epoch ${state.epoch}, expires ${expiry})`,
-      `key cap          ${usdgText(state.spent)} spent of ${usdgText(state.cap)}`,
-      `remaining        ${usdgText(state.remaining)}`,
-      `key balances     ${usdgText(keyUsdg)}, ${formatUnits(keyEth, 18)} ETH for gas`,
-      "",
-    ].join("\n"),
-  );
-}
-
-interface PayArgs {
-  url: string;
-  method: string;
-  data: string | undefined;
-  headers: Record<string, string>;
-  max: bigint | undefined;
+interface Flags {
+  values: Record<string, string>;
+  headers: string[];
   quiet: boolean;
+  positional: string[];
 }
 
-function parsePayArgs(args: string[]): PayArgs {
-  const out: PayArgs = { url: "", method: "GET", data: undefined, headers: {}, max: undefined, quiet: false };
+const VALUE_FLAGS = new Set(["--name", "--cap", "--key", "--max", "--method", "--data"]);
+
+function parseFlags(args: string[]): Flags {
+  const out: Flags = { values: {}, headers: [], quiet: false, positional: [] };
   for (let i = 0; i < args.length; i++) {
     const arg = args[i] ?? "";
     const next = (): string => {
@@ -177,74 +114,211 @@ function parsePayArgs(args: string[]): PayArgs {
       if (v === undefined) fail(`${arg} needs a value`);
       return v;
     };
-    if (arg === "--method") out.method = next().toUpperCase();
-    else if (arg === "--data") out.data = next();
-    else if (arg === "--max") out.max = parseUnits(next(), USDG_DECIMALS);
+    if (VALUE_FLAGS.has(arg)) out.values[arg.slice(2)] = next();
+    else if (arg === "--header") out.headers.push(next());
     else if (arg === "--quiet") out.quiet = true;
-    else if (arg === "--header") {
-      const raw = next();
-      const idx = raw.indexOf(":");
-      if (idx <= 0) fail("--header expects name:value");
-      out.headers[raw.slice(0, idx).trim()] = raw.slice(idx + 1).trim();
-    } else if (arg.startsWith("--")) fail(`unknown option ${arg}`);
-    else if (!out.url) out.url = arg;
-    else fail(`unexpected argument ${arg}`);
+    else if (arg.startsWith("--")) fail(`unknown option ${arg}`);
+    else out.positional.push(arg);
   }
-  if (!out.url) fail("usage: payhole pay <url> [options]");
   return out;
 }
 
+function capFlag(flags: Flags, usage: string): bigint {
+  const raw = flags.values["cap"];
+  if (raw === undefined) fail(usage);
+  const cap = parseUsdg(raw);
+  if (cap <= 0n) fail("--cap must be more than zero");
+  return cap;
+}
+
+/** Which key a command works with: --key from the store, else PAYHOLE_SESSION_KEY, else the only stored key. */
+function chooseKey(s: Settings, flags: Flags): { privateKey: Hex; stored: StoredKey | undefined } {
+  const name = flags.values["key"];
+  if (name !== undefined) {
+    const stored = s.store.get(name);
+    if (!stored) fail(`no key named "${name}" in ${s.store.path}; run "payhole key list"`);
+    return { privateKey: stored.privateKey, stored };
+  }
+  if (s.sessionKey) return { privateKey: s.sessionKey, stored: undefined };
+  const keys = s.store.list();
+  const [only] = keys;
+  if (keys.length === 1 && only) return { privateKey: only.privateKey, stored: only };
+  if (keys.length === 0) fail(`no session key: run "payhole key create --name <name> --cap <usdg>" or set PAYHOLE_SESSION_KEY (looked in ${s.store.path})`);
+  return fail(`several keys in ${s.store.path}; choose one with --key <name>`);
+}
+
+function commandKey(s: Settings, args: string[]): void {
+  const [sub, ...rest] = args;
+  const flags = parseFlags(rest);
+  switch (sub) {
+    case "create": {
+      const name = flags.values["name"];
+      if (name === undefined) fail("usage: payhole key create --name <name> --cap <usdg>");
+      const key = s.store.create(name, capFlag(flags, "usage: payhole key create --name <name> --cap <usdg>"));
+      process.stdout.write(`${row("created", `${short(key.address)}  cap ${amount(key.cap)}`)}\n`);
+      return;
+    }
+    case "import": {
+      const name = flags.values["name"];
+      const [raw] = flags.positional;
+      if (name === undefined || raw === undefined) fail("usage: payhole key import --name <name> --cap <usdg> <private-key>");
+      const key = s.store.create(name, capFlag(flags, "usage: payhole key import --name <name> --cap <usdg> <private-key>"), normalizeKey(raw));
+      process.stdout.write(`${row("imported", `${short(key.address)}  cap ${amount(key.cap)}`)}\n`);
+      return;
+    }
+    case "list": {
+      const keys = s.store.list();
+      if (keys.length === 0) {
+        process.stdout.write(`no keys in ${s.store.path}\n`);
+        return;
+      }
+      const width = Math.max(...keys.map((k) => k.name.length));
+      for (const k of keys) process.stdout.write(`${k.name.padEnd(width)}  ${short(k.address)}  ${formatUsdg(k.spent)} / ${formatUsdg(k.cap)}\n`);
+      return;
+    }
+    case "address":
+      process.stdout.write(`${privateKeyToAccount(chooseKey(s, flags).privateKey).address}\n`);
+      return;
+    case "export": {
+      if (flags.values["key"] === undefined) fail("usage: payhole key export --key <name>");
+      process.stdout.write(`${chooseKey(s, flags).privateKey}\n`);
+      return;
+    }
+    case undefined:
+    default:
+      fail(USAGE);
+  }
+}
+
+/** `on` when the local Sinkhole admin API answers its health check within half a second. */
+async function sinkholeState(url: string): Promise<"on" | "off"> {
+  try {
+    const response = await fetch(`${url.replace(/\/$/, "")}/healthz`, { signal: AbortSignal.timeout(500) });
+    if (!response.ok) return "off";
+    const body = (await response.json()) as { ok?: unknown };
+    return body.ok === true ? "on" : "off";
+  } catch {
+    return "off";
+  }
+}
+
+async function commandStatus(s: Settings): Promise<void> {
+  const { publicClient } = clients(s);
+  const keys = s.store.list();
+  const lines: string[] = [];
+
+  if (s.budgetAccount) {
+    const account = s.budgetAccount;
+    const [balance, cap, spent] = await Promise.all([
+      publicClient.readContract({ address: s.usdg, abi: erc20Abi, functionName: "balanceOf", args: [account] }),
+      publicClient.readContract({ address: account, abi: budgetAccountAbi, functionName: "globalCap" }),
+      publicClient.readContract({ address: account, abi: budgetAccountAbi, functionName: "globalSpent" }),
+    ]);
+    lines.push(row("pocket", `${amount(balance)}  cap ${formatUsdg(cap)}  spent ${formatUsdg(spent)}  ${short(account)}`));
+  } else {
+    const payer = s.sessionKey ? privateKeyToAccount(s.sessionKey).address : keys[0]?.address;
+    if (payer) {
+      const balance = await publicClient.readContract({ address: s.usdg, abi: erc20Abi, functionName: "balanceOf", args: [payer] });
+      lines.push(row("pocket", `${amount(balance)}  direct from ${short(payer)}, no budget account`));
+    } else {
+      lines.push(row("pocket", "none: set PAYHOLE_BUDGET_ACCOUNT or create a key"));
+    }
+  }
+
+  if (keys.length === 0) {
+    lines.push(row("keys", "none"));
+  } else {
+    const width = Math.max(...keys.map((k) => k.name.length));
+    const account = s.budgetAccount;
+    const chainState = account ? await Promise.all(keys.map((k) => readSessionKey(publicClient, account, k.address))) : keys.map(() => undefined);
+    keys.forEach((k, i) => {
+      const state = chainState[i];
+      const onChain = state ? `  ${state.live ? "live" : "not live"} on chain, ${formatUsdg(state.remaining)} left` : "";
+      lines.push(row(i === 0 ? "keys" : "", `${k.name.padEnd(width)}  ${formatUsdg(k.spent)} / ${formatUsdg(k.cap)}${onChain}`));
+    });
+  }
+
+  lines.push(row("sinkhole", await sinkholeState(s.sinkholeUrl)));
+  process.stdout.write(`${lines.join("\n")}\n`);
+}
+
 async function commandPay(s: Settings, args: string[]): Promise<void> {
-  const pay = parsePayArgs(args);
+  const flags = parseFlags(args);
+  const [url, extra] = flags.positional;
+  if (url === undefined) fail("usage: payhole pay <url> [--key <name>] [--max <usdg>] [--method M] [--data body] [--header n:v] [--quiet]");
+  if (extra !== undefined) fail(`unexpected argument ${extra}`);
+  const headers: Record<string, string> = {};
+  for (const raw of flags.headers) {
+    const idx = raw.indexOf(":");
+    if (idx <= 0) fail("--header expects name:value");
+    headers[raw.slice(0, idx).trim()] = raw.slice(idx + 1).trim();
+  }
+  const maxRaw = flags.values["max"];
+  const max = maxRaw !== undefined ? parseUsdg(maxRaw) : undefined;
+  const method = (flags.values["method"] ?? "GET").toUpperCase();
+  const data = flags.values["data"];
+
   const log = (line: string) => {
-    if (!pay.quiet) process.stderr.write(`${line}\n`);
+    if (!flags.quiet) process.stderr.write(`${line}\n`);
   };
-  const onPaid = (receipt: PaymentReceipt) => {
-    log(`paid ${usdgText(receipt.offer.amount)} to ${receipt.offer.payTo} (x402 v${receipt.offer.version})`);
-    if (receipt.settlement) {
-      log(
-        receipt.settlement.success
-          ? `settled in ${receipt.settlement.transaction}`
-          : `settlement failed: ${receipt.settlement.errorReason ?? "unknown"}`,
+  const { privateKey, stored } = chooseKey(s, flags);
+  const account = privateKeyToAccount(privateKey);
+
+  // The local cap is checked before anything is signed or pulled; the chain checks its own cap after.
+  const localCap = (offer: PaymentOffer) => {
+    if (stored && stored.spent + offer.amount > stored.cap) {
+      throw new PaymentRefusedError(
+        `key "${stored.name}" can spend ${formatUsdg(stored.cap - stored.spent)} USDG more, needs ${formatUsdg(offer.amount)} USDG`,
+        "cap-exceeded",
+        offer.amount,
       );
     }
+    return { allow: true as const };
   };
-  const account = privateKeyToAccount(loadKey(s));
+  const onPaid = (receipt: PaymentReceipt) => {
+    const settled = receipt.settlement ? receipt.settlement.success : receipt.status < 400;
+    if (settled) {
+      if (stored) s.store.recordSpend(stored.name, receipt.offer.amount);
+      const tx = receipt.settlement?.transaction;
+      log(row("paid", `${amount(receipt.offer.amount)}${tx ? `  tx ${short(tx)}` : ""}`));
+    } else {
+      log(row("failed", `settlement: ${receipt.settlement?.errorReason ?? `status ${receipt.status}`}`));
+    }
+  };
+
   let fetchPaid: typeof globalThis.fetch;
   if (s.budgetAccount) {
     fetchPaid = payholeFetch({
-      sessionKey: loadKey(s),
+      sessionKey: privateKey,
       budgetAccount: s.budgetAccount,
       rpcUrl: s.rpcUrl,
       chainId: s.chainId,
       usdg: s.usdg,
-      ...(pay.max !== undefined ? { maxAmount: pay.max } : {}),
-      onPull: (pulled, txHash) => log(`pulled ${usdgText(pulled)} from the budget account (${txHash ?? "no tx"})`),
+      ...(max !== undefined ? { maxAmount: max } : {}),
+      authorize: localCap,
+      onPull: (pulled, txHash) => log(row("pulled", `${amount(pulled)} from the pocket${txHash ? `  tx ${short(txHash)}` : ""}`)),
       onPaid,
     });
   } else {
-    // No BudgetAccount configured: pay from the key's own USDG balance. Used for facilitator interop checks.
-    log("PAYHOLE_BUDGET_ACCOUNT not set: paying from the key's own balance");
+    // No pocket configured: pay from the key's own USDG balance. Used for facilitator interop checks.
+    log(row("direct", `paying from ${short(account.address)}, no budget account set`));
     fetchPaid = createX402Fetch({
       signer: account,
       chainId: s.chainId,
       asset: s.usdg,
-      authorize: (offer) =>
-        pay.max !== undefined && offer.amount > pay.max
-          ? { allow: false, reason: `amount ${offer.amount.toString()} exceeds the configured maximum` }
-          : { allow: true },
+      authorize: (offer) => {
+        if (max !== undefined && offer.amount > max) {
+          throw new PaymentRefusedError(`offer of ${amount(offer.amount)} exceeds --max ${amount(max)}`, "max-exceeded", offer.amount);
+        }
+        return localCap(offer);
+      },
       onPaid,
     });
   }
-  log(`payer ${account.address}`);
   try {
-    const response = await fetchPaid(pay.url, {
-      method: pay.method,
-      headers: pay.headers,
-      ...(pay.data !== undefined ? { body: pay.data } : {}),
-    });
+    const response = await fetchPaid(url, { method, headers, ...(data !== undefined ? { body: data } : {}) });
     const body = await response.text();
-    log(`${response.status} ${response.statusText}`.trim());
+    log(row("status", `${response.status} ${response.statusText}`.trim()));
     process.stdout.write(body.endsWith("\n") || body.length === 0 ? body : `${body}\n`);
     process.exitCode = response.ok ? 0 : 1;
   } catch (error) {
@@ -257,14 +331,13 @@ async function commandPay(s: Settings, args: string[]): Promise<void> {
 
 async function main(argv: string[]): Promise<void> {
   const [command, ...rest] = argv;
-  const s = settings();
   switch (command) {
     case "key":
-      return commandKey(s, rest);
+      return commandKey(settings(), rest);
     case "status":
-      return commandStatus(s);
+      return commandStatus(settings());
     case "pay":
-      return commandPay(s, rest);
+      return commandPay(settings(), rest);
     case "help":
     case "--help":
     case "-h":
@@ -272,10 +345,11 @@ async function main(argv: string[]): Promise<void> {
       process.stdout.write(USAGE);
       return;
     default:
+      if (/^https?:\/\//.test(command)) return commandPay(settings(), argv);
       fail(USAGE);
   }
 }
 
 main(process.argv.slice(2)).catch((error: unknown) => {
-  fail(error instanceof Error ? error.message : String(error));
+  fail(error instanceof PayholeError ? error.message : error instanceof Error ? error.message : String(error));
 });

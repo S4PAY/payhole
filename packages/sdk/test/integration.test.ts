@@ -19,6 +19,7 @@ import {
   budgetAccountFactoryAbi,
   customChain,
   NoAcceptableOfferError,
+  PayholeError,
   PaymentRefusedError,
   payholeFetch,
   readSessionKey,
@@ -209,17 +210,55 @@ describe("payholeFetch against a BudgetAccount", () => {
   });
 });
 
+describe("payholeFetch direct form", () => {
+  const directKey = generatePrivateKey();
+  const directAccount = privateKeyToAccount(directKey);
+  const saved = { ...process.env };
+
+  afterAll(() => {
+    for (const name of ["PAYHOLE_SESSION_KEY", "PAYHOLE_BUDGET_ACCOUNT", "PAYHOLE_RPC_URL", "PAYHOLE_CHAIN_ID", "PAYHOLE_USDG"]) {
+      if (saved[name] === undefined) delete process.env[name];
+      else process.env[name] = saved[name];
+    }
+  });
+
+  it("reads its settings from the environment and honours cap per call", async () => {
+    await ownerWrite("setSessionKey", [directAccount.address, 1_000_000n, BigInt(Math.floor(Date.now() / 1000) + 3600)]);
+    const hash = await wallet(funder, anvil.rpcUrl).sendTransaction({ to: directAccount.address, value: parseEther("1") });
+    await publicClient.waitForTransactionReceipt({ hash });
+    Object.assign(process.env, {
+      PAYHOLE_SESSION_KEY: directKey,
+      PAYHOLE_BUDGET_ACCOUNT: budgetAccount,
+      PAYHOLE_RPC_URL: anvil.rpcUrl,
+      PAYHOLE_CHAIN_ID: String(CHAIN_ID),
+      PAYHOLE_USDG: usdg,
+    });
+    const payments = server.stats.payments;
+    const refused = await payholeFetch(`${server.url}/paid`, { cap: "0.10" }).catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(PaymentRefusedError);
+    expect((refused as PaymentRefusedError).reason).toBe("max-exceeded");
+    expect(server.stats.payments).toBe(payments);
+
+    const response = await payholeFetch(`${server.url}/paid`, { method: "POST", body: "{}", cap: 0.25 });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, paid: PRICE.toString() });
+    expect(server.stats.payments).toBe(payments + 1);
+
+    delete process.env["PAYHOLE_SESSION_KEY"];
+    await expect(payholeFetch(`${server.url}/free`)).rejects.toBeInstanceOf(PayholeError);
+  });
+});
+
 describe("payhole CLI", () => {
-  const cliKey = generatePrivateKey();
-  const cliAccount = privateKeyToAccount(cliKey);
-  const keyDir = mkdtempSync(join(tmpdir(), "payhole-cli-"));
+  const home = mkdtempSync(join(tmpdir(), "payhole-cli-"));
   const env = () => ({
     ...process.env,
-    PAYHOLE_KEY_FILE: join(keyDir, "key.json"),
+    PAYHOLE_HOME: home,
     PAYHOLE_BUDGET_ACCOUNT: budgetAccount,
     PAYHOLE_RPC_URL: anvil.rpcUrl,
     PAYHOLE_CHAIN_ID: String(CHAIN_ID),
     PAYHOLE_USDG: usdg,
+    SINKHOLE_ADMIN_URL: "http://127.0.0.1:9",
   });
   // The mock server lives in this process, so the CLI must run asynchronously to be answered.
   const cli = (...args: string[]) =>
@@ -232,33 +271,46 @@ describe("payhole CLI", () => {
       child.on("close", (status) => resolve({ status, stdout, stderr }));
     });
 
-  it("imports a key, shows status, pays once, then refuses", async () => {
-    const imported = await cli("key", "import", cliKey);
-    expect(imported.status, imported.stderr).toBe(0);
-    expect(imported.stdout).toContain(cliAccount.address);
-    expect((await cli("key", "address")).stdout.trim()).toBe(cliAccount.address);
+  // Every CLI run imports viem cold, which is slow on a network mount; the budget below covers nine runs.
+  it("creates a capped key, shows status, pays once, then refuses", { timeout: 900_000 }, async () => {
+    const created = await cli("key", "create", "--name", "research", "--cap", "0.25");
+    expect(created.status, created.stderr).toBe(0);
+    expect(created.stdout).toMatch(/^created {2}0x[0-9a-fA-F]{4}\u2026[0-9a-fA-F]{4} {2}cap 0.25 USDG\n$/);
+    const address = (await cli("key", "address", "--key", "research")).stdout.trim();
+    expect(address).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect((await cli("key", "list")).stdout).toContain("research  0x");
 
-    await ownerWrite("setSessionKey", [cliAccount.address, PRICE, BigInt(Math.floor(Date.now() / 1000) + 3600)]);
-    const hash = await wallet(funder, anvil.rpcUrl).sendTransaction({ to: cliAccount.address, value: parseEther("1") });
+    await ownerWrite("setSessionKey", [address, PRICE, BigInt(Math.floor(Date.now() / 1000) + 3600)]);
+    const hash = await wallet(funder, anvil.rpcUrl).sendTransaction({ to: address as Address, value: parseEther("1") });
     await publicClient.waitForTransactionReceipt({ hash });
 
     const status = await cli("status");
     expect(status.status, status.stderr).toBe(0);
-    expect(status.stdout).toContain("remaining        0.25 USDG");
-    expect(status.stdout).toContain("live");
+    expect(status.stdout).toMatch(/^pocket {3}\d+\.\d\d USDG {2}cap /m);
+    expect(status.stdout).toContain("keys     research  0.00 / 0.25  live on chain, 0.25 left");
+    expect(status.stdout).toContain("sinkhole off");
 
-    const paid = await cli("pay", `${server.url}/paid`);
+    const capped = await cli("pay", `${server.url}/paid`, "--key", "research", "--max", "0.10");
+    expect(capped.status, capped.stderr).toBe(2);
+    expect(capped.stderr).toContain("payment refused (max-exceeded)");
+
+    const paid = await cli("pay", `${server.url}/paid`, "--key", "research");
     expect(paid.status, paid.stderr).toBe(0);
-    expect(paid.stderr).toContain("paid 0.25 USDG");
-    expect(paid.stderr).toContain("settled in 0x");
+    expect(paid.stderr).toMatch(/^pulled {3}0.25 USDG from the pocket {2}tx 0x/m);
+    expect(paid.stderr).toMatch(/^paid {5}0.25 USDG {2}tx 0x[0-9a-fA-F]{4}\u2026[0-9a-fA-F]{4}$/m);
     expect(JSON.parse(paid.stdout)).toEqual({ ok: true, paid: PRICE.toString() });
 
-    const refused = await cli("pay", `${server.url}/paid`);
+    const refused = await cli(`${server.url}/paid`, "--key", "research");
     expect(refused.status, refused.stderr).toBe(2);
-    expect(refused.stderr).toContain("payment refused");
-    expect(refused.stderr).toContain("cap-exceeded");
+    expect(refused.stderr).toContain("payment refused (cap-exceeded)");
+    expect(refused.stderr).toContain('key "research" can spend 0.00 USDG more');
 
     const after = await cli("status");
-    expect(after.stdout).toContain("remaining        0 USDG");
+    expect(after.stdout).toContain("keys     research  0.25 / 0.25  live on chain, 0.00 left");
+
+    const quiet = await cli("pay", `${server.url}/free`, "--key", "research", "--quiet");
+    expect(quiet.status).toBe(0);
+    expect(quiet.stderr).toBe("");
+    expect(JSON.parse(quiet.stdout)).toEqual({ free: true });
   });
 });
