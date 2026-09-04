@@ -9,9 +9,11 @@ import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { Blocklist, parseExtensionPush, type BlocklistState } from "./blocklist.js";
 import { loadConfig, type SinkholeConfig } from "./config.js";
 import { DnsmasqSupervisor } from "./dnsmasq.js";
+import { QueryStats, type QueryStatsState } from "./queryLog.js";
 import { RateLimiter } from "./rateLimit.js";
 import { createAdminServer } from "./server.js";
 import { debounce, readJson, writeJsonAtomic } from "./store.js";
+import { Subscriptions } from "./subscriptions.js";
 import { Directory, type DirectoryEntry } from "./swarm/directory.js";
 import { cachedTierReader, createTierReader, type TierReader } from "./swarm/membership.js";
 import {
@@ -39,6 +41,7 @@ interface Identity {
 }
 
 const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
 const VERSION = (createRequire(import.meta.url)("../package.json") as { version?: string }).version ?? "0.0.0";
 
 function log(line: string): void {
@@ -125,6 +128,31 @@ async function run(config: SinkholeConfig): Promise<void> {
   const blocklist = new Blocklist({ threshold: config.flags.threshold, ttlMs: config.flags.ttlDays * 24 * 60 * MINUTE }, persisted.blocklist ?? null);
   if (config.manualFile) await loadManualFile(blocklist, config.manualFile);
 
+  const subscriptions = await Subscriptions.load({ dir: join(config.dataDir, "lists"), refreshMs: config.lists.refreshHours * HOUR, log }, config.lists.urls);
+  blocklist.setLists(subscriptions.domains());
+  subscriptions.onChange(() => blocklist.setLists(subscriptions.domains()));
+  if (subscriptions.size > 0) log(`${subscriptions.size} list subscriptions, ${subscriptions.domains().size} domains cached from earlier fetches`);
+
+  const statsPath = join(config.dataDir, "stats.json");
+  let stats: QueryStats | null = null;
+  if (config.queryLog.enabled) {
+    let saved: QueryStatsState | null = null;
+    try {
+      saved = await readJson<QueryStatsState>(statsPath);
+    } catch (error) {
+      log(`ignoring unreadable ${statsPath}: ${errorText(error)}`);
+    }
+    stats = new QueryStats({}, saved);
+  }
+  const persistStats = async (): Promise<void> => {
+    if (!stats?.changed) return;
+    try {
+      await writeJsonAtomic(statsPath, stats.toJSON());
+    } catch (error) {
+      log(`failed to persist statistics: ${errorText(error)}`);
+    }
+  };
+
   const directory = new Directory(
     { probe: (entry) => probeEndpoint(entry, { allowPrivate: config.probe.allowPrivate }), limiter: new RateLimiter(6, 60 * MINUTE) },
     persisted.directory ?? null,
@@ -138,15 +166,26 @@ async function run(config: SinkholeConfig): Promise<void> {
     }
   }, 1000);
 
+  const statsRef = stats;
   const dnsmasq = new DnsmasqSupervisor({
     binary: config.dns.binary,
     confDir: join(config.dataDir, "dnsmasq"),
-    settings: { listen: config.dns.listen, port: config.dns.port, upstream: config.dns.upstream, cacheSize: config.dns.cacheSize, user: config.dns.user },
+    settings: { listen: config.dns.listen, port: config.dns.port, upstream: config.dns.upstream, cacheSize: config.dns.cacheSize, user: config.dns.user, logQueries: config.queryLog.enabled },
     log,
+    ...(statsRef
+      ? {
+          onLine: (line: string) => {
+            if (!statsRef.ingest(line)) log(line);
+          },
+        }
+      : {}),
   });
+  const blockSets = (): { curated: Set<string>; hosts: ReadonlySet<string> } => ({ curated: blocklist.curated(), hosts: blocklist.listDomains() });
   const applyDns = debounce(async () => {
     try {
-      if (await dnsmasq.apply(blocklist.domains())) log(`blocklist applied: ${blocklist.domains().size} domains`);
+      const sets = blockSets();
+      const result = await dnsmasq.apply(sets);
+      if (result !== "unchanged") log(`blocklist ${result}: ${sets.curated.size} curated domains, ${sets.hosts.size} from lists`);
     } catch (error) {
       log(`failed to apply blocklist: ${errorText(error)}`);
     }
@@ -156,8 +195,8 @@ async function run(config: SinkholeConfig): Promise<void> {
     persist.trigger();
   });
   directory.onChange(() => persist.trigger());
-  await dnsmasq.start(blocklist.domains());
-  log(`dnsmasq listening on ${config.dns.listen}:${config.dns.port}, upstream ${config.dns.upstream.join(", ")}, ${blocklist.domains().size} domains blocked`);
+  await dnsmasq.start(blockSets());
+  log(`dnsmasq listening on ${config.dns.listen}:${config.dns.port}, upstream ${config.dns.upstream.join(", ")}, ${blocklist.domains().size} domains blocked, query log ${config.queryLog.enabled ? "on" : "off"}`);
 
   let swarm: Swarm | null = null;
   let identity: Identity | null = null;
@@ -268,7 +307,9 @@ async function run(config: SinkholeConfig): Promise<void> {
       listenAddrs: swarm?.multiaddrs() ?? [],
       connectedPeers: swarm?.peers() ?? [],
       identity: identity ? { address: identity.address, publishing: identity.account !== null } : null,
-      counts: blocklist.counts(),
+      counts: { ...blocklist.counts(), ...(stats ? { queries24h: stats.snapshot().summary.queries24h, blocked24h: stats.snapshot().summary.blocked24h } : {}) },
+      queryLog: { enabled: config.queryLog.enabled },
+      lists: subscriptions.size,
       flagThreshold: blocklist.threshold,
       flagTtlDays: config.flags.ttlDays,
       directory: directory.size,
@@ -284,8 +325,18 @@ async function run(config: SinkholeConfig): Promise<void> {
         membership: { minTier: config.membership.minTier, vault: config.membership.vault ?? null },
         extension: { url: config.extension.url ?? null, pullMinutes: config.extension.pullMinutes },
         flags: { threshold: config.flags.threshold, ttlDays: config.flags.ttlDays, reannounceMinutes: config.flags.reannounceMinutes },
+        queryLog: { enabled: config.queryLog.enabled },
+        lists: { refreshHours: config.lists.refreshHours },
       },
     }),
+    ...(stats ? { stats: { snapshot: () => stats.snapshot(), queries: (filter) => stats.queries(filter) } } : {}),
+    subscriptions: {
+      list: () => subscriptions.list(),
+      get: (id) => subscriptions.get(id),
+      add: (url) => subscriptions.add(url),
+      remove: (id) => subscriptions.remove(id),
+      refresh: (id) => subscriptions.refresh(id),
+    },
     directory: {
       list: () => directory.list(),
       add: async (input) => {
@@ -315,7 +366,14 @@ async function run(config: SinkholeConfig): Promise<void> {
       blocklist.prune();
       directory.prune();
     }, MINUTE),
+    setInterval(() => void subscriptions.refreshDue(), 5 * MINUTE),
   ];
+  void subscriptions.refreshDue();
+  if (stats) {
+    const live = stats;
+    timers.push(setInterval(() => live.sweep(), 5_000));
+    timers.push(setInterval(() => void persistStats(), MINUTE));
+  }
   if (swarm) {
     timers.push(setTimeout(() => void announceOwnFlags(), MINUTE));
     timers.push(setInterval(() => void announceOwnFlags(), config.flags.reannounceMinutes * MINUTE));
@@ -338,6 +396,7 @@ async function run(config: SinkholeConfig): Promise<void> {
       if (swarm) await swarm.stop().catch((error: unknown) => log(`swarm stop failed: ${errorText(error)}`));
       await dnsmasq.stop();
       await persist.flush();
+      await persistStats();
       process.exit(0);
     })();
   };

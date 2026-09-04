@@ -9,6 +9,10 @@ export interface DnsmasqSettings {
   cacheSize: number;
   /** Absolute path of the rendered blocklist, included with `conf-file=`. */
   blocklistFile: string;
+  /** Absolute path of the rendered hosts file for subscribed lists, loaded with `addn-hosts=`; re-read on SIGHUP. */
+  hostsFile?: string | undefined;
+  /** Log every query to stderr in the `extra` format so the agent can build statistics. */
+  logQueries?: boolean | undefined;
   /** Unprivileged user dnsmasq switches to after binding; omitted when undefined. */
   user?: string | undefined;
 }
@@ -27,8 +31,9 @@ function safe(value: string, name: string): string {
 }
 
 /**
- * Renders the main dnsmasq configuration. Query logging is deliberately absent: the Sinkhole never
- * observes what is resolved, only which names are blocked.
+ * Renders the main dnsmasq configuration. Query logging is off unless `logQueries` is set; with it on,
+ * dnsmasq prints one line per query, forward and answer to stderr, where the agent aggregates them into
+ * statistics without storing more than a bounded ring of recent queries.
  */
 export function renderDnsmasqConfig(settings: DnsmasqSettings): string {
   if (isIP(settings.listen) === 0) throw new Error("listen must be an IP address");
@@ -52,6 +57,8 @@ export function renderDnsmasqConfig(settings: DnsmasqSettings): string {
     "local-ttl=60",
     ...settings.upstream.map((server) => `server=${server}`),
     ...(settings.user ? [`user=${safe(settings.user, "user")}`] : []),
+    ...(settings.logQueries ? ["log-queries=extra"] : []),
+    ...(settings.hostsFile ? [`addn-hosts=${safe(settings.hostsFile, "hostsFile")}`] : []),
     `conf-file=${safe(settings.blocklistFile, "blocklistFile")}`,
     "",
   ];
@@ -70,6 +77,22 @@ export function renderBlocklistConfig(domains: Iterable<string>): string {
     if (/[\s/#]/.test(domain)) throw new Error(`refusing to render unsafe domain ${JSON.stringify(domain)}`);
     lines.push(`address=/${domain}/0.0.0.0`);
     lines.push(`address=/${domain}/::`);
+  }
+  lines.push("");
+  return lines.join("\n");
+}
+
+/**
+ * Renders subscribed lists as a hosts file: `0.0.0.0 <domain>` per name. dnsmasq answers A queries for these
+ * names with 0.0.0.0 and AAAA queries with NODATA (a name it knows locally is never forwarded), matches exact
+ * names only (public lists enumerate hosts, not zones), and re-reads the file on SIGHUP without a restart.
+ */
+export function renderHostsFile(domains: Iterable<string>): string {
+  const sorted = [...new Set(domains)].sort();
+  const lines = ["# Rendered by the PayHole Sinkhole agent from subscribed lists. Edits are overwritten.", `# ${sorted.length} blocked domains`];
+  for (const domain of sorted) {
+    if (/[\s#]/.test(domain)) throw new Error(`refusing to render unsafe domain ${JSON.stringify(domain)}`);
+    lines.push(`0.0.0.0 ${domain}`);
   }
   lines.push("");
   return lines.join("\n");

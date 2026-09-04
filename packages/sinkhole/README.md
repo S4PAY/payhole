@@ -5,7 +5,8 @@ DNS-level blocker for PayHole users plus the sync agent that feeds it. One conta
 - **dnsmasq**, configured entirely from files the agent renders, answering `0.0.0.0` (and `::`) for every blocked domain and all of its subdomains, and forwarding everything else upstream.
 - **The agent** (Node, PID 1), which receives the browser extension's blocklist, joins a libp2p gossipsub swarm of other Sinkhole nodes to share drainer and scam domain flags and a directory of verified x402 endpoints, merges the sources, and restarts dnsmasq whenever the merged list changes.
 
-Point a machine's or a network's DNS at the Sinkhole and drainer domains stop resolving.
+Point a machine's or a network's DNS at the Sinkhole and drainer domains stop resolving. It can run behind a Pi-hole or
+replace one: it subscribes to the same public hosts-format blocklists, and its admin page counts and charts every query.
 
 ## Blocklist sources
 
@@ -14,14 +15,21 @@ Point a machine's or a network's DNS at the Sinkhole and drainer domains stop re
 | Local flags | The extension pushes its list to `PUT /api/blocklist`, or the agent pulls the same JSON from `EXTENSION_BLOCKLIST_URL` | Always |
 | Manual entries | `MANUAL_BLOCKLIST_FILE` (one hostname per line, hosts-file lines and `#` comments accepted) plus `POST /api/blocklist/manual` and `DELETE /api/blocklist/manual/:domain` | Always |
 | Swarm flags | Flag messages from other nodes | Only after `FLAG_THRESHOLD` distinct reporters (default 5) with valid membership proofs have flagged the domain within `FLAG_TTL_DAYS` (default 30) |
+| Subscribed lists | `BLOCKLIST_URLS` plus `POST /api/subscriptions` on the admin page; hosts format or one name per line, refetched every `BLOCKLIST_REFRESH_HOURS` (default 24) with `ETag` and `If-Modified-Since` | Always, by exact name |
 
 Hostnames are validated everywhere they enter: lowercase, punycode, no scheme, path, port or IP literal, at least two labels. Anything else is rejected and reported, never silently repaired.
 
-The merged list is rendered to `DATA_DIR/dnsmasq/blocklist.conf` as `address=/<domain>/0.0.0.0` lines. dnsmasq only reads `address=` rules at startup (SIGHUP re-reads hosts files, not the configuration), so the agent applies a change with a quick graceful restart of dnsmasq; a burst of changes is coalesced into one restart. Clients that query during the few milliseconds of restart retry on their own.
+The curated sources (extension, manual, swarm) are rendered to `DATA_DIR/dnsmasq/blocklist.conf` as `address=/<domain>/0.0.0.0` lines, which sink the domain and every subdomain. dnsmasq only reads `address=` rules at startup, so a change to that set is applied with a quick graceful restart; a burst of changes is coalesced into one restart, and clients that query during the few milliseconds of restart retry on their own.
+
+Subscribed lists go to `DATA_DIR/dnsmasq/blocked.hosts` as `0.0.0.0 <name>` lines, loaded with `addn-hosts`. Public lists enumerate exact hostnames, and dnsmasq answers a name it knows locally without forwarding it (A gets 0.0.0.0, AAAA gets NODATA), so this is the right shape for them, and it keeps the config parser out of the picture: a hosts file is re-read on SIGHUP, so a list refresh never restarts the resolver. Rendering the 300 000 names of a large list takes about 150 ms in the agent (measured in `test/dnsmasq.test.ts`); the file is about 9.5 MB, and dnsmasq loads it into its cache table on the reload. On the Rock Pi 4B+ where the swarm test ran, a list of that size is expected to cost dnsmasq tens of megabytes of memory and a second or two per reload; measure it there before subscribing to several very large lists on a 2 GB box.
+
+## Query statistics
+
+With `QUERY_LOG_ENABLED=1` (the default) dnsmasq runs with `log-queries=extra` and writes its log to the agent, which reads each line and keeps fixed-size counters: 24 hours at one-minute resolution and 7 days at one-hour resolution (total, blocked, cached, forwarded), the last 24 hours per client, the top blocked and top permitted names, query types, upstreams, and a ring of the last 1000 queries. A snapshot goes to `DATA_DIR/stats.json` once a minute when something changed, so a restart keeps the history. Memory is bounded by the ring sizes: at most 256 clients and 1500 distinct names per source are ranked per hour; a busier hour still counts in the totals. `GET /api/stats` and `GET /api/queries` serve the admin page's Queries tab: the stacked 24-hour chart, the 7-day chart, the ranked lists, and the query log with client, domain and status filters.
 
 ## Privacy
 
-Only explicit flags leave the node: the domains the extension pushed and the manual entries. The agent never observes what is resolved. It does not read dnsmasq logs, and the rendered configuration enables no query logging at all. Swarm announcements carry a domain, a reason, a timestamp and the operator's signatures; nothing about traffic.
+Only explicit flags leave the node: the domains the extension pushed and the manual entries. Swarm announcements carry a domain, a reason, a timestamp and the operator's signatures; nothing about traffic. Query statistics stay on the node: they are counters and a short ring in `DATA_DIR`, readable only with the admin token, and `QUERY_LOG_ENABLED=0` turns the query log off entirely, in which case the resolver never observes what is resolved.
 
 ## The swarm
 
@@ -73,9 +81,11 @@ Run them against the same volume the service uses, otherwise the proof is for a 
 
 ## Admin page
 
-The admin API serves a dashboard at `/` on the admin port: status cards (resolver, blocked domains by source, peers,
-pending flags, last syncs), the blocklist with manual entries and exports, swarm flags with reporter counts, the x402
-directory with the probe form, and a Node tab with the running configuration. It loads only from this origin (fonts,
+The admin API serves a dashboard at `/` on the admin port: status cards (resolver, queries and blocked in the last 24
+hours, blocked domains by source, peers, pending flags, last syncs), a Queries tab with the charts, ranked lists and
+query log, the blocklist with manual entries, search and exports, a Lists tab to subscribe, refresh and remove public
+blocklists, swarm flags with reporter counts, the x402 directory with the probe form, and a Node tab with the running
+configuration. It loads only from this origin (fonts,
 logo, and script are bundled under `/admin/`), keeps the token in the browser's local storage, and refreshes every 30
 seconds. Preview it with seeded data and no resolver: `pnpm exec tsx scripts/demo-admin.ts 18053`, token `demo`.
 
@@ -95,7 +105,7 @@ Docker publishes container ports by inserting its own iptables rules ahead of uf
 
 The admin port is bound to `127.0.0.1` in the compose file; put a reverse proxy with TLS in front of it if the extension or an operator must reach it remotely. The swarm port (4001/tcp) should be reachable from other nodes if this node is to be a bootstrap peer.
 
-Data lives in the `sinkhole-data` volume: `state.json` (flags, manual entries, directory), `peer.key`, and `dnsmasq/` with the rendered configuration. Back up `peer.key` if the PeerId matters (the membership proof is bound to it).
+Data lives in the `sinkhole-data` volume: `state.json` (flags, manual entries, directory), `stats.json` (query counters), `lists/` (subscribed lists and their metadata), `peer.key`, and `dnsmasq/` with the rendered configuration. Back up `peer.key` if the PeerId matters (the membership proof is bound to it).
 
 ## Environment
 
@@ -114,6 +124,9 @@ Data lives in the `sinkhole-data` volume: `state.json` (flags, manual entries, d
 | `EXTENSION_BLOCKLIST_URL` | unset | Pull the extension JSON from here |
 | `EXTENSION_PULL_MINUTES` | `15` | Pull interval |
 | `MANUAL_BLOCKLIST_FILE` | unset | Hostnames to always block, read at startup |
+| `BLOCKLIST_URLS` | unset | Public blocklists to subscribe to, comma separated |
+| `BLOCKLIST_REFRESH_HOURS` | `24` | How often subscribed lists are refetched |
+| `QUERY_LOG_ENABLED` | `1` | `0` disables the query log and the statistics |
 | `FLAG_THRESHOLD` | `5` | Distinct reporters needed to block a swarm-flagged domain |
 | `FLAG_TTL_DAYS` | `30` | Flag lifetime |
 | `FLAG_REANNOUNCE_MINUTES` | `30` | Re-announcement interval for own flags |
@@ -139,7 +152,7 @@ All routes except `/healthz` and the page at `/` need `Authorization: Bearer <AD
 | `GET /healthz` | `{ok, dnsmasq, peers}`; 503 when dnsmasq is not running |
 | `GET /` | Single-file admin page; reads the endpoints below with a pasted token |
 | `GET /api/status` | Peer id, listen addresses, connected peers, counts (local, manual, swarm confirmed, merged), directory size, last extension sync and last swarm message, dropped-message counters, dnsmasq state |
-| `GET /api/blocklist` | Merged list with the sources of every domain |
+| `GET /api/blocklist?q=&limit=` | Merged list with the sources of every domain; `q` filters, `limit` caps the page (default 1000, max 5000), `count` and `matched` report the totals |
 | `GET /api/blocklist/export?format=hosts\|dnsmasq\|plain\|json` | Download the merged list |
 | `PUT /api/blocklist` | Extension push `{version: 1, updatedAt, entries: [{domain, reason, flaggedAt}]}`; replaces the local list, answers `{accepted, added, removed, rejected}` |
 | `POST /api/blocklist/manual` | `{domain, reason?}`; 201 when new |
@@ -147,6 +160,12 @@ All routes except `/healthz` and the page at `/` need `Authorization: Bearer <AD
 | `GET /api/directory` | Verified x402 endpoints |
 | `POST /api/directory` | `{url, payTo, network?, asset?}`; probes, stores and announces, or 422 with the probe failure |
 | `GET /api/flags` | Swarm flag counts per domain with the threshold |
+| `GET /api/stats` | Query statistics: 24-hour and 7-day series, summary, clients, top blocked and permitted, types, upstreams; 404 when logging is off |
+| `GET /api/queries?limit=&client=&domain=&status=` | Most recent queries, newest first; `status` is blocked, cached, forwarded, local, unanswered or unknown |
+| `GET /api/subscriptions` | Subscribed lists with entries, last fetch, next refresh and last error |
+| `POST /api/subscriptions` | `{url}`; subscribes and fetches at once; 201 when new |
+| `POST /api/subscriptions/:id/refresh` | Fetch one list now |
+| `DELETE /api/subscriptions/:id` | Unsubscribe and drop its names |
 
 Bodies are limited to 4 MB.
 
@@ -161,7 +180,7 @@ pnpm --filter @payhole/sinkhole lint
 pnpm --filter @payhole/sinkhole build
 ```
 
-The tests cover the merge and threshold rules, hostname validation, message signing and verification with a mocked tier reader, the directory probe against a local mock server (valid 402, 200, mismatched payTo, loopback refused before any request, timeout), dnsmasq rendering and the supervisor (with a stand-in binary), the admin API, and a three-node swarm in-process: A publishes a flag, B records one reporter and relays it to C, a second distinct operator confirms it at threshold 2, and messages with a mismatched proof or an unqualified operator are dropped, counted, and not forwarded.
+The tests cover the merge and threshold rules, hostname validation, the dnsmasq log parser and the statistics rings (correlation of queries with their outcome, windows, the log ring, persistence), list subscriptions against a local server (hosts and plain formats, conditional requests, size cap, timeout, persistence), message signing and verification with a mocked tier reader, the directory probe against a local mock server (valid 402, 200, mismatched payTo, loopback refused before any request, timeout), dnsmasq rendering and the supervisor (with a stand-in binary), the admin API, and a three-node swarm in-process: A publishes a flag, B records one reporter and relays it to C, a second distinct operator confirms it at threshold 2, and messages with a mismatched proof or an unqualified operator are dropped, counted, and not forwarded.
 
 To run the agent outside Docker, dnsmasq must be installed (`DNSMASQ_BINARY` if it is not on `PATH`), the process needs to bind the chosen `DNS_PORT`, and `pnpm dev` starts it from the sources.
 
@@ -178,7 +197,9 @@ To run the agent outside Docker, dnsmasq must be installed (`DNSMASQ_BINARY` if 
 - Re-announcing thousands of local flags every `FLAG_REANNOUNCE_MINUTES` costs one message per flag. Large lists on many nodes add up; raise the interval for big deployments.
 - Gossipsub is awaited on the directory probe (up to 5 seconds per new entry) before forwarding, which is deliberate so unverified entries never propagate, but it slows directory gossip on busy nodes.
 - IPv6 blocking answers `::` for AAAA; a client that ignores the AAAA answer and only has IPv4 is unaffected either way.
-- The admin page keeps the token in `sessionStorage` for the tab's lifetime; use it from a trusted browser.
+- The admin page keeps the token in the browser's local storage until Disconnect; use it from a trusted browser.
+- Query statistics are counters, not a database: there is no per-client history beyond 24 hours and no full query archive. Pi-hole's long-term database has no equivalent here by design.
+- Subscribed lists are matched by exact name, as in every hosts-format list. Blocking a whole zone with its subdomains is what the curated sources do.
 
 ## Run it at home on a Raspberry Pi or another edge box
 

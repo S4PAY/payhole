@@ -1,7 +1,9 @@
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Blocklist } from "../src/blocklist.js";
+import { QueryStats } from "../src/queryLog.js";
 import { createAdminServer } from "../src/server.js";
+import type { SubscriptionInfo } from "../src/subscriptions.js";
 import type { DirectoryEntry } from "../src/swarm/directory.js";
 
 const TOKEN = "test-token-123";
@@ -11,8 +13,14 @@ const USDG = "0x5fc5360D0400a0Fd4f2af552ADD042D716F1d168";
 const blocklist = new Blocklist({ threshold: 2, ttlMs: 3_600_000 });
 const published: { domain: string; reason: string }[][] = [];
 const directory: DirectoryEntry[] = [];
+const stats = new QueryStats();
+const subscriptions = new Map<string, SubscriptionInfo>();
 let healthy = true;
 let base = "";
+
+function subscription(url: string): SubscriptionInfo {
+  return { id: "abcdefabcdef", url, addedAt: 1, lastFetchedAt: null, lastSuccessAt: null, lastError: null, entries: 0, bytes: 0, etag: null, lastModified: null, nextRefreshAt: 1 };
+}
 
 const server = createAdminServer({
   token: TOKEN,
@@ -43,6 +51,25 @@ const server = createAdminServer({
     },
   },
   publish: (entries) => published.push(entries),
+  stats: { snapshot: () => stats.snapshot(), queries: (filter) => stats.queries(filter) },
+  subscriptions: {
+    list: () => [...subscriptions.values()],
+    get: (id) => subscriptions.get(id),
+    add: (url) => {
+      if (!url.startsWith("http")) return Promise.reject(new Error("url must be an http(s) URL without credentials"));
+      const existing = [...subscriptions.values()].find((s) => s.url === url);
+      if (existing) return Promise.resolve({ item: existing, added: false });
+      const item = subscription(url);
+      subscriptions.set(item.id, item);
+      return Promise.resolve({ item, added: true });
+    },
+    remove: (id) => Promise.resolve(subscriptions.delete(id)),
+    refresh: (id) => {
+      const item = subscriptions.get(id);
+      if (item) item.entries = 42;
+      return Promise.resolve({ ok: true, changed: true, entries: 42, error: null });
+    },
+  },
   maxBodyBytes: 2048,
 });
 
@@ -84,7 +111,7 @@ describe("admin api", () => {
   it("reports status", async () => {
     const res = await call("/api/status");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ peerId: "12D3KooWtest", counts: { local: 0, manual: 0, swarmConfirmed: 0, swarmFlagged: 0, merged: 0 } });
+    expect(await res.json()).toEqual({ peerId: "12D3KooWtest", counts: { local: 0, manual: 0, swarmConfirmed: 0, swarmFlagged: 0, list: 0, merged: 0 } });
   });
 
   it("accepts an extension push, then exports every format", async () => {
@@ -107,9 +134,22 @@ describe("admin api", () => {
       ],
     ]);
 
-    const list = (await (await call("/api/blocklist")).json()) as { count: number; entries: { domain: string; sources: string[] }[] };
+    const list = (await (await call("/api/blocklist")).json()) as { count: number; matched: number; entries: { domain: string; sources: string[] }[] };
     expect(list.count).toBe(2);
+    expect(list.matched).toBe(2);
     expect(list.entries.map((e) => e.domain)).toEqual(["drainer.example", "tracker.example"]);
+    blocklist.setLists(new Set(["ads.example", "tracker.example", "zzz.example"]));
+    const merged = (await (await call("/api/blocklist?limit=2")).json()) as { count: number; matched: number; entries: { domain: string; sources: string[] }[] };
+    expect(merged.count).toBe(4);
+    expect(merged.matched).toBe(4);
+    expect(merged.entries.map((e) => [e.domain, e.sources])).toEqual([
+      ["drainer.example", ["local"]],
+      ["tracker.example", ["local", "list"]],
+    ]);
+    const searched = (await (await call("/api/blocklist?q=zzz")).json()) as { matched: number; entries: { domain: string; sources: string[] }[] };
+    expect(searched.matched).toBe(1);
+    expect(searched.entries).toEqual([{ domain: "zzz.example", sources: ["list"], reason: "subscribed list" }]);
+    blocklist.setLists(new Set());
 
     const plain = await call("/api/blocklist/export?format=plain");
     expect(plain.headers.get("content-type")).toContain("text/plain");
@@ -159,6 +199,60 @@ describe("admin api", () => {
     expect((await call("/api/directory", { method: "POST", body: JSON.stringify({ url: "https://api.example/x" }) })).status).toBe(400);
     const list = (await (await call("/api/directory")).json()) as { count: number };
     expect(list.count).toBe(1);
+  });
+});
+
+describe("statistics and subscriptions", () => {
+  it("serves the stats snapshot and the filtered query log", async () => {
+    stats.ingest("dnsmasq[1]: 7 10.0.0.2/1 query[A] drainer.example from 10.0.0.2");
+    stats.ingest("dnsmasq[1]: 7 10.0.0.2/1 config drainer.example is 0.0.0.0");
+    stats.ingest("dnsmasq[1]: 8 10.0.0.2/2 query[A] ok.example from 10.0.0.2");
+    stats.ingest("dnsmasq[1]: 8 10.0.0.2/2 cached ok.example is 1.2.3.4");
+    const snap = (await (await call("/api/stats")).json()) as { summary: { queries24h: number; blocked24h: number }; minutes: { total: number[] } };
+    expect(snap.summary).toMatchObject({ queries24h: 2, blocked24h: 1 });
+    expect(snap.minutes.total).toHaveLength(1440);
+    const all = (await (await call("/api/queries")).json()) as { count: number; entries: { domain: string; status: string }[] };
+    expect(all.entries.map((q) => q.domain)).toEqual(["ok.example", "drainer.example"]);
+    const blocked = (await (await call("/api/queries?status=blocked&limit=5")).json()) as { entries: { domain: string }[] };
+    expect(blocked.entries.map((q) => q.domain)).toEqual(["drainer.example"]);
+    expect((await call("/api/queries?status=weird")).status).toBe(400);
+    expect((await call("/api/stats", { method: "POST" })).status).toBe(405);
+  });
+
+  it("manages subscriptions", async () => {
+    const created = await call("/api/subscriptions", { method: "POST", body: JSON.stringify({ url: "https://lists.example/hosts.txt" }) });
+    expect(created.status).toBe(201);
+    expect(await created.json()).toMatchObject({ added: true, entry: { url: "https://lists.example/hosts.txt", entries: 42 }, refresh: { ok: true, entries: 42 } });
+    const again = await call("/api/subscriptions", { method: "POST", body: JSON.stringify({ url: "https://lists.example/hosts.txt" }) });
+    expect(again.status).toBe(200);
+    expect((await call("/api/subscriptions", { method: "POST", body: JSON.stringify({ url: "ftp://x" }) })).status).toBe(400);
+    expect((await call("/api/subscriptions", { method: "POST", body: JSON.stringify({}) })).status).toBe(400);
+    const list = (await (await call("/api/subscriptions")).json()) as { count: number };
+    expect(list.count).toBe(1);
+    const refreshed = await call("/api/subscriptions/abcdefabcdef/refresh", { method: "POST" });
+    expect(refreshed.status).toBe(200);
+    expect(await refreshed.json()).toMatchObject({ refresh: { ok: true } });
+    expect((await call("/api/subscriptions/000000000000/refresh", { method: "POST" })).status).toBe(404);
+    expect((await call("/api/subscriptions/abcdefabcdef", { method: "DELETE" })).status).toBe(200);
+    expect((await call("/api/subscriptions/abcdefabcdef", { method: "DELETE" })).status).toBe(404);
+    expect((await call("/api/subscriptions/not-an-id", { method: "DELETE" })).status).toBe(404);
+  });
+
+  it("answers 404 for stats and lists when the node has them off", async () => {
+    const bare = createAdminServer({
+      token: TOKEN,
+      blocklist: new Blocklist({ threshold: 2, ttlMs: 1000 }),
+      status: () => ({}),
+      health: () => ({ ok: true }),
+      directory: { list: () => [], add: () => Promise.resolve({ ok: false, reason: "not_402", detail: "off" }) },
+    });
+    await new Promise<void>((resolve) => bare.listen(0, "127.0.0.1", resolve));
+    const bareBase = `http://127.0.0.1:${(bare.address() as AddressInfo).port}`;
+    const headers = { authorization: `Bearer ${TOKEN}` };
+    expect((await fetch(`${bareBase}/api/stats`, { headers })).status).toBe(404);
+    expect((await fetch(`${bareBase}/api/queries`, { headers })).status).toBe(404);
+    expect((await fetch(`${bareBase}/api/subscriptions`, { headers })).status).toBe(404);
+    await new Promise<void>((resolve) => bare.close(() => resolve()));
   });
 });
 

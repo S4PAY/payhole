@@ -14,7 +14,10 @@ interface StatusCounts {
   manual: number;
   swarmConfirmed: number;
   swarmFlagged: number;
+  list?: number;
   merged: number;
+  queries24h?: number;
+  blocked24h?: number;
 }
 
 interface Status {
@@ -30,6 +33,8 @@ interface Status {
   swarm?: { received: number; accepted: number; dropped: Record<string, number> } | null;
   dnsmasq?: { running: boolean; pid: number | null; restarts: number; unexpectedExits?: number; lastReloadAt?: number | null; lastExit?: unknown };
   uptimeSeconds?: number;
+  queryLog?: { enabled: boolean };
+  lists?: number;
   node?: { hostname: string; version: string; startedAt: number };
   config?: {
     dns: { listen: string; port: number; upstream: string[]; cacheSize: number };
@@ -38,7 +43,52 @@ interface Status {
     membership: { minTier: number; vault: string | null };
     extension: { url: string | null; pullMinutes: number };
     flags: { threshold: number; ttlDays: number; reannounceMinutes: number };
+    queryLog?: { enabled: boolean };
+    lists?: { refreshHours: number };
   };
+}
+
+interface Series {
+  start: number;
+  stepMs: number;
+  total: number[];
+  blocked: number[];
+  cached: number[];
+  forwarded: number[];
+}
+
+interface Stats {
+  generatedAt: number;
+  summary: { queries24h: number; blocked24h: number; blockedPercent: number; cached24h: number; forwarded24h: number; clients24h: number; queries7d: number; blocked7d: number };
+  minutes: Series;
+  hours: Series;
+  clients: { client: string; total: number; blocked: number }[];
+  topBlocked: { domain: string; count: number }[];
+  topPermitted: { domain: string; count: number }[];
+  types: { type: string; count: number }[];
+  upstreams: { upstream: string; count: number }[];
+}
+
+interface QueryRecord {
+  t: number;
+  client: string;
+  domain: string;
+  type: string;
+  status: string;
+  answer: string | null;
+  upstream: string | null;
+}
+
+interface SubscriptionInfo {
+  id: string;
+  url: string;
+  addedAt: number;
+  lastFetchedAt: number | null;
+  lastSuccessAt: number | null;
+  lastError: string | null;
+  entries: number;
+  bytes: number;
+  nextRefreshAt: number | null;
 }
 
 interface BlockEntry {
@@ -75,6 +125,10 @@ let connected = false;
 let timer: number | null = null;
 let entries: BlockEntry[] = [];
 let toastTimer: number | null = null;
+let statsEnabled = true;
+let listsEnabled = true;
+let logStatus = "";
+let filterTimer: number | null = null;
 
 function el<T extends HTMLElement>(id: string): T {
   const node = document.getElementById(id);
@@ -236,8 +290,15 @@ function renderHealth(health: Health | null): void {
 
 function renderStatus(status: Status): void {
   const c = status.counts;
-  text("s-blocked", String(c.merged), "value");
-  text("s-blocked-sub", `${c.local} from the extension, ${c.manual} manual, ${c.swarmConfirmed} from the swarm`);
+  text("s-blocked", c.merged.toLocaleString(), "value");
+  text("s-blocked-sub", `${c.local} from the extension, ${c.manual} manual, ${c.swarmConfirmed} from the swarm${c.list ? `, ${c.list.toLocaleString()} from lists` : ""}`);
+  statsEnabled = status.queryLog?.enabled ?? c.queries24h !== undefined;
+  if (!statsEnabled) {
+    text("s-queries", "off", "value small");
+    text("s-queries-sub", "query logging is disabled on this node");
+    text("s-blocked24", "off", "value small");
+    text("s-blocked24-sub", "set QUERY_LOG_ENABLED=1 to count");
+  }
   const peers = status.connectedPeers?.length ?? 0;
   text("s-peers", String(peers), "value");
   const bootstrap = status.config?.swarm.bootstrap.length ?? 0;
@@ -274,17 +335,27 @@ async function copyText(value: string, done: string): Promise<void> {
 
 /* ---- Blocklist ---- */
 
+let blocklistTotal = 0;
+let blocklistMatched = 0;
+
+async function loadBlocklist(): Promise<void> {
+  const filter = el<HTMLInputElement>("filter").value.trim().toLowerCase();
+  const data = await api<{ count: number; matched: number; entries: BlockEntry[] }>(`/api/blocklist?limit=${ROW_LIMIT}${filter ? `&q=${encodeURIComponent(filter)}` : ""}`);
+  entries = data.entries;
+  blocklistTotal = data.count;
+  blocklistMatched = data.matched;
+  renderBlocklist();
+}
+
 function renderBlocklist(): void {
   const filter = el<HTMLInputElement>("filter").value.trim().toLowerCase();
   const body = el<HTMLTableSectionElement>("blocklist").querySelector("tbody");
   if (!body) return;
   body.replaceChildren();
   let shown = 0;
-  let matched = 0;
+  const matched = blocklistMatched;
   for (const entry of entries) {
-    if (filter && !entry.domain.includes(filter) && !entry.reason.toLowerCase().includes(filter)) continue;
-    matched += 1;
-    if (shown >= ROW_LIMIT) continue;
+    if (shown >= ROW_LIMIT) break;
     shown += 1;
     const tr = document.createElement("tr");
     cell(tr, entry.domain, "mono");
@@ -312,16 +383,269 @@ function renderBlocklist(): void {
     }
     body.appendChild(tr);
   }
-  const meta = entries.length === 0 ? "" : filter ? `${matched} of ${entries.length} match${shown < matched ? `, showing ${shown}` : ""}` : `${entries.length} domains${shown < entries.length ? `, showing ${shown}` : ""}`;
+  const meta = blocklistTotal === 0 ? "" : filter ? `${matched} of ${blocklistTotal} match${shown < matched ? `, showing ${shown}` : ""}` : `${blocklistTotal} domains${shown < blocklistTotal ? `, showing ${shown}` : ""}`;
   text("bl-meta", meta);
-  text("t-blocklist", entries.length ? String(entries.length) : "");
-  if (entries.length === 0) {
-    setEmpty("bl-empty", "bl-wrap", "Nothing is blocked yet. Domains arrive here from the extension's blocklist sync, from swarm flags once enough peers agree, or from the form above. The resolver answers everything normally until then.");
+  text("t-blocklist", blocklistTotal ? String(blocklistTotal) : "");
+  if (blocklistTotal === 0) {
+    setEmpty("bl-empty", "bl-wrap", "Nothing is blocked yet. Domains arrive here from the extension's blocklist sync, from swarm flags once enough peers agree, from subscribed lists, or from the form above. The resolver answers everything normally until then.");
   } else if (matched === 0) {
     setEmpty("bl-empty", "bl-wrap", `No domain matches "${filter}".`);
   } else {
     setEmpty("bl-empty", "bl-wrap", null);
   }
+}
+
+/* ---- Query statistics ---- */
+
+const SVG = "http://www.w3.org/2000/svg";
+
+function svgEl<K extends keyof SVGElementTagNameMap>(name: K, attrs: Record<string, string | number>): SVGElementTagNameMap[K] {
+  const node = document.createElementNS(SVG, name);
+  for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
+  return node;
+}
+
+function compact(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 10_000) return `${Math.round(value / 1000)}k`;
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
+  return String(value);
+}
+
+interface Bin {
+  start: number;
+  end: number;
+  total: number;
+  blocked: number;
+}
+
+function binSeries(series: Series, size: number): Bin[] {
+  const bins: Bin[] = [];
+  for (let i = 0; i < series.total.length; i += size) {
+    let total = 0;
+    let blocked = 0;
+    for (let j = i; j < Math.min(i + size, series.total.length); j += 1) {
+      total += series.total[j] ?? 0;
+      blocked += series.blocked[j] ?? 0;
+    }
+    bins.push({ start: series.start + i * series.stepMs, end: series.start + Math.min(i + size, series.total.length) * series.stepMs, total, blocked });
+  }
+  return bins;
+}
+
+function clock(ms: number): string {
+  return new Date(ms).toLocaleTimeString(undefined, { hour12: false, hour: "2-digit", minute: "2-digit" });
+}
+
+function dayLabel(ms: number): string {
+  return new Date(ms).toLocaleDateString(undefined, { weekday: "short", day: "2-digit" });
+}
+
+function drawChart(id: string, noteId: string, axisId: string, bins: Bin[], label: (bin: Bin) => string, ticks: (bin: Bin) => string): void {
+  const host = el(id);
+  host.replaceChildren();
+  const width = 1000;
+  const height = 100;
+  const max = Math.max(1, ...bins.map((b) => b.total));
+  const svg = svgEl("svg", { viewBox: `0 0 ${width} ${height}`, preserveAspectRatio: "none", role: "img", "aria-label": "queries per interval" });
+  for (const fraction of [0.25, 0.5, 0.75]) svg.appendChild(svgEl("line", { class: "grid", x1: 0, x2: width, y1: height * fraction, y2: height * fraction }));
+  const slot = width / bins.length;
+  const gap = Math.min(2, slot * 0.2);
+  bins.forEach((bin, i) => {
+    const x = i * slot;
+    const totalH = (bin.total / max) * height;
+    const blockedH = (bin.blocked / max) * height;
+    svg.appendChild(svgEl("rect", { class: "permitted", x: x + gap / 2, y: height - totalH, width: Math.max(0.5, slot - gap), height: totalH }));
+    if (blockedH > 0) svg.appendChild(svgEl("rect", { class: "blocked", x: x + gap / 2, y: height - blockedH, width: Math.max(0.5, slot - gap), height: blockedH }));
+  });
+  const hit = svgEl("rect", { class: "hit", x: 0, y: 0, width: slot, height, visibility: "hidden" });
+  svg.appendChild(hit);
+  const note = el(noteId);
+  const show = (event: PointerEvent): void => {
+    const box = svg.getBoundingClientRect();
+    const index = Math.min(bins.length - 1, Math.max(0, Math.floor(((event.clientX - box.left) / box.width) * bins.length)));
+    const bin = bins[index];
+    if (!bin) return;
+    hit.setAttribute("x", String(index * slot));
+    hit.setAttribute("visibility", "visible");
+    note.textContent = label(bin);
+  };
+  svg.addEventListener("pointermove", show);
+  svg.addEventListener("pointerdown", show);
+  svg.addEventListener("pointerleave", () => hit.setAttribute("visibility", "hidden"));
+  host.appendChild(svg);
+  const axis = el(axisId);
+  axis.replaceChildren();
+  const first = bins[0];
+  const middle = bins[Math.floor(bins.length / 2)];
+  const last = bins[bins.length - 1];
+  for (const bin of [first, middle, last]) {
+    const span = document.createElement("span");
+    span.textContent = bin ? ticks(bin) : "";
+    axis.appendChild(span);
+  }
+}
+
+function barList(id: string, rows: { label: string; count: number; blocked?: boolean }[], empty: string): void {
+  const host = el(id);
+  host.replaceChildren();
+  if (rows.length === 0) {
+    const p = document.createElement("div");
+    p.className = "muted";
+    p.style.fontSize = "12px";
+    p.textContent = empty;
+    host.appendChild(p);
+    return;
+  }
+  const max = Math.max(1, ...rows.map((r) => r.count));
+  for (const row of rows.slice(0, 8)) {
+    const wrap = document.createElement("div");
+    wrap.className = row.blocked ? "bar-row blocked" : "bar-row";
+    const label = document.createElement("div");
+    label.className = "bar-label";
+    label.textContent = row.label;
+    label.title = row.label;
+    const track = document.createElement("div");
+    track.className = "bar-track";
+    const fill = document.createElement("i");
+    fill.style.width = `${Math.max(2, Math.round((row.count / max) * 100))}%`;
+    track.appendChild(fill);
+    const count = document.createElement("div");
+    count.className = "bar-count";
+    count.textContent = compact(row.count);
+    wrap.append(label, track, count);
+    host.appendChild(wrap);
+  }
+}
+
+function renderStats(stats: Stats | null): void {
+  const body = el("q-body");
+  if (!stats) {
+    text("t-queries", "");
+    body.hidden = true;
+    setEmpty("q-empty", "q-body", "Query logging is off on this node. Set QUERY_LOG_ENABLED=1 to count queries, chart them, and keep a short log of recent lookups. Nothing is stored per query beyond a ring of the last thousand.");
+    return;
+  }
+  body.hidden = false;
+  el("q-empty").hidden = true;
+  const s = stats.summary;
+  text("s-queries", compact(s.queries24h), "value");
+  text("s-queries-sub", s.queries24h === 0 ? "no queries in the last 24 hours" : `${s.clients24h} client${s.clients24h === 1 ? "" : "s"}, ${compact(s.queries7d)} in 7 days`);
+  text("s-blocked24", compact(s.blocked24h), "value ok");
+  text("s-blocked24-sub", s.queries24h === 0 ? "nothing to block yet" : `${s.blockedPercent}% of queries, ${compact(s.cached24h)} from cache`);
+  text("t-queries", s.queries24h ? compact(s.queries24h) : "");
+  text("q-meta", `${compact(s.queries24h)} queries, ${compact(s.blocked24h)} blocked, ${compact(s.forwarded24h)} forwarded, ${compact(s.cached24h)} cached`);
+  text("q-week-meta", `${compact(s.queries7d)} queries, ${compact(s.blocked7d)} blocked`);
+  const day = binSeries(stats.minutes, 10);
+  drawChart("chart-day", "chart-day-note", "chart-day-axis", day, (bin) => `${clock(bin.start)} to ${clock(bin.end)}: ${bin.total} queries, ${bin.blocked} blocked`, (bin) => clock(bin.start));
+  const week = binSeries(stats.hours, 1);
+  drawChart("chart-week", "chart-week-note", "chart-week-axis", week, (bin) => `${dayLabel(bin.start)} ${clock(bin.start)}: ${bin.total} queries, ${bin.blocked} blocked`, (bin) => dayLabel(bin.start));
+  barList("bars-blocked", stats.topBlocked.map((d) => ({ label: d.domain, count: d.count, blocked: true })), "nothing blocked in the last 24 hours");
+  barList("bars-permitted", stats.topPermitted.map((d) => ({ label: d.domain, count: d.count })), "no permitted lookups yet");
+  barList("bars-clients", stats.clients.map((c) => ({ label: c.client, count: c.total })), "no clients yet");
+  barList("bars-types", stats.types.map((t) => ({ label: t.type, count: t.count })), "no queries yet");
+  barList("bars-upstreams", stats.upstreams.map((u) => ({ label: u.upstream, count: u.count })), "nothing forwarded yet");
+}
+
+function renderQueryLog(records: QueryRecord[]): void {
+  const body = el<HTMLTableSectionElement>("log").querySelector("tbody");
+  if (!body) return;
+  body.replaceChildren();
+  for (const record of records) {
+    const tr = document.createElement("tr");
+    cell(tr, new Date(record.t).toLocaleTimeString(undefined, { hour12: false }), "mono");
+    cell(tr, record.client, "mono");
+    cell(tr, record.domain, "mono");
+    cell(tr, record.type, "mono");
+    cell(tr, tag(record.status, record.status));
+    cell(tr, record.answer ?? (record.upstream ? `to ${record.upstream}` : ""), "mono");
+    body.appendChild(tr);
+  }
+  const filter = el<HTMLInputElement>("log-filter").value.trim();
+  text("log-meta", records.length ? `${records.length} most recent${logStatus ? ` ${logStatus}` : ""}${filter ? ` matching "${filter}"` : ""}` : "");
+  setEmpty("log-empty", "log-wrap", records.length === 0 ? (filter || logStatus ? "No recent query matches that filter." : "No queries logged yet. The log fills as devices resolve names through this node.") : null);
+}
+
+async function loadQueries(): Promise<void> {
+  if (!statsEnabled) return;
+  const filter = el<HTMLInputElement>("log-filter").value.trim();
+  const params = new URLSearchParams({ limit: "60" });
+  if (filter) params.set(/^[0-9a-f.:]+$/i.test(filter) ? "client" : "domain", filter);
+  if (logStatus) params.set("status", logStatus);
+  const data = await api<{ entries: QueryRecord[] }>(`/api/queries?${params.toString()}`);
+  renderQueryLog(data.entries);
+}
+
+/* ---- Lists ---- */
+
+function renderLists(items: SubscriptionInfo[] | null): void {
+  const tab = document.querySelector<HTMLElement>('.tab[data-tab="lists"]');
+  if (tab) tab.hidden = items === null;
+  if (items === null) return;
+  const body = el<HTMLTableSectionElement>("lists").querySelector("tbody");
+  if (!body) return;
+  body.replaceChildren();
+  let total = 0;
+  for (const item of items) {
+    total += item.entries;
+    const tr = document.createElement("tr");
+    const link = document.createElement("a");
+    link.href = item.url;
+    link.target = "_blank";
+    link.rel = "noopener";
+    link.textContent = item.url;
+    cell(tr, link, "mono");
+    cell(tr, item.entries ? compact(item.entries) : "0", "mono");
+    cell(tr, item.lastSuccessAt ? ago(item.lastSuccessAt) : item.lastFetchedAt ? `failed ${ago(item.lastFetchedAt)}` : "never", "mono");
+    cell(tr, item.nextRefreshAt ? (item.nextRefreshAt <= Date.now() ? "due" : `in ${ago(Date.now() * 2 - item.nextRefreshAt).replace(" ago", "")}`) : "", "mono");
+    cell(tr, item.lastError ? tag("error", "error") : item.lastSuccessAt ? tag("ok", "ok") : tag("pending", ""));
+    const actions = cell(tr, "");
+    const refresh = document.createElement("button");
+    refresh.type = "button";
+    refresh.className = "small";
+    refresh.textContent = "Refresh";
+    refresh.onclick = () => {
+      refresh.disabled = true;
+      api<{ refresh: { ok: boolean; entries: number; error: string | null } }>(`/api/subscriptions/${item.id}/refresh`, { method: "POST" })
+        .then((result) => {
+          if (result.refresh.ok) toast(`${result.refresh.entries} names from ${item.url}`, "good");
+          else toast(result.refresh.error ?? "refresh failed");
+          return refreshAll();
+        })
+        .catch((error: unknown) => toast(describe(error)))
+        .finally(() => {
+          refresh.disabled = false;
+        });
+    };
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "danger small";
+    remove.textContent = "Remove";
+    remove.onclick = () => {
+      remove.disabled = true;
+      api(`/api/subscriptions/${item.id}`, { method: "DELETE" })
+        .then(() => {
+          toast("list removed", "good");
+          return refreshAll();
+        })
+        .catch((error: unknown) => {
+          remove.disabled = false;
+          toast(describe(error));
+        });
+    };
+    actions.append(refresh, document.createTextNode(" "), remove);
+    if (item.lastError) {
+      const why = document.createElement("div");
+      why.className = "muted";
+      why.style.fontSize = "11px";
+      why.textContent = item.lastError;
+      tr.cells[4]?.appendChild(why);
+    }
+    body.appendChild(tr);
+  }
+  text("lists-meta", items.length ? `${items.length} list${items.length === 1 ? "" : "s"}, ${compact(total)} names` : "");
+  text("t-lists", items.length ? String(items.length) : "");
+  setEmpty("lists-empty", "lists-wrap", items.length === 0 ? "No lists subscribed. Add a public blocklist URL above and this node fetches it now and again every refresh interval; its names are blocked by exact match, next to the curated sources." : null);
 }
 
 /* ---- Flags ---- */
@@ -458,6 +782,16 @@ function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** Resolves to null when the node answers 404, which means the feature is off there. */
+async function optional<T>(request: Promise<T>): Promise<T | null> {
+  try {
+    return await request;
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null;
+    throw error;
+  }
+}
+
 async function loadHealth(): Promise<void> {
   try {
     const res = await fetch("/healthz", { cache: "no-store" });
@@ -472,19 +806,25 @@ async function refreshAll(): Promise<void> {
   const refresh = el<HTMLButtonElement>("refresh");
   refresh.disabled = true;
   try {
-    const [status, blocklist, flags, directory] = await Promise.all([
-      api<Status>("/api/status"),
-      api<{ entries: BlockEntry[] }>("/api/blocklist"),
+    const status = await api<Status>("/api/status");
+    statsEnabled = status.queryLog?.enabled ?? statsEnabled;
+    const [flags, directory, stats, subscriptions] = await Promise.all([
       api<{ threshold: number; entries: FlagEntry[] }>("/api/flags"),
       api<{ entries: DirectoryEntry[] }>("/api/directory"),
+      statsEnabled ? optional(api<Stats>("/api/stats")) : Promise.resolve(null),
+      listsEnabled ? optional(api<{ entries: SubscriptionInfo[] }>("/api/subscriptions")) : Promise.resolve(null),
     ]);
     await loadHealth();
     renderStatus(status);
-    entries = blocklist.entries;
-    renderBlocklist();
+    await loadBlocklist();
     renderFlags(flags);
     renderDirectory(directory);
     renderNode(status);
+    if (stats === null) statsEnabled = false;
+    renderStats(stats);
+    if (subscriptions === null) listsEnabled = false;
+    renderLists(subscriptions ? subscriptions.entries : null);
+    await loadQueries();
     text("foot-left", `refreshed ${new Date().toLocaleTimeString(undefined, { hour12: false })} · auto every 30s`);
   } catch (error) {
     if (error instanceof ApiError && error.status === 401) {
@@ -518,18 +858,19 @@ function setConnected(on: boolean): void {
     }, REFRESH_MS);
   } else {
     text("foot-left", "not connected");
-    for (const id of ["s-blocked", "s-flags", "s-ext", "s-swarm", "s-reloads", "s-peer"]) text(id, "—", id === "s-ext" || id === "s-swarm" || id === "s-peer" ? "value small" : "value");
-    for (const id of ["s-blocked-sub", "s-flags-sub", "s-ext-sub", "s-swarm-sub", "s-reloads-sub"]) text(id, "connect to see");
+    for (const id of ["s-blocked", "s-queries", "s-blocked24", "s-flags", "s-ext", "s-swarm", "s-reloads", "s-peer"]) text(id, "—", id === "s-ext" || id === "s-swarm" || id === "s-peer" ? "value small" : "value");
+    for (const id of ["s-blocked-sub", "s-queries-sub", "s-blocked24-sub", "s-flags-sub", "s-ext-sub", "s-swarm-sub", "s-reloads-sub"]) text(id, "connect to see");
     el<HTMLButtonElement>("copy-peer").hidden = true;
-    for (const id of ["t-blocklist", "t-flags", "t-directory"]) text(id, "");
+    for (const id of ["t-blocklist", "t-queries", "t-lists", "t-flags", "t-directory"]) text(id, "");
   }
 }
 
 function activeTab(): string {
-  return document.querySelector<HTMLElement>(".tab.active")?.dataset["tab"] ?? "blocklist";
+  return document.querySelector<HTMLElement>(".tab.active")?.dataset["tab"] ?? "queries";
 }
 
 function showTab(name: string): void {
+  if (!document.querySelector(`.tab[data-tab="${name}"]`)) name = "queries";
   for (const button of document.querySelectorAll<HTMLElement>(".tab")) button.classList.toggle("active", button.dataset["tab"] === name);
   for (const panel of document.querySelectorAll<HTMLElement>("[data-panel]")) panel.hidden = !connected || panel.dataset["panel"] !== name;
   try {
@@ -590,9 +931,45 @@ function boot(): void {
   });
   el<HTMLButtonElement>("refresh").addEventListener("click", () => void refreshAll());
   el<HTMLButtonElement>("disconnect").addEventListener("click", () => disconnect());
-  el<HTMLInputElement>("filter").addEventListener("input", renderBlocklist);
+  const debounced = (fn: () => Promise<void>): void => {
+    if (filterTimer !== null) window.clearTimeout(filterTimer);
+    filterTimer = window.setTimeout(() => {
+      filterTimer = null;
+      fn().catch((error: unknown) => toast(describe(error)));
+    }, 250);
+  };
+  el<HTMLInputElement>("filter").addEventListener("input", () => debounced(loadBlocklist));
+  el<HTMLInputElement>("log-filter").addEventListener("input", () => debounced(loadQueries));
+  for (const chip of document.querySelectorAll<HTMLButtonElement>("#log-chips .chip")) {
+    chip.addEventListener("click", () => {
+      logStatus = chip.dataset["status"] ?? "";
+      for (const other of document.querySelectorAll<HTMLButtonElement>("#log-chips .chip")) other.classList.toggle("active", other === chip);
+      loadQueries().catch((error: unknown) => toast(describe(error)));
+    });
+  }
+  el<HTMLFormElement>("list-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const input = el<HTMLInputElement>("list-url");
+    const url = input.value.trim();
+    if (!url) return;
+    const button = el<HTMLFormElement>("list-form").querySelector("button");
+    if (button) button.disabled = true;
+    toast("Fetching the list...", "good");
+    api<{ added: boolean; entry: SubscriptionInfo; refresh?: { ok: boolean; entries: number; error: string | null } }>("/api/subscriptions", { method: "POST", body: { url } })
+      .then((result) => {
+        input.value = "";
+        if (!result.added) toast("That list is already subscribed", "good");
+        else if (result.refresh?.ok) toast(`Subscribed: ${result.refresh.entries} names`, "good");
+        else toast(`Subscribed, but the first fetch failed: ${result.refresh?.error ?? "unknown error"}`);
+        return refreshAll();
+      })
+      .catch((error: unknown) => toast(describe(error)))
+      .finally(() => {
+        if (button) button.disabled = false;
+      });
+  });
   for (const button of document.querySelectorAll<HTMLElement>(".tab")) {
-    button.addEventListener("click", () => showTab(button.dataset["tab"] ?? "blocklist"));
+    button.addEventListener("click", () => showTab(button.dataset["tab"] ?? "queries"));
   }
   for (const button of document.querySelectorAll<HTMLButtonElement>("button[data-format]")) {
     button.addEventListener("click", () => download(button.dataset["format"] ?? "plain"));
@@ -629,9 +1006,9 @@ function boot(): void {
       .catch((error: unknown) => toast(describe(error)));
   });
 
-  let remembered = "blocklist";
+  let remembered = "queries";
   try {
-    remembered = localStorage.getItem("sinkhole-tab") ?? "blocklist";
+    remembered = localStorage.getItem("sinkhole-tab") ?? "queries";
   } catch {
     /* storage unavailable */
   }

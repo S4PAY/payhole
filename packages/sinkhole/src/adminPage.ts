@@ -50,6 +50,8 @@ export const ADMIN_PAGE = `<!doctype html>
 <main class="page">
   <section class="stats" id="stats" aria-label="Status">
     <div class="stat"><div class="label">Resolver</div><div class="value" id="s-resolver">&#8212;</div><div class="sub" id="s-resolver-sub">checking</div></div>
+    <div class="stat"><div class="label">Queries 24 h</div><div class="value" id="s-queries">&#8212;</div><div class="sub" id="s-queries-sub">connect to see</div></div>
+    <div class="stat"><div class="label">Blocked 24 h</div><div class="value" id="s-blocked24">&#8212;</div><div class="sub" id="s-blocked24-sub">connect to see</div></div>
     <div class="stat"><div class="label">Domains blocked</div><div class="value" id="s-blocked">&#8212;</div><div class="sub" id="s-blocked-sub">connect to see the breakdown</div></div>
     <div class="stat"><div class="label">Swarm peers</div><div class="value" id="s-peers">&#8212;</div><div class="sub" id="s-peers-sub">checking</div></div>
     <div class="stat"><div class="label">Flags pending</div><div class="value" id="s-flags">&#8212;</div><div class="sub" id="s-flags-sub">connect to see</div></div>
@@ -70,11 +72,45 @@ export const ADMIN_PAGE = `<!doctype html>
   </section>
 
   <nav class="tabs" id="tabs" hidden aria-label="Sections">
-    <button type="button" class="tab active" data-tab="blocklist">Blocklist<span class="count" id="t-blocklist"></span></button>
+    <button type="button" class="tab active" data-tab="queries">Queries<span class="count" id="t-queries"></span></button>
+    <button type="button" class="tab" data-tab="blocklist">Blocklist<span class="count" id="t-blocklist"></span></button>
+    <button type="button" class="tab" data-tab="lists">Lists<span class="count" id="t-lists"></span></button>
     <button type="button" class="tab" data-tab="flags">Swarm flags<span class="count" id="t-flags"></span></button>
     <button type="button" class="tab" data-tab="directory">x402 directory<span class="count" id="t-directory"></span></button>
     <button type="button" class="tab" data-tab="node">Node</button>
   </nav>
+
+  <section class="card" id="tab-queries" data-panel="queries" hidden>
+    <div class="card-head"><h2>Queries, last 24 hours</h2><div class="meta" id="q-meta"></div></div>
+    <div class="empty" id="q-empty" hidden></div>
+    <div class="stack" id="q-body">
+      <div class="chart-legend"><span class="key permitted">permitted</span><span class="key blocked">blocked</span><span class="chart-note" id="chart-day-note">hover or tap a bar</span></div>
+      <div class="chart" id="chart-day"></div>
+      <div class="chart-axis" id="chart-day-axis"></div>
+      <div class="card-head"><h3>Last 7 days</h3><div class="meta" id="q-week-meta"></div></div>
+      <div class="chart-legend"><span class="chart-note" id="chart-week-note">hover or tap a bar</span></div>
+      <div class="chart small" id="chart-week"></div>
+      <div class="chart-axis" id="chart-week-axis"></div>
+      <div class="bars-grid">
+        <div class="bars"><h3>Top blocked</h3><div id="bars-blocked"></div></div>
+        <div class="bars"><h3>Top permitted</h3><div id="bars-permitted"></div></div>
+        <div class="bars"><h3>Clients</h3><div id="bars-clients"></div></div>
+        <div class="bars"><h3>Query types</h3><div id="bars-types"></div><h3 class="spaced">Upstreams</h3><div id="bars-upstreams"></div></div>
+      </div>
+      <div class="card-head"><h3>Query log</h3><div class="meta" id="log-meta"></div></div>
+      <div class="row">
+        <input id="log-filter" type="search" placeholder="filter by domain or client" spellcheck="false">
+        <div class="chips" id="log-chips">
+          <button type="button" class="chip active" data-status="">all</button>
+          <button type="button" class="chip" data-status="blocked">blocked</button>
+          <button type="button" class="chip" data-status="forwarded">forwarded</button>
+          <button type="button" class="chip" data-status="cached">cached</button>
+        </div>
+      </div>
+      <div class="empty" id="log-empty" hidden></div>
+      <div class="table-wrap" id="log-wrap"><table id="log"><thead><tr><th>Time</th><th>Client</th><th>Domain</th><th>Type</th><th>Status</th><th>Answer</th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
 
   <section class="card" id="tab-blocklist" data-panel="blocklist" hidden>
     <div class="card-head"><h2>Blocklist</h2><div class="meta" id="bl-meta"></div></div>
@@ -93,6 +129,17 @@ export const ADMIN_PAGE = `<!doctype html>
     </div>
     <div class="empty" id="bl-empty" hidden></div>
     <div class="table-wrap" id="bl-wrap"><table id="blocklist"><thead><tr><th>Domain</th><th>Sources</th><th>Reason</th><th></th></tr></thead><tbody></tbody></table></div>
+  </section>
+
+  <section class="card" id="tab-lists" data-panel="lists" hidden>
+    <div class="card-head"><h2>Subscribed lists</h2><div class="meta" id="lists-meta"></div></div>
+    <p class="hint">Public blocklists in hosts format or one name per line, fetched on a schedule and matched by exact name. Try a well known one, for example the StevenBlack unified hosts file.</p>
+    <form id="list-form" class="row">
+      <input id="list-url" type="url" placeholder="https://example.com/hosts.txt" required spellcheck="false">
+      <button type="submit" class="primary">Subscribe</button>
+    </form>
+    <div class="empty" id="lists-empty" hidden></div>
+    <div class="table-wrap" id="lists-wrap"><table id="lists"><thead><tr><th>List</th><th>Entries</th><th>Fetched</th><th>Next refresh</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
   </section>
 
   <section class="card" id="tab-flags" data-panel="flags" hidden>

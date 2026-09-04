@@ -26,7 +26,7 @@ export interface SwarmFlag {
   seen: number;
 }
 
-export type Source = "local" | "manual" | "swarm";
+export type Source = "local" | "manual" | "swarm" | "list";
 
 export interface MergedEntry {
   domain: string;
@@ -107,9 +107,10 @@ function sameSet(a: Set<string>, b: Set<string>): boolean {
 }
 
 /**
- * The three blocklist sources and their merge. Local flags (extension pushes) and manual entries always
- * block. Swarm flags block only once `threshold` distinct reporters have flagged the domain within the
- * TTL. Listeners are told whenever the merged set changes so dnsmasq can be updated.
+ * The blocklist sources and their merge. Local flags (extension pushes) and manual entries always block.
+ * Swarm flags block only once `threshold` distinct reporters have flagged the domain within the TTL.
+ * Subscribed public lists are a fourth source, kept as one shared set because they can hold hundreds of
+ * thousands of names. Listeners are told whenever the merged set changes so dnsmasq can be updated.
  */
 export class Blocklist {
   private readonly local = new Map<string, LocalEntry>();
@@ -117,6 +118,7 @@ export class Blocklist {
   private localReceivedAt: number | null = null;
   private readonly manual = new Map<string, ManualEntry>();
   private readonly swarm = new Map<string, Map<string, SwarmFlag>>();
+  private lists: ReadonlySet<string> = new Set();
   private readonly listeners = new Set<() => void>();
   /** Merged set as of the last notification; expiry can change the set without any mutation. */
   private lastNotified: Set<string>;
@@ -174,6 +176,17 @@ export class Blocklist {
     if (sameSet(current, this.lastNotified)) return;
     this.lastNotified = current;
     this.notify();
+  }
+
+  /** Replaces the subscribed-list set (owned by the subscriptions module; not copied). */
+  setLists(domains: ReadonlySet<string>): void {
+    this.lists = domains;
+    this.checkChanged();
+  }
+
+  /** The list-source domains as last set. */
+  listDomains(): ReadonlySet<string> {
+    return this.lists;
   }
 
   private withChange<T>(fn: () => T): T {
@@ -311,7 +324,8 @@ export class Blocklist {
     return out.sort(byDomain);
   }
 
-  merged(now = this.clock()): MergedEntry[] {
+  /** The curated entries (extension, manual, swarm) with their sources; list entries are not included. */
+  curatedEntries(now = this.clock()): MergedEntry[] {
     const out = new Map<string, MergedEntry>();
     const add = (domain: string, source: Source, reason: string): void => {
       const existing = out.get(domain);
@@ -327,7 +341,51 @@ export class Blocklist {
     return [...out.values()].sort(byDomain);
   }
 
-  domains(now = this.clock()): Set<string> {
+  /** Every blocked domain with its sources, list entries included. Large with big subscriptions; prefer `search`. */
+  merged(now = this.clock()): MergedEntry[] {
+    const entries = this.curatedEntries(now);
+    const seen = new Map(entries.map((e) => [e.domain, e]));
+    for (const domain of this.lists) {
+      const existing = seen.get(domain);
+      if (existing) existing.sources.push("list");
+      else entries.push({ domain, sources: ["list"], reason: "subscribed list" });
+    }
+    return entries.sort(byDomain);
+  }
+
+  /**
+   * Entries matching `query` (substring of the domain or reason), curated ones first, at most `limit`.
+   * `count` is the size of the whole merged set, `matched` how many entries matched before the limit.
+   */
+  search(query: string, limit: number, now = this.clock()): { count: number; matched: number; entries: MergedEntry[] } {
+    const q = query.trim().toLowerCase();
+    const curated = this.curatedEntries(now);
+    const curatedSet = new Set(curated.map((e) => e.domain));
+    const out: MergedEntry[] = [];
+    let matched = 0;
+    for (const entry of curated) {
+      if (q && !entry.domain.includes(q) && !entry.reason.toLowerCase().includes(q)) continue;
+      matched += 1;
+      if (out.length < limit) out.push(this.lists.has(entry.domain) ? { ...entry, sources: [...entry.sources, "list"] } : entry);
+    }
+    let listMatched = 0;
+    const listHits: string[] = [];
+    for (const domain of this.lists) {
+      if (curatedSet.has(domain)) continue;
+      if (q && !domain.includes(q)) continue;
+      listMatched += 1;
+      if (listHits.length < limit) listHits.push(domain);
+    }
+    matched += listMatched;
+    for (const domain of listHits.sort()) {
+      if (out.length >= limit) break;
+      out.push({ domain, sources: ["list"], reason: "subscribed list" });
+    }
+    return { count: this.domains(now).size, matched, entries: out };
+  }
+
+  /** Domains blocked by the curated sources: extension, manual, swarm. Rendered as dnsmasq `address=` rules. */
+  curated(now = this.clock()): Set<string> {
     const out = new Set<string>();
     for (const domain of this.local.keys()) out.add(domain);
     for (const domain of this.manual.keys()) out.add(domain);
@@ -335,12 +393,19 @@ export class Blocklist {
     return out;
   }
 
-  counts(now = this.clock()): { local: number; manual: number; swarmConfirmed: number; swarmFlagged: number; merged: number } {
+  domains(now = this.clock()): Set<string> {
+    const out = this.curated(now);
+    for (const domain of this.lists) out.add(domain);
+    return out;
+  }
+
+  counts(now = this.clock()): { local: number; manual: number; swarmConfirmed: number; swarmFlagged: number; list: number; merged: number } {
     return {
       local: this.local.size,
       manual: this.manual.size,
       swarmConfirmed: this.swarmConfirmed(now).length,
       swarmFlagged: this.flagSummaries(now).length,
+      list: this.lists.size,
       merged: this.domains(now).size,
     };
   }

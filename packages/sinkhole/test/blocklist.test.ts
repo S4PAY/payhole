@@ -90,7 +90,7 @@ describe("Blocklist local and manual sources", () => {
       { domain: "shared.example", sources: ["local", "manual"], reason: "phish" },
       { domain: "tracker.example", sources: ["local"], reason: "tracker" },
     ]);
-    expect(blocklist.counts()).toEqual({ local: 2, manual: 2, swarmConfirmed: 0, swarmFlagged: 1, merged: 3 });
+    expect(blocklist.counts()).toEqual({ local: 2, manual: 2, swarmConfirmed: 0, swarmFlagged: 1, list: 0, merged: 3 });
 
     const second = blocklist.setLocal({ version: 1, updatedAt: "2026-09-05T00:00:00.000Z", entries: [{ domain: "shared.example", reason: "phish", flaggedAt: "x" }] });
     expect(second.removed).toEqual(["tracker.example"]);

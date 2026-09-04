@@ -4,7 +4,9 @@ import { createServer as createHttpServer, type IncomingMessage, type Server, ty
 import { chainConfig } from "@payhole/sdk";
 import { ADMIN_ASSETS, ADMIN_CSP, ADMIN_PAGE } from "./adminPage.js";
 import { parseExtensionPush, type Blocklist } from "./blocklist.js";
+import { isQueryStatus, type QueryFilter, type QueryRecord, type StatsSnapshot } from "./queryLog.js";
 import { isExportFormat, renderExport } from "./render/export.js";
+import type { RefreshResult, SubscriptionInfo } from "./subscriptions.js";
 import type { AnnouncementResult, DirectoryEntry } from "./swarm/directory.js";
 import type { EndpointAnnouncement } from "./swarm/probe.js";
 
@@ -16,8 +18,23 @@ export interface AdminDeps {
   directory: { list: () => DirectoryEntry[]; add: (input: EndpointAnnouncement) => Promise<AnnouncementResult> };
   /** Receives newly added explicit flags so they can be announced to the swarm. */
   publish?: (entries: { domain: string; reason: string }[]) => void;
+  /** Query statistics; absent when query logging is off, and the routes answer 404. */
+  stats?: { snapshot: () => StatsSnapshot; queries: (filter: QueryFilter) => QueryRecord[] } | undefined;
+  /** Subscribed public blocklists; absent in deployments without list support. */
+  subscriptions?:
+    | {
+        list: () => SubscriptionInfo[];
+        get: (id: string) => SubscriptionInfo | undefined;
+        add: (url: string) => Promise<{ item: SubscriptionInfo; added: boolean }>;
+        remove: (id: string) => Promise<boolean>;
+        refresh: (id: string) => Promise<RefreshResult>;
+      }
+    | undefined;
   maxBodyBytes?: number;
 }
+
+const BLOCKLIST_PAGE = 1000;
+const BLOCKLIST_PAGE_MAX = 5000;
 
 export class HttpError extends Error {
   constructor(
@@ -99,8 +116,10 @@ export function createAdminServer(deps: AdminDeps): Server {
     }
     if (path === "/api/blocklist") {
       if (method === "GET") {
-        const entries = deps.blocklist.merged();
-        return json(res, 200, { count: entries.length, entries });
+        const limitParam = Number(url.searchParams.get("limit") ?? BLOCKLIST_PAGE);
+        const limit = Number.isInteger(limitParam) && limitParam > 0 ? Math.min(limitParam, BLOCKLIST_PAGE_MAX) : BLOCKLIST_PAGE;
+        const result = deps.blocklist.search(url.searchParams.get("q") ?? "", limit);
+        return json(res, 200, { count: result.count, matched: result.matched, limit, entries: result.entries });
       }
       if (method === "PUT") {
         const parsed = parseExtensionPush(await readJson(req, maxBody));
@@ -168,6 +187,66 @@ export function createAdminServer(deps: AdminDeps): Server {
     if (path === "/api/flags") {
       if (method !== "GET") throw new HttpError(405, "method_not_allowed", "use GET");
       return json(res, 200, { threshold: deps.blocklist.threshold, ttlMs: deps.blocklist.ttlMs, entries: deps.blocklist.flagSummaries() });
+    }
+    if (path === "/api/stats") {
+      if (method !== "GET") throw new HttpError(405, "method_not_allowed", "use GET");
+      if (!deps.stats) throw new HttpError(404, "stats_disabled", "query logging is off on this node (QUERY_LOG_ENABLED=0)");
+      return json(res, 200, deps.stats.snapshot());
+    }
+    if (path === "/api/queries") {
+      if (method !== "GET") throw new HttpError(405, "method_not_allowed", "use GET");
+      if (!deps.stats) throw new HttpError(404, "stats_disabled", "query logging is off on this node (QUERY_LOG_ENABLED=0)");
+      const filter: QueryFilter = {};
+      const limit = Number(url.searchParams.get("limit") ?? "200");
+      if (Number.isInteger(limit) && limit > 0) filter.limit = limit;
+      const client = url.searchParams.get("client");
+      if (client) filter.client = client;
+      const domain = url.searchParams.get("domain");
+      if (domain) filter.domain = domain;
+      const status = url.searchParams.get("status");
+      if (status) {
+        if (!isQueryStatus(status)) throw new HttpError(400, "invalid_status", "status must be blocked, cached, forwarded, local, unanswered or unknown");
+        filter.status = status;
+      }
+      const entries = deps.stats.queries(filter);
+      return json(res, 200, { count: entries.length, entries });
+    }
+    if (path === "/api/subscriptions") {
+      const subs = deps.subscriptions;
+      if (!subs) throw new HttpError(404, "lists_disabled", "list subscriptions are not available on this node");
+      if (method === "GET") {
+        const entries = subs.list();
+        return json(res, 200, { count: entries.length, entries });
+      }
+      if (method === "POST") {
+        const body = await readJson(req, maxBody);
+        const target = isRecord(body) ? body["url"] : undefined;
+        if (typeof target !== "string") throw new HttpError(400, "invalid_url", "body must carry a url string");
+        let added: { item: SubscriptionInfo; added: boolean };
+        try {
+          added = await subs.add(target);
+        } catch (error) {
+          throw new HttpError(400, "invalid_url", error instanceof Error ? error.message : String(error));
+        }
+        const result = added.added ? await subs.refresh(added.item.id) : null;
+        return json(res, added.added ? 201 : 200, { entry: subs.get(added.item.id) ?? added.item, added: added.added, ...(result ? { refresh: result } : {}) });
+      }
+      throw new HttpError(405, "method_not_allowed", "use GET or POST");
+    }
+    const subscription = /^\/api\/subscriptions\/([0-9a-f]{12})(\/refresh)?$/.exec(path);
+    if (subscription?.[1] !== undefined) {
+      const subs = deps.subscriptions;
+      if (!subs) throw new HttpError(404, "lists_disabled", "list subscriptions are not available on this node");
+      const id = subscription[1];
+      if (subscription[2] !== undefined) {
+        if (method !== "POST") throw new HttpError(405, "method_not_allowed", "use POST");
+        if (!subs.get(id)) throw new HttpError(404, "not_found", "no such subscription");
+        const result = await subs.refresh(id);
+        return json(res, 200, { entry: subs.get(id), refresh: result });
+      }
+      if (method !== "DELETE") throw new HttpError(405, "method_not_allowed", "use DELETE");
+      if (!(await subs.remove(id))) throw new HttpError(404, "not_found", "no such subscription");
+      return json(res, 200, { id, removed: true });
     }
     throw new HttpError(404, "not_found", "no such route");
   };

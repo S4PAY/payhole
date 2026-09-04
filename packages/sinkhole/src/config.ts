@@ -21,6 +21,8 @@ export interface SinkholeConfig {
     proofJson: string | undefined;
   };
   probe: { allowPrivate: boolean };
+  queryLog: { enabled: boolean };
+  lists: { urls: string[]; refreshHours: number };
 }
 
 function integer(value: string | undefined, fallback: number, name: string, min = 1): number {
@@ -115,5 +117,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): SinkholeConfig
       proofJson: optional(env["NODE_PROOF_JSON"]),
     },
     probe: { allowPrivate: flag(env["PROBE_ALLOW_PRIVATE"]) },
+    queryLog: { enabled: flag(env["QUERY_LOG_ENABLED"], true) },
+    lists: { urls: list(env["BLOCKLIST_URLS"]), refreshHours: integer(env["BLOCKLIST_REFRESH_HOURS"], 24, "BLOCKLIST_REFRESH_HOURS") },
   };
 }
