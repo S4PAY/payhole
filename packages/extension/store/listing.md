@@ -48,6 +48,7 @@ policy at payhole.org/privacy.html.
 Official URL: https://payhole.org
 Homepage URL: https://payhole.org
 Support URL: https://github.com/S4PAY/payhole/issues
+Contact email: hello@payhole.org
 
 ## Privacy tab
 
