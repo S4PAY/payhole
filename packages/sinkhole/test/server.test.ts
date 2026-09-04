@@ -161,3 +161,39 @@ describe("admin api", () => {
     expect(list.count).toBe(1);
   });
 });
+
+describe("admin page assets", () => {
+  it("serves the stylesheet, the client script, the logo, and the fonts from this origin", async () => {
+    const expectations: [string, string][] = [
+      ["/admin/styles.css", "text/css"],
+      ["/admin/client.js", "text/javascript"],
+      ["/admin/logo.png", "image/png"],
+      ["/admin/fonts/Inter.woff2", "font/woff2"],
+      ["/admin/fonts/SpaceGrotesk.woff2", "font/woff2"],
+      ["/admin/fonts/JetBrainsMono.woff2", "font/woff2"],
+    ];
+    for (const [path, type] of expectations) {
+      const res = await call(path, {}, null);
+      expect(res.status, path).toBe(200);
+      expect(res.headers.get("content-type"), path).toContain(type);
+      expect((await res.arrayBuffer()).byteLength, path).toBeGreaterThan(100);
+    }
+  });
+
+  it("keeps the page free of inline code and points it at the served assets", async () => {
+    const res = await call("/", {}, null);
+    const csp = res.headers.get("content-security-policy") ?? "";
+    expect(csp).toContain("script-src 'self'");
+    expect(csp).not.toContain("unsafe-inline");
+    const html = await res.text();
+    expect(html).toContain('src="/admin/client.js"');
+    expect(html).toContain('href="/admin/styles.css"');
+    expect(html).not.toMatch(/<script>[^<]/);
+  });
+
+  it("does not serve anything else under /admin", async () => {
+    expect((await call("/admin/../package.json", {}, null)).status).toBe(404);
+    expect((await call("/admin/other.js", {}, null)).status).toBe(404);
+    expect((await call("/admin/styles.css", { method: "POST" }, null)).status).toBe(405);
+  });
+});

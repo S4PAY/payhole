@@ -5,6 +5,11 @@
   "description": "PayHole Sinkhole: a dnsmasq-based DNS blocker fed by the browser extension and by a libp2p swarm that shares drainer and scam domain flags and an x402 endpoint directory.",
   "type": "module",
   "license": "MIT",
+  "files": [
+    "dist",
+    "assets",
+    "README.md"
+  ],
   "engines": {
     "node": ">=22"
   },
@@ -14,7 +19,8 @@
     "test": "vitest run",
     "lint": "eslint .",
     "start": "node dist/main.js",
-    "dev": "tsx src/main.ts"
+    "dev": "tsx src/main.ts",
+    "pretest": "tsc -p tsconfig.build.json"
   },
   "dependencies": {
     "@chainsafe/libp2p-noise": "17.0.0",

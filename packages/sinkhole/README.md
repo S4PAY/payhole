@@ -71,6 +71,14 @@ docker run --rm -v sinkhole-data:/data -e NODE_OPERATOR_KEY=0x... payhole-sinkho
 
 Run them against the same volume the service uses, otherwise the proof is for a different peer.
 
+## Admin page
+
+The admin API serves a dashboard at `/` on the admin port: status cards (resolver, blocked domains by source, peers,
+pending flags, last syncs), the blocklist with manual entries and exports, swarm flags with reporter counts, the x402
+directory with the probe form, and a Node tab with the running configuration. It loads only from this origin (fonts,
+logo, and script are bundled under `/admin/`), keeps the token in the browser's local storage, and refreshes every 30
+seconds. Preview it with seeded data and no resolver: `pnpm exec tsx scripts/demo-admin.ts 18053`, token `demo`.
+
 ## Ports and the firewall
 
 Docker publishes container ports by inserting its own iptables rules ahead of ufw, so a `0.0.0.0` port mapping is reachable from the internet even when ufw denies incoming traffic. The compose file therefore binds every port to `127.0.0.1`: DNS (53), the admin API (8053), and the swarm (4001). Exposing a port is a deliberate two-step change: edit the mapping in `docker-compose.yml` to the interface you want (`0.0.0.0:53:53/udp` for a resolver clients can reach, `0.0.0.0:4001:4001/tcp` for swarm peers), then allow only the sources that need it in ufw, for example `ufw allow from 203.0.113.0/24 to any port 53` or `ufw allow 4001/tcp`. Never expose 8053; reach the admin API and push blocklists through an SSH tunnel (`ssh -L 8053:127.0.0.1:8053 host`). `scripts/container-test.sh` maps its test ports to localhost only.

@@ -1,7 +1,8 @@
 import { createHash, timingSafeEqual } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { chainConfig } from "@payhole/sdk";
-import { ADMIN_PAGE } from "./adminPage.js";
+import { ADMIN_ASSETS, ADMIN_CSP, ADMIN_PAGE } from "./adminPage.js";
 import { parseExtensionPush, type Blocklist } from "./blocklist.js";
 import { isExportFormat, renderExport } from "./render/export.js";
 import type { AnnouncementResult, DirectoryEntry } from "./swarm/directory.js";
@@ -77,11 +78,12 @@ function sha256(text: string): Buffer {
 
 /**
  * Admin API and page. Everything under `/api/` requires `Authorization: Bearer <ADMIN_TOKEN>`;
- * `/healthz` and the static page at `/` do not (the page holds no data until a token is entered).
+ * `/healthz`, the page at `/`, and its static files under `/admin/` do not (the page holds no data until a token is entered).
  */
 export function createAdminServer(deps: AdminDeps): Server {
   const maxBody = deps.maxBodyBytes ?? 4 * 1024 * 1024;
   const tokenHash = sha256(deps.token);
+  const assetCache = new Map<string, Buffer>();
 
   const authorized = (req: IncomingMessage): boolean => {
     const header = req.headers.authorization;
@@ -184,9 +186,26 @@ export function createAdminServer(deps: AdminDeps): Server {
         "content-type": "text/html; charset=utf-8",
         "content-length": Buffer.byteLength(ADMIN_PAGE),
         "cache-control": "no-store",
-        "content-security-policy": "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'self'",
+        "content-security-policy": ADMIN_CSP,
+        "x-content-type-options": "nosniff",
       });
       res.end(ADMIN_PAGE);
+      return;
+    }
+    const asset = Object.hasOwn(ADMIN_ASSETS, url.pathname) ? ADMIN_ASSETS[url.pathname] : undefined;
+    if (asset) {
+      if (method !== "GET") return json(res, 405, { error: "method_not_allowed" }, { allow: "GET" });
+      let body = assetCache.get(url.pathname);
+      if (!body) {
+        try {
+          body = await readFile(asset.file);
+        } catch {
+          return json(res, 404, { error: "not_found", message: "asset missing from this build" });
+        }
+        assetCache.set(url.pathname, body);
+      }
+      res.writeHead(200, { "content-type": asset.contentType, "content-length": body.length, "cache-control": "public, max-age=3600", "x-content-type-options": "nosniff" });
+      res.end(body);
       return;
     }
     if (!url.pathname.startsWith("/api/")) return json(res, 404, { error: "not_found" });

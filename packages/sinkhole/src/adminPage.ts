@@ -1,245 +1,130 @@
-/** Single-file admin page served at `/`. It only talks to the JSON API with the token pasted by the operator. */
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+/** Package root, one level above `src/` and `dist/`, so assets resolve the same way before and after compilation. */
+const packageRoot = fileURLToPath(new URL("..", import.meta.url));
+
+export interface AdminAsset {
+  file: string;
+  contentType: string;
+}
+
+/** Static files the admin page loads. Everything is served from this origin; the page needs no internet. */
+export const ADMIN_ASSETS: Readonly<Record<string, AdminAsset>> = {
+  "/admin/styles.css": { file: join(packageRoot, "assets", "admin", "styles.css"), contentType: "text/css; charset=utf-8" },
+  "/admin/client.js": { file: join(packageRoot, "dist", "adminClient.js"), contentType: "text/javascript; charset=utf-8" },
+  "/admin/logo.png": { file: join(packageRoot, "assets", "admin", "logo.png"), contentType: "image/png" },
+  "/admin/fonts/Inter.woff2": { file: join(packageRoot, "assets", "admin", "fonts", "Inter.woff2"), contentType: "font/woff2" },
+  "/admin/fonts/SpaceGrotesk.woff2": { file: join(packageRoot, "assets", "admin", "fonts", "SpaceGrotesk.woff2"), contentType: "font/woff2" },
+  "/admin/fonts/JetBrainsMono.woff2": { file: join(packageRoot, "assets", "admin", "fonts", "JetBrainsMono.woff2"), contentType: "font/woff2" },
+};
+
+/** Content security policy for the page: only this origin, no inline code. */
+export const ADMIN_CSP = "default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'self'";
+
+/** The admin page markup. All behaviour lives in `adminClient.ts`, served as `/admin/client.js`. */
 export const ADMIN_PAGE = `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
 <title>PayHole Sinkhole</title>
-<style>
-  :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
-  body { margin: 0; padding: 1rem 1.5rem 3rem; max-width: 1100px; }
-  header { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; }
-  h1 { font-size: 1.4rem; margin: 0.5rem 0; }
-  h2 { font-size: 1.1rem; margin: 1.5rem 0 0.5rem; border-bottom: 1px solid #8884; padding-bottom: 0.25rem; }
-  input, button { font: inherit; padding: 0.3rem 0.5rem; }
-  input { min-width: 12rem; }
-  button { cursor: pointer; }
-  table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
-  th, td { text-align: left; padding: 0.3rem 0.5rem; border-bottom: 1px solid #8883; vertical-align: top; word-break: break-all; }
-  dl { display: grid; grid-template-columns: max-content 1fr; gap: 0.2rem 1rem; font-size: 0.9rem; }
-  dt { opacity: 0.7; }
-  dd { margin: 0; word-break: break-all; }
-  form { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.5rem 0; }
-  #message { min-height: 1.2rem; font-size: 0.9rem; color: #b00; }
-  .muted { opacity: 0.7; }
-  .actions button { font-size: 0.8rem; }
-</style>
+<link rel="icon" href="/admin/logo.png" type="image/png">
+<link rel="stylesheet" href="/admin/styles.css">
+<script type="module" src="/admin/client.js"></script>
 </head>
 <body>
-<header>
-  <h1>PayHole Sinkhole</h1>
-  <form id="token-form">
-    <input id="token" type="password" placeholder="admin token" autocomplete="off">
-    <button type="submit">Connect</button>
-    <button type="button" id="refresh">Refresh</button>
-  </form>
+<header class="top">
+  <div class="top-inner">
+    <a class="brand" href="/"><img src="/admin/logo.png" alt=""><span class="brand-name">PayHole <span>Sinkhole</span></span></a>
+    <div class="conn">
+      <span id="host" class="host mono muted"></span>
+      <span id="conn" class="pill"><span class="pill-text" id="conn-text">offline</span></span>
+      <button id="refresh" type="button" class="small" hidden>Refresh</button>
+      <button id="disconnect" type="button" class="link small" hidden>Disconnect</button>
+    </div>
+  </div>
 </header>
-<div id="message"></div>
 
-<h2>Status</h2>
-<dl id="status"></dl>
+<main class="page">
+  <section class="stats" id="stats" aria-label="Status">
+    <div class="stat"><div class="label">Resolver</div><div class="value" id="s-resolver">&#8212;</div><div class="sub" id="s-resolver-sub">checking</div></div>
+    <div class="stat"><div class="label">Domains blocked</div><div class="value" id="s-blocked">&#8212;</div><div class="sub" id="s-blocked-sub">connect to see the breakdown</div></div>
+    <div class="stat"><div class="label">Swarm peers</div><div class="value" id="s-peers">&#8212;</div><div class="sub" id="s-peers-sub">checking</div></div>
+    <div class="stat"><div class="label">Flags pending</div><div class="value" id="s-flags">&#8212;</div><div class="sub" id="s-flags-sub">connect to see</div></div>
+    <div class="stat"><div class="label">Extension sync</div><div class="value small" id="s-ext">&#8212;</div><div class="sub" id="s-ext-sub">connect to see</div></div>
+    <div class="stat"><div class="label">Swarm activity</div><div class="value small" id="s-swarm">&#8212;</div><div class="sub" id="s-swarm-sub">connect to see</div></div>
+    <div class="stat"><div class="label">Resolver reloads</div><div class="value" id="s-reloads">&#8212;</div><div class="sub" id="s-reloads-sub">connect to see</div></div>
+    <div class="stat"><div class="label">Peer id</div><div class="value small" id="s-peer">&#8212;</div><div class="sub" id="s-peer-sub"><button type="button" class="link small" id="copy-peer" hidden>Copy</button></div></div>
+  </section>
 
-<h2>Blocklist <span class="muted" id="bl-count"></span></h2>
-<form id="manual-form">
-  <input id="manual-domain" placeholder="domain to block" required>
-  <input id="manual-reason" placeholder="reason (optional)">
-  <button type="submit">Add manual entry</button>
-</form>
-<p>
-  <input id="filter" placeholder="filter domains">
-  Export:
-  <button type="button" data-format="hosts">hosts</button>
-  <button type="button" data-format="dnsmasq">dnsmasq</button>
-  <button type="button" data-format="plain">plain</button>
-  <button type="button" data-format="json">json</button>
-</p>
-<table id="blocklist"><thead><tr><th>Domain</th><th>Sources</th><th>Reason</th><th></th></tr></thead><tbody></tbody></table>
+  <section class="card connect" id="connect">
+    <h2>Connect to this node</h2>
+    <p>Paste the admin token from the node's <span class="mono">.env</span> file (ADMIN_TOKEN). It stays in this browser only.</p>
+    <form id="token-form" class="stack">
+      <input id="token" type="password" placeholder="admin token" autocomplete="off" spellcheck="false" required>
+      <div class="row"><button type="submit" class="primary">Connect</button></div>
+      <div class="error" id="token-error"></div>
+    </form>
+  </section>
 
-<h2>Swarm flags <span class="muted" id="flags-count"></span></h2>
-<table id="flags"><thead><tr><th>Domain</th><th>Reporters</th><th>Confirmed</th><th>Last seen</th><th>Reasons</th></tr></thead><tbody></tbody></table>
+  <nav class="tabs" id="tabs" hidden aria-label="Sections">
+    <button type="button" class="tab active" data-tab="blocklist">Blocklist<span class="count" id="t-blocklist"></span></button>
+    <button type="button" class="tab" data-tab="flags">Swarm flags<span class="count" id="t-flags"></span></button>
+    <button type="button" class="tab" data-tab="directory">x402 directory<span class="count" id="t-directory"></span></button>
+    <button type="button" class="tab" data-tab="node">Node</button>
+  </nav>
 
-<h2>x402 directory <span class="muted" id="dir-count"></span></h2>
-<form id="dir-form">
-  <input id="dir-url" placeholder="https://api.example/resource" required>
-  <input id="dir-payto" placeholder="payTo address" required>
-  <input id="dir-network" placeholder="network (default eip155:4663)">
-  <input id="dir-asset" placeholder="asset (default USDG)">
-  <button type="submit">Probe and add</button>
-</form>
-<table id="directory"><thead><tr><th>URL</th><th>Network</th><th>Pay to</th><th>Amount</th><th>Origin</th><th>Verified</th></tr></thead><tbody></tbody></table>
+  <section class="card" id="tab-blocklist" data-panel="blocklist" hidden>
+    <div class="card-head"><h2>Blocklist</h2><div class="meta" id="bl-meta"></div></div>
+    <form id="manual-form" class="row">
+      <input id="manual-domain" type="text" placeholder="domain to block, e.g. drainer.example" required spellcheck="false">
+      <input id="manual-reason" type="text" placeholder="reason (optional)">
+      <button type="submit" class="primary">Block domain</button>
+    </form>
+    <div class="row">
+      <input id="filter" type="search" placeholder="filter domains" spellcheck="false">
+      <span class="hint">Export</span>
+      <button type="button" class="small" data-format="hosts">hosts</button>
+      <button type="button" class="small" data-format="dnsmasq">dnsmasq</button>
+      <button type="button" class="small" data-format="plain">plain</button>
+      <button type="button" class="small" data-format="json">json</button>
+    </div>
+    <div class="empty" id="bl-empty" hidden></div>
+    <div class="table-wrap" id="bl-wrap"><table id="blocklist"><thead><tr><th>Domain</th><th>Sources</th><th>Reason</th><th></th></tr></thead><tbody></tbody></table></div>
+  </section>
 
-<script>
-(function () {
-  'use strict';
-  var tokenInput = document.getElementById('token');
-  var message = document.getElementById('message');
-  var allEntries = [];
-  try { tokenInput.value = sessionStorage.getItem('sinkhole-token') || ''; } catch (e) { /* storage unavailable */ }
+  <section class="card" id="tab-flags" data-panel="flags" hidden>
+    <div class="card-head"><h2>Swarm flags</h2><div class="meta" id="flags-meta"></div></div>
+    <div class="empty" id="flags-empty" hidden></div>
+    <div class="table-wrap" id="flags-wrap"><table id="flags"><thead><tr><th>Domain</th><th>Reporters</th><th>Status</th><th>Last seen</th><th>Reasons</th></tr></thead><tbody></tbody></table></div>
+  </section>
 
-  function token() { return tokenInput.value.trim(); }
-  function say(text) { message.textContent = text || ''; }
-  function api(path, init) {
-    init = init || {};
-    var headers = { authorization: 'Bearer ' + token() };
-    if (init.body !== undefined) headers['content-type'] = 'application/json';
-    return fetch(path, { method: init.method || 'GET', headers: headers, body: init.body === undefined ? undefined : JSON.stringify(init.body) })
-      .then(function (res) {
-        var type = res.headers.get('content-type') || '';
-        var parse = type.indexOf('application/json') === 0 ? res.json() : res.text();
-        return parse.then(function (data) {
-          if (!res.ok) throw new Error((data && data.error ? data.error + ': ' + (data.message || '') : 'HTTP ' + res.status));
-          return data;
-        });
-      });
-  }
-  function cell(row, text) { var td = document.createElement('td'); td.textContent = text === null || text === undefined ? '' : String(text); row.appendChild(td); return td; }
-  function when(ms) { return ms ? new Date(ms).toISOString().replace('T', ' ').slice(0, 19) : ''; }
+  <section class="card" id="tab-directory" data-panel="directory" hidden>
+    <div class="card-head"><h2>x402 directory</h2><div class="meta" id="dir-meta"></div></div>
+    <form id="dir-form" class="row">
+      <input id="dir-url" type="url" placeholder="https://api.example/resource" required spellcheck="false">
+      <input id="dir-payto" type="text" placeholder="payTo address" required spellcheck="false">
+      <input id="dir-network" type="text" placeholder="network (default eip155:4663)" spellcheck="false">
+      <input id="dir-asset" type="text" placeholder="asset (default USDG)" spellcheck="false">
+      <button type="submit" class="primary">Probe and add</button>
+    </form>
+    <div class="empty" id="dir-empty" hidden></div>
+    <div class="table-wrap" id="dir-wrap"><table id="directory"><thead><tr><th>URL</th><th>Network</th><th>Pay to</th><th>Amount</th><th>Origin</th><th>Verified</th></tr></thead><tbody></tbody></table></div>
+  </section>
 
-  function renderStatus(status) {
-    var dl = document.getElementById('status');
-    dl.textContent = '';
-    var rows = [
-      ['Peer id', status.peerId || 'swarm disabled'],
-      ['Listen addresses', (status.listenAddrs || []).join('\\n')],
-      ['Connected peers', (status.connectedPeers || []).length],
-      ['Operator', status.identity ? status.identity.address + (status.identity.publishing ? ' (publishing)' : ' (receive only)') : 'none'],
-      ['Local flags', status.counts.local],
-      ['Manual entries', status.counts.manual],
-      ['Swarm confirmed', status.counts.swarmConfirmed + ' of ' + status.counts.swarmFlagged + ' flagged (threshold ' + status.flagThreshold + ')'],
-      ['Merged blocklist', status.counts.merged],
-      ['Directory entries', status.directory],
-      ['Last extension sync', status.lastSync.extension.updatedAt || 'never'],
-      ['Last swarm message', when(status.lastSync.swarm) || 'never'],
-      ['Swarm messages', status.swarm ? status.swarm.received + ' received, ' + status.swarm.accepted + ' accepted, dropped ' + JSON.stringify(status.swarm.dropped) : 'n/a'],
-      ['dnsmasq', status.dnsmasq.running ? 'running (pid ' + status.dnsmasq.pid + ', ' + status.dnsmasq.restarts + ' reloads)' : 'not running'],
-      ['Uptime', Math.round(status.uptimeSeconds) + ' s']
-    ];
-    rows.forEach(function (row) {
-      var dt = document.createElement('dt'); dt.textContent = row[0];
-      var dd = document.createElement('dd'); dd.textContent = String(row[1]); dd.style.whiteSpace = 'pre-line';
-      dl.appendChild(dt); dl.appendChild(dd);
-    });
-  }
+  <section class="card" id="tab-node" data-panel="node" hidden>
+    <div class="card-head"><h2>Node</h2><div class="meta" id="node-meta"></div></div>
+    <div class="two">
+      <dl class="grid" id="node-left"></dl>
+      <dl class="grid" id="node-right"></dl>
+    </div>
+  </section>
 
-  function renderBlocklist() {
-    var filter = document.getElementById('filter').value.trim().toLowerCase();
-    var body = document.querySelector('#blocklist tbody');
-    body.textContent = '';
-    var shown = 0;
-    allEntries.forEach(function (entry) {
-      if (filter && entry.domain.indexOf(filter) === -1) return;
-      if (shown++ >= 500) return;
-      var tr = document.createElement('tr');
-      cell(tr, entry.domain);
-      cell(tr, entry.sources.join(', '));
-      cell(tr, entry.reason);
-      var actions = cell(tr, '');
-      actions.className = 'actions';
-      if (entry.sources.indexOf('manual') !== -1) {
-        var btn = document.createElement('button');
-        btn.type = 'button';
-        btn.textContent = 'Remove manual';
-        btn.onclick = function () {
-          api('/api/blocklist/manual/' + encodeURIComponent(entry.domain), { method: 'DELETE' }).then(refresh).catch(function (e) { say(e.message); });
-        };
-        actions.appendChild(btn);
-      }
-      body.appendChild(tr);
-    });
-    document.getElementById('bl-count').textContent = '(' + allEntries.length + ' domains' + (shown < allEntries.length ? ', showing ' + shown : '') + ')';
-  }
-
-  function renderFlags(data) {
-    var body = document.querySelector('#flags tbody');
-    body.textContent = '';
-    data.entries.forEach(function (entry) {
-      var tr = document.createElement('tr');
-      cell(tr, entry.domain);
-      cell(tr, entry.reporters + ' / ' + data.threshold);
-      cell(tr, entry.confirmed ? 'yes' : 'no');
-      cell(tr, when(entry.lastSeen));
-      cell(tr, entry.reasons.join('; '));
-      body.appendChild(tr);
-    });
-    document.getElementById('flags-count').textContent = '(' + data.entries.length + ')';
-  }
-
-  function renderDirectory(data) {
-    var body = document.querySelector('#directory tbody');
-    body.textContent = '';
-    data.entries.forEach(function (entry) {
-      var tr = document.createElement('tr');
-      cell(tr, entry.url);
-      cell(tr, entry.network);
-      cell(tr, entry.payTo);
-      cell(tr, entry.amount === null ? '' : entry.amount);
-      cell(tr, entry.origin);
-      cell(tr, when(entry.verifiedAt));
-      body.appendChild(tr);
-    });
-    document.getElementById('dir-count').textContent = '(' + data.entries.length + ')';
-  }
-
-  function refresh() {
-    if (!token()) { say('Enter the admin token.'); return; }
-    say('');
-    return Promise.all([api('/api/status'), api('/api/blocklist'), api('/api/flags'), api('/api/directory')])
-      .then(function (results) {
-        renderStatus(results[0]);
-        allEntries = results[1].entries;
-        renderBlocklist();
-        renderFlags(results[2]);
-        renderDirectory(results[3]);
-      })
-      .catch(function (e) { say(e.message); });
-  }
-
-  document.getElementById('token-form').onsubmit = function (event) {
-    event.preventDefault();
-    try { sessionStorage.setItem('sinkhole-token', token()); } catch (e) { /* storage unavailable */ }
-    refresh();
-  };
-  document.getElementById('refresh').onclick = refresh;
-  document.getElementById('filter').oninput = renderBlocklist;
-  document.getElementById('manual-form').onsubmit = function (event) {
-    event.preventDefault();
-    var domain = document.getElementById('manual-domain').value.trim();
-    var reason = document.getElementById('manual-reason').value.trim() || 'manual';
-    api('/api/blocklist/manual', { method: 'POST', body: { domain: domain, reason: reason } })
-      .then(function () { document.getElementById('manual-domain').value = ''; return refresh(); })
-      .catch(function (e) { say(e.message); });
-  };
-  document.getElementById('dir-form').onsubmit = function (event) {
-    event.preventDefault();
-    var body = { url: document.getElementById('dir-url').value.trim(), payTo: document.getElementById('dir-payto').value.trim() };
-    var network = document.getElementById('dir-network').value.trim();
-    var asset = document.getElementById('dir-asset').value.trim();
-    if (network) body.network = network;
-    if (asset) body.asset = asset;
-    say('Probing...');
-    api('/api/directory', { method: 'POST', body: body })
-      .then(function () { say('Endpoint verified and added.'); return refresh(); })
-      .catch(function (e) { say(e.message); });
-  };
-  Array.prototype.forEach.call(document.querySelectorAll('button[data-format]'), function (button) {
-    button.onclick = function () {
-      var format = button.getAttribute('data-format');
-      fetch('/api/blocklist/export?format=' + format, { headers: { authorization: 'Bearer ' + token() } })
-        .then(function (res) { if (!res.ok) throw new Error('HTTP ' + res.status); return res.blob(); })
-        .then(function (blob) {
-          var a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = 'sinkhole-blocklist.' + (format === 'json' ? 'json' : 'txt');
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-        })
-        .catch(function (e) { say(e.message); });
-    };
-  });
-  if (token()) refresh();
-})();
-</script>
+  <footer class="foot"><span id="foot-left">not connected</span><span id="foot-right"><a href="https://payhole.org">payhole.org</a></span></footer>
+</main>
+<div id="toast" class="toast" hidden></div>
 </body>
 </html>
 `;

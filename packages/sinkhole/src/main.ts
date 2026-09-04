@@ -1,6 +1,8 @@
 import { mkdir, readFile } from "node:fs/promises";
 import type { Server } from "node:http";
+import { createRequire } from "node:module";
 import { isIP } from "node:net";
+import { hostname } from "node:os";
 import { join } from "node:path";
 import { getAddress, type Address } from "viem";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
@@ -37,6 +39,7 @@ interface Identity {
 }
 
 const MINUTE = 60_000;
+const VERSION = (createRequire(import.meta.url)("../package.json") as { version?: string }).version ?? "0.0.0";
 
 function log(line: string): void {
   console.log(`${new Date().toISOString()} ${line}`);
@@ -273,6 +276,15 @@ async function run(config: SinkholeConfig): Promise<void> {
       swarm: swarm ? { received: swarm.received, accepted: swarm.accepted, dropped: swarm.dropped } : null,
       dnsmasq: dnsmasq.status(),
       uptimeSeconds: (Date.now() - startedAt) / 1000,
+      node: { hostname: hostname(), version: VERSION, startedAt },
+      config: {
+        dns: { listen: config.dns.listen, port: config.dns.port, upstream: config.dns.upstream, cacheSize: config.dns.cacheSize },
+        admin: { listen: config.admin.listen, port: config.admin.port },
+        swarm: { enabled: config.swarm.enabled, listen: config.swarm.listen, bootstrap: config.swarm.bootstrap, mdns: config.swarm.mdns },
+        membership: { minTier: config.membership.minTier, vault: config.membership.vault ?? null },
+        extension: { url: config.extension.url ?? null, pullMinutes: config.extension.pullMinutes },
+        flags: { threshold: config.flags.threshold, ttlDays: config.flags.ttlDays, reannounceMinutes: config.flags.reannounceMinutes },
+      },
     }),
     directory: {
       list: () => directory.list(),
