@@ -411,6 +411,32 @@ td.mono {
   font-size: 12px;
 }
 
+/* The popup is 360px wide: tighter cells, and the site column truncates instead of wrapping letter by letter. */
+body.popup table {
+  font-size: 12px;
+}
+
+body.popup th,
+body.popup td {
+  padding: 8px 5px;
+}
+
+body.popup th {
+  letter-spacing: 0.06em;
+}
+
+body.popup td:nth-child(2) {
+  max-width: 82px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.popup td .mono,
+body.popup td.mono {
+  font-size: 11px;
+}
+
 .table-wrap {
   overflow-x: auto;
 }

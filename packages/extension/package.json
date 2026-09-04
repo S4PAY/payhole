@@ -1,6 +1,6 @@
 {
   "name": "@payhole/extension",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "description": "PayHole browser extension: per-site capped addresses paying x402 resources on Robinhood Chain from a BudgetAccount.",
   "type": "module",
