@@ -1,4 +1,5 @@
 User-agent: *
 Allow: /
 Disallow: /api/
+Disallow: /store/
 Sitemap: https://payhole.org/sitemap.xml
