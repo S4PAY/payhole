@@ -217,10 +217,13 @@ b = expand(b, "can", [{"x": x} for x in ["The one address derived for its origin
 b = expand(b, "cannot", [{"x": x} for x in ["Your seed or any other site's address", "Your pocket balance or its cap", "Where else you have paid", "Your blocklist, your swarm peers, or your DNS queries"]])
 b = expand(b, "contracts", [{"n": n, "a": a, "s": SF(a), "e": BS(a)} for n, a in CONTRACTS])
 b = b.replace("{{ safeExplorer }}", BS("0xfCeB8905E316D383Cd90Aa1Ab04ab1650611445b"))
-b = b.replace("<a>Contracts repository</a>", f'<a href="{SF("0x298712ca3a1367bbd8caabd5269b05985228eedf")}">Contracts repository</a>')
-b = b.replace("<a>Extension repository</a>", '<a href="/extension.html">Extension repository</a>')
+b = b.replace("<a>Contracts repository</a>", '<a href="https://github.com/S4PAY/payhole/tree/main/packages/contracts">Contracts repository</a>')
+b = b.replace("<a>Extension repository</a>", '<a href="https://github.com/S4PAY/payhole/tree/main/packages/extension">Extension repository</a>')
+b = b.replace("<a>Test reports</a>", '<a href="https://github.com/S4PAY/payhole/tree/main/packages/contracts/test">Test reports</a>')
+# "Read the code" card: Sinkhole points at the package; every other Sinkhole link stays on the home section
+i = b.index("Read the code"); j = b.index("Test reports", i)
+b = b[:i] + b[i:j].replace("<a>Sinkhole</a>", '<a href="https://github.com/S4PAY/payhole/tree/main/packages/sinkhole">Sinkhole</a>') + b[j:]
 b = b.replace("<a>Sinkhole</a>", '<a href="/#sinkhole">Sinkhole</a>')
-b = b.replace("<a>Test reports</a>", '<a href="/trust.html">Test reports</a>')
 write("trust.html", "Trust · PayHole", "Every part that touches your money, what each one can see, and where to read the code.", b)
 
 for f in sorted(os.listdir(S)):
