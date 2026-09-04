@@ -185,7 +185,12 @@ takes a few minutes the first time.
    "Ports and the firewall" for the two-line fix.
 3. Clone the repository, copy `packages/sinkhole/.env.example` to `packages/sinkhole/.env`, set `ADMIN_TOKEN`
    (`openssl rand -hex 32`), and if the extension should sync its blocklist to this box add `ADMIN_BIND=<box LAN address>`.
-4. Start it: `docker compose -f packages/sinkhole/docker-compose.home.yml up -d --build`.
+4. Start it: `docker compose -f packages/sinkhole/docker-compose.home.yml up -d --build`. On a box whose Docker
+   daemon is older than its compose plugin (Debian 12 ships Docker 20.10; the build fails with "client version is too
+   new"), build the image directly and let compose only run it:
+   `DOCKER_BUILDKIT=0 docker build -f packages/sinkhole/Dockerfile -t payhole-sinkhole .` from the repository root,
+   then `docker compose -f packages/sinkhole/docker-compose.home.yml up -d --no-build`. Verified on a Rock Pi 4B+
+   (64-bit ARM, Debian 12): the build takes about fifteen minutes and the running container uses about 120 MB.
 5. Check it answers and blocks: `dig @<box LAN address> example.com` returns an address, and a domain on the list
    returns nothing. `curl -H "Authorization: Bearer $ADMIN_TOKEN" http://<box LAN address>:8053/healthz` shows the
    resolver, list size, and peer count.
