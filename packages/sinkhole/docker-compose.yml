@@ -1,0 +1,32 @@
+# docker compose -f packages/sinkhole/docker-compose.yml up -d   (run from anywhere; paths are relative to this file)
+services:
+  sinkhole:
+    build:
+      context: ../..
+      dockerfile: packages/sinkhole/Dockerfile
+    image: payhole-sinkhole
+    container_name: payhole-sinkhole
+    restart: unless-stopped
+    # Copy .env.example to .env next to this file and fill in ADMIN_TOKEN and the membership settings.
+    env_file:
+      - .env
+    environment:
+      DATA_DIR: /data
+      # Uncomment to load a hand-maintained list from the volume (one hostname per line).
+      # MANUAL_BLOCKLIST_FILE: /data/manual-blocklist.txt
+    ports:
+      # Docker publishes ports around ufw, so everything binds to 127.0.0.1 here. To serve clients or
+      # peers on the network, change the binding deliberately and open the port in ufw for the source
+      # addresses that need it (see "Ports and the firewall" in the README).
+      # Port 53 must be free on the host; on Ubuntu systemd-resolved usually holds it (see README).
+      - "127.0.0.1:53:53/udp"
+      - "127.0.0.1:53:53/tcp"
+      # Admin API and page, token protected.
+      - "127.0.0.1:8053:8053/tcp"
+      # libp2p swarm.
+      - "127.0.0.1:4001:4001/tcp"
+    volumes:
+      - sinkhole-data:/data
+
+volumes:
+  sinkhole-data:
