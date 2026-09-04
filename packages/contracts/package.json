@@ -1,0 +1,15 @@
+{
+  "name": "@payhole/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "PayHole protocol contracts for Robinhood Chain: budget accounts, burn vault, creator registry.",
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test && FOUNDRY_PROFILE=v4 forge test --match-path 'test/v4/*'",
+    "test:fork": "bash scripts/fork-test.sh",
+    "lint": "forge fmt --check && forge lint",
+    "fmt": "forge fmt",
+    "slither": "slither . --config-file slither.config.json",
+    "deploy": "bash scripts/deploy.sh"
+  }
+}
