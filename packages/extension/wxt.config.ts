@@ -6,7 +6,7 @@ export default defineConfig({
   outDir: ".output",
   manifest: {
     name: "PayHole",
-    description: "Spending-pocket wallet on Robinhood Chain: capped per-site addresses, x402 payments, tracker blocking, creator tips.",
+    description: "A capped spending pocket on Robinhood Chain that pays websites, tools, and agents over x402 while you browse.",
     permissions: [
       "storage",
       "alarms",
