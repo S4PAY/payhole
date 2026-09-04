@@ -1,0 +1,26 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+.output/
+.wxt/
+out/
+cache/
+coverage/
+*.tsbuildinfo
+
+# secrets and local config
+.env
+.env.*
+!.env.example
+
+# foundry
+packages/contracts/broadcast/**/dry-run/
+
+# editor and os
+.DS_Store
+.idea/
+.vscode/
+*.swp
