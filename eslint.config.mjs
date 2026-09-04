@@ -37,6 +37,7 @@ export default defineConfig(
         { argsIgnorePattern: "^_", varsIgnorePattern: "^_", caughtErrorsIgnorePattern: "^_" },
       ],
       "@typescript-eslint/switch-exhaustiveness-check": "error",
+      "@typescript-eslint/dot-notation": ["error", { allowIndexSignaturePropertyAccess: true }],
       "no-console": "off",
     },
   },
