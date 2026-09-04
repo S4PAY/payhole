@@ -76,7 +76,7 @@ def social(title, desc, name):
             f'<link rel="me" href="https://x.com/payhole_x402"><link rel="canonical" href="{url}">')
 
 def head(title, desc, script=None, scene=False, name="index.html"):
-    s = f'<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>{title}</title>\n<meta name="description" content="{desc}">\n{social(title, desc, name)}<meta name="theme-color" content="#000000">\n<link rel="icon" href="/favicon.svg" type="image/svg+xml">\n{FONTS}\n<link rel="stylesheet" href="/styles.css">\n'
+    s = f'<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>{title}</title>\n<meta name="description" content="{desc}">\n{social(title, desc, name)}<meta name="theme-color" content="#000000">\n<link rel="icon" href="/favicon.png" type="image/png" sizes="64x64"><link rel="apple-touch-icon" href="/apple-touch-icon.png">\n{FONTS}\n<link rel="stylesheet" href="/styles.css">\n'
     if scene:
         # The design's hero is the aperture-scene element from aperture.js (three.js), served from this origin.
         s += IMPORTMAP + "\n"
@@ -86,6 +86,7 @@ def head(title, desc, script=None, scene=False, name="index.html"):
 
 def common(body):
     for a, b in HREFS: body = body.replace(f'href="{a}"', f'href="{b}"')
+    body = body.replace('<span class="ph-mark" style="display:inline-block;width:17px;height:17px;border-radius:50%;margin:0 1px"></span>', '<img src="/logo.png" alt="" width="19" height="19" style="display:inline-block;width:19px;height:19px;margin:0 1px;vertical-align:-2px">')
     body = body.replace('<a class="ph-lava" style=', '<a href="/extension.html" class="ph-lava" style=')
     body = body.replace("<a>Extension</a>", '<a href="/extension.html">Extension</a><a href="/try.html">Try it</a>')
     body = body.replace('<span>payhole.org</span></div>', '<span style="display:flex;gap:16px"><a href="/privacy.html">Privacy</a><a href="https://github.com/S4PAY/payhole">github.com/S4PAY/payhole</a><a href="https://www.npmjs.com/package/@payhole/sdk">npm @payhole/sdk</a><a href="https://x.com/payhole_x402" rel="me">x.com/payhole_x402</a><span>payhole.org</span></span></div>')
