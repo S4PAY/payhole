@@ -194,5 +194,9 @@ takes a few minutes the first time.
 7. In the extension's Blocklist settings, enter `http://<box LAN address>:8053` and the token so your own reports
    reach the box.
 
+Already running Pi-hole on the same box? Set `DNS_HOST_PORT=5335` in `.env`, start Sinkhole, then in Pi-hole's
+Settings, DNS, add `<box LAN address>#5335` as the only upstream. Pi-hole keeps its ad lists in front and Sinkhole
+adds the drainer list behind it; remove the upstream entry to undo.
+
 Ports on a home network: 53 is open to the LAN on purpose, the admin API stays on the box unless you bind it, and the
 swarm on TCP 4001 works outbound-only behind NAT; forward 4001 on the router only if you want to accept inbound peers.

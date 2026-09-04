@@ -5,6 +5,7 @@
 #   DNS_BIND    interface DNS listens on, default 0.0.0.0 (all interfaces, so every device can use it)
 #   ADMIN_BIND  admin API and page, default 127.0.0.1; set to the LAN address to let the extension sync
 #   SWARM_BIND  libp2p listener, default 0.0.0.0; forward TCP 4001 on the router to take inbound peers
+#   DNS_HOST_PORT  host port for DNS, default 53; use another port (5335) to run beside Pi-hole and chain them
 services:
   sinkhole:
     build:
@@ -18,8 +19,8 @@ services:
     environment:
       DATA_DIR: /data
     ports:
-      - "${DNS_BIND:-0.0.0.0}:53:53/udp"
-      - "${DNS_BIND:-0.0.0.0}:53:53/tcp"
+      - "${DNS_BIND:-0.0.0.0}:${DNS_HOST_PORT:-53}:53/udp"
+      - "${DNS_BIND:-0.0.0.0}:${DNS_HOST_PORT:-53}:53/tcp"
       - "${ADMIN_BIND:-127.0.0.1}:8053:8053/tcp"
       - "${SWARM_BIND:-0.0.0.0}:4001:4001/tcp"
     volumes:
