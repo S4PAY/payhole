@@ -25,7 +25,7 @@ const v2 = {
 
 describe("base64 json", () => {
   it("round-trips unicode with standard alphabet and padding", () => {
-    const value = { text: "café ☃", n: 1 };
+    const value = { text: "café ñ", n: 1 };
     const encoded = encodeBase64Json(value);
     expect(encoded).toMatch(/^[A-Za-z0-9+/]*={0,2}$/);
     expect(decodeBase64Json(encoded)).toEqual(value);

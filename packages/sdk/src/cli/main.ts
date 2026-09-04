@@ -12,7 +12,7 @@ import { defaultKeyStorePath, KeyStore, type StoredKey } from "./keystore.js";
 const USAGE = `payhole - pay x402 URLs from a PayHole pocket with capped session keys
 
 Usage:
-  payhole key create --name <name> --cap <usdg>      generate a session key with a local spending cap
+  payhole key create [--name <name>] --cap <usdg>    generate a session key with a local spending cap (name defaults to "default")
   payhole key import --name <name> --cap <usdg> <private-key>
   payhole key list                                   every key: name, address, spent / cap
   payhole key address [--key <name>]                 print a key's address (give it to the pocket owner)
@@ -143,7 +143,7 @@ function chooseKey(s: Settings, flags: Flags): { privateKey: Hex; stored: Stored
   const keys = s.store.list();
   const [only] = keys;
   if (keys.length === 1 && only) return { privateKey: only.privateKey, stored: only };
-  if (keys.length === 0) fail(`no session key: run "payhole key create --name <name> --cap <usdg>" or set PAYHOLE_SESSION_KEY (looked in ${s.store.path})`);
+  if (keys.length === 0) fail(`no session key: run "payhole key create --cap <usdg>" or set PAYHOLE_SESSION_KEY (looked in ${s.store.path})`);
   return fail(`several keys in ${s.store.path}; choose one with --key <name>`);
 }
 
@@ -152,9 +152,8 @@ function commandKey(s: Settings, args: string[]): void {
   const flags = parseFlags(rest);
   switch (sub) {
     case "create": {
-      const name = flags.values["name"];
-      if (name === undefined) fail("usage: payhole key create --name <name> --cap <usdg>");
-      const key = s.store.create(name, capFlag(flags, "usage: payhole key create --name <name> --cap <usdg>"));
+      const name = flags.values["name"] ?? "default";
+      const key = s.store.create(name, capFlag(flags, "usage: payhole key create [--name <name>] --cap <usdg>"));
       process.stdout.write(`${row("created", `${short(key.address)}  cap ${amount(key.cap)}`)}\n`);
       return;
     }

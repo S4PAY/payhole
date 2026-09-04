@@ -38,7 +38,7 @@ Requirements: Node 22 or newer (24 in this repo), pnpm, and Foundry (`anvil`) fo
 ## CLI
 
 ```sh
-payhole key create --name research --cap 5      # created  0x9c1e…4a2f  cap 5.00 USDG
+payhole key create --name research --cap 5      # created  0x9c1e…4a2f  cap 5.00 USDG (--name defaults to "default")
 payhole key import --name agent --cap 1 0x...    # store an existing key under a name and cap
 payhole key list                                 # name, address, spent / cap
 payhole key address --key research               # the address the pocket owner registers with setSessionKey

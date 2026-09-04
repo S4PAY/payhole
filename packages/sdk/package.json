@@ -1,9 +1,26 @@
 {
   "name": "@payhole/sdk",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "PayHole client SDK: x402 payments from a session key against a BudgetAccount, plus a CLI.",
-  "type": "module",
+  "keywords": [
+    "x402",
+    "usdg",
+    "robinhood-chain",
+    "payments",
+    "eip-3009",
+    "payhole"
+  ],
+  "homepage": "https://payhole.org",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/S4PAY/payhole.git",
+    "directory": "packages/sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/S4PAY/payhole/issues"
+  },
   "license": "MIT",
+  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -11,13 +28,16 @@
     }
   },
   "bin": {
-    "payhole": "./dist/cli/main.js"
+    "payhole": "dist/cli/main.js"
   },
   "files": [
     "dist"
   ],
   "engines": {
     "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
