@@ -5,59 +5,98 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Trust · PayHole</title>
 <meta name="description" content="Every part that touches your money, what each one can see, and where to read the code.">
-<meta property="og:title" content="Trust · PayHole">
-<meta property="og:description" content="Every part that touches your money, what each one can see, and where to read the code.">
-<meta property="og:type" content="website">
-<meta name="theme-color" content="#000000">
+<meta property="og:title" content="Trust · PayHole"><meta property="og:description" content="Every part that touches your money, what each one can see, and where to read the code."><meta property="og:type" content="website"><meta name="theme-color" content="#000000">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-<header class="nav"><div class="wrap">
-  <a class="brand" href="/">PayH<span class="mark"></span>le</a>
-  <nav class="links"><a href="/creators.html">Creators</a><a href="/developers.html">Developers</a><a href="/token.html">Token</a><a href="/#sinkhole">Sinkhole</a><a href="/trust.html" aria-current="page">Trust</a></nav>
-  <a class="btn sm lava" href="/extension.html">Get the extension</a>
-</div></header>
 
-<main>
-<section class="wrap" style="padding:clamp(64px,9vw,112px) 24px 80px"><div class="stack"><div class="eyebrow muted">Trust</div><h1 class="h1" style="max-width:900px">Open source. Tested.</h1><p class="lead">Here is every part that touches your money, what each one can see, and where to read the code.</p></div></section>
+<div style="width:100%">
+<div style="position:sticky;top:0;z-index:20;background:rgba(0,0,0,.45);backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%);border-bottom:1px solid rgba(255,255,255,.08)">
+  <div class="ph-nav" style="max-width:1200px;margin:0 auto;padding:0 24px;height:68px;display:flex;align-items:center;justify-content:space-between;gap:24px">
+    <a href="/" style="display:inline-flex;align-items:center;font:600 22px 'Space Grotesk';letter-spacing:-0.03em;color:var(--text)">PayH<span class="ph-mark" style="display:inline-block;width:17px;height:17px;border-radius:50%;margin:0 1px"></span>le</a>
+    <div data-r="navlinks" style="display:flex;gap:28px;font:500 15px Inter"><a href="/creators.html">Creators</a><a href="/developers.html">Developers</a><a href="/token.html">Token</a><a href="/#sinkhole">Sinkhole</a><a href="/trust.html" style="color:var(--text)">Trust</a></div>
+    <div style="display:flex;gap:10px;align-items:center"><a href="/extension.html" class="ph-lava" style="font:600 14px Inter;padding:10px 16px;border-radius:8px;white-space:nowrap">Get the extension</a></div>
+  </div>
+</div>
 
-<section class="wrap stack" style="gap:40px;padding-bottom:clamp(64px,9vw,112px)">
-  <h2 class="h2" style="font-size:32px">Architecture</h2>
-  <div class="four" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:48px;gap:40px 32px">
-    <div class="stack" style="gap:12px"><div class="eyebrow muted" style="font-size:11px">Your machine</div><div class="card flat" style="background:var(--bg);padding:20px;gap:6px"><h3 class="h3" style="font-size:17px">Extension</h3><p class="small" style="font-size:13px">Manifest V3. Holds the encrypted seed. Sees every 402.</p></div><div style="height:24px;width:1px;border-left:1px dashed var(--muted);margin-left:24px"></div><div class="card flat" style="background:var(--bg);padding:20px;gap:6px;border-color:rgba(255,77,77,.5)"><h3 class="h3" style="font-size:17px">Sinkhole</h3><p class="small" style="font-size:13px">Self-hosted DNS. Blocks trackers and drainers. Peer swarm for scam flags.</p></div></div>
-    <div class="stack" style="gap:12px"><div class="eyebrow muted" style="font-size:11px">Derived</div><div class="card flat" style="background:var(--bg);padding:20px;gap:6px"><h3 class="h3" style="font-size:17px">Per-site addresses</h3><p class="small" style="font-size:13px">One per origin, from the seed. Each with its own cap.</p></div><div style="height:24px;width:1px;border-left:1px dashed var(--muted);margin-left:24px"></div><div class="card flat" style="background:var(--bg);padding:20px;gap:6px;border-color:var(--accent)"><h3 class="h3" style="font-size:17px">BudgetAccount</h3><p class="small" style="font-size:13px">Your pocket. Enforces caps on chain. Created by BudgetAccountFactory. Only you can move its funds.</p></div></div>
-    <div class="stack" style="gap:12px"><div class="eyebrow muted" style="font-size:11px">Settlement</div><div class="card flat" style="background:var(--bg);padding:20px;gap:6px"><h3 class="h3" style="font-size:17px">Facilitator</h3><p class="small" style="font-size:13px">Submits x402 settlements and pays gas. Can only settle what a per-site address signed.</p></div><div style="height:24px;width:1px;border-left:1px dashed var(--muted);margin-left:24px"></div><div class="card flat" style="background:var(--bg);padding:20px;gap:6px;border-color:rgba(255,158,61,.6)"><h3 class="h3" style="font-size:17px;color:var(--ember)">Burn vault</h3><p class="small" style="font-size:13px">Buys and burns PAYHOLE. Records tiers for addresses that burn through unlock.</p></div></div>
-    <div class="stack" style="gap:12px"><div class="eyebrow muted" style="font-size:11px">Creators</div><div class="card flat" style="background:var(--bg);padding:20px;gap:6px"><h3 class="h3" style="font-size:17px">Verifier</h3><p class="small" style="font-size:13px">payhole.org/api. Reads TXT records and signs attestations. Holds no funds.</p></div><div style="height:24px;width:1px;border-left:1px dashed var(--muted);margin-left:24px"></div><div class="card flat" style="background:var(--bg);padding:20px;gap:6px"><h3 class="h3" style="font-size:17px">Registry</h3><p class="small" style="font-size:13px">CreatorRegistry. Domain to wallet. Tips go straight to the wallet.</p></div></div>
-    <div style="grid-column:1 / -1;display:flex;align-items:center;gap:16px;border-top:1px dashed var(--border);padding-top:24px;font:400 13px var(--mono);color:var(--muted);flex-wrap:wrap"><span>Extension</span><span style="flex:1;border-top:1px dashed var(--muted)"></span><span>per-site address</span><span style="flex:1;border-top:1px dashed var(--muted)"></span><span>BudgetAccount</span><span style="flex:1;border-top:1px dashed var(--muted)"></span><span>facilitator</span><span style="flex:1;border-top:1px dashed var(--muted)"></span><span style="color:var(--accent)">site paid in USDG</span></div>
-  </div>
-</section>
+<div style="max-width:1200px;margin:0 auto;padding:clamp(64px,9vw,112px) 24px 80px;display:flex;flex-direction:column;gap:24px">
+  <div style="font:500 12px Inter;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase">Trust</div>
+  <div style="font:600 clamp(48px,6vw,80px) 'Space Grotesk';letter-spacing:-0.045em;line-height:0.98;max-width:900px">Open source. Tested.</div>
+  <div style="font:400 20px/1.5 Inter;color:var(--muted);max-width:620px">Here is every part that touches your money, what each one can see, and where to read the code.</div>
+</div>
 
-<section class="surface"><div class="rule"></div><div class="glow"></div><div class="wrap section stack" style="gap:40px;position:relative">
-  <h2 class="h2">What a page can and cannot see</h2>
-  <div class="two">
-    <div class="card flat" style="background:var(--bg);padding:32px;gap:20px"><div class="eyebrow">Can see</div><div class="list"><div><i></i>The one address derived for its origin</div><div><i></i>The payments that address made to it</div><div><i></i>Whether a 402 was settled or declined</div><div><i></i>That the address was funded from a BudgetAccount, if it traces the chain</div></div></div>
-    <div class="card flat" style="background:var(--bg);padding:32px;gap:20px"><div class="eyebrow" style="color:var(--danger)">Cannot see</div><div class="list"><div><i class="no"></i>Your seed or any other site's address</div><div><i class="no"></i>Your pocket balance or its caps</div><div><i class="no"></i>Where else you have paid</div><div><i class="no"></i>Your blocklist, your swarm peers, or your DNS queries</div></div></div>
+<div style="max-width:1200px;margin:0 auto;padding:0 24px clamp(64px,9vw,112px);display:flex;flex-direction:column;gap:40px">
+  <div style="font:600 32px 'Space Grotesk';letter-spacing:-0.03em">Architecture</div>
+  <div data-r="four arch" style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:48px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:40px 32px">
+    <div style="display:flex;flex-direction:column;gap:12px">
+        <div style="font:500 11px Inter;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase">Your machine</div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:6px"><div style="font:600 17px 'Space Grotesk';letter-spacing:-0.02em">Extension</div><div style="font:400 13px/1.5 Inter;color:var(--muted)">Manifest V3. Holds the seed. Intercepts 402s.</div></div>
+        <div style="height:24px;width:1px;border-left:1px dashed var(--muted);margin-left:24px"></div>
+        <div style="background:var(--bg);border:1px solid rgba(255,77,77,0.5);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:6px"><div style="font:600 17px 'Space Grotesk';letter-spacing:-0.02em;color:var(--text)">Sinkhole</div><div style="font:400 13px/1.5 Inter;color:var(--muted)">Self-hosted DNS. Blocks trackers and drainers. Peer swarm for scam flags.</div></div>
+      </div>
+<div style="display:flex;flex-direction:column;gap:12px">
+        <div style="font:500 11px Inter;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase">Derived</div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:6px"><div style="font:600 17px 'Space Grotesk';letter-spacing:-0.02em">Per-site addresses</div><div style="font:400 13px/1.5 Inter;color:var(--muted)">One per origin, from the seed. Each with its own cap.</div></div>
+        <div style="height:24px;width:1px;border-left:1px dashed var(--muted);margin-left:24px"></div>
+        <div style="background:var(--bg);border:1px solid var(--accent);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:6px"><div style="font:600 17px 'Space Grotesk';letter-spacing:-0.02em;color:var(--text)">BudgetAccount</div><div style="font:400 13px/1.5 Inter;color:var(--muted)">Your pocket. Enforces caps on chain. From BudgetAccountFactory.</div></div>
+      </div>
+<div style="display:flex;flex-direction:column;gap:12px">
+        <div style="font:500 11px Inter;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase">Settlement</div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:6px"><div style="font:600 17px 'Space Grotesk';letter-spacing:-0.02em">Facilitator</div><div style="font:400 13px/1.5 Inter;color:var(--muted)">Submits x402 settlements. Pays gas. Cannot exceed a cap.</div></div>
+        <div style="height:24px;width:1px;border-left:1px dashed var(--muted);margin-left:24px"></div>
+        <div style="background:var(--bg);border:1px solid rgba(255,158,61,0.6);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:6px"><div style="font:600 17px 'Space Grotesk';letter-spacing:-0.02em;color:#FF9E3D">Burn vault</div><div style="font:400 13px/1.5 Inter;color:var(--muted)">Buys and burns PAYHOLE. Credits tiers to pockets.</div></div>
+      </div>
+<div style="display:flex;flex-direction:column;gap:12px">
+        <div style="font:500 11px Inter;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase">Creators</div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:6px"><div style="font:600 17px 'Space Grotesk';letter-spacing:-0.02em">Verifier</div><div style="font:400 13px/1.5 Inter;color:var(--muted)">verifier.payhole.org. Reads TXT records, checks attestations.</div></div>
+        <div style="height:24px;width:1px;border-left:1px dashed var(--muted);margin-left:24px"></div>
+        <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:6px"><div style="font:600 17px 'Space Grotesk';letter-spacing:-0.02em;color:var(--text)">Registry</div><div style="font:400 13px/1.5 Inter;color:var(--muted)">CreatorRegistry. Domain to wallet. Tips route here.</div></div>
+      </div>
+    <div style="grid-column:1 / -1;display:flex;align-items:center;gap:16px;border-top:1px dashed var(--border);padding-top:24px;font:400 13px 'JetBrains Mono';color:var(--muted)"><span>Extension</span><span style="flex:1;border-top:1px dashed var(--muted)"></span><span>per-site address</span><span style="flex:1;border-top:1px dashed var(--muted)"></span><span>BudgetAccount</span><span style="flex:1;border-top:1px dashed var(--muted)"></span><span>facilitator</span><span style="flex:1;border-top:1px dashed var(--muted)"></span><span style="color:var(--accent-text)">site paid in USDG</span></div>
   </div>
-</div></section>
+</div>
+<div style="background:var(--surface);position:relative;overflow:hidden"><div class="ph-rule"></div><div class="ph-glow"></div><div style="max-width:1200px;margin:0 auto;position:relative;padding:clamp(64px,9vw,112px) 24px;display:flex;flex-direction:column;gap:40px">
+  <div style="font:600 clamp(32px,4.5vw,44px) 'Space Grotesk';letter-spacing:-0.03em;line-height:1.05">What a page can and cannot see</div>
+  <div data-r="split" style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+    <div class="ph-glass" style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:32px;display:flex;flex-direction:column;gap:20px">
+      <div style="font:500 12px Inter;color:var(--accent-text);letter-spacing:0.08em;text-transform:uppercase">Can see</div>
+      <div style="display:flex;flex-direction:column;gap:14px;font:400 16px/1.5 Inter">
+        <div style="display:flex;gap:12px"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);margin-top:9px;flex-shrink:0"></span>The one address derived for its origin</div>
+<div style="display:flex;gap:12px"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);margin-top:9px;flex-shrink:0"></span>The payments that address made to it</div>
+<div style="display:flex;gap:12px"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);margin-top:9px;flex-shrink:0"></span>Whether a 402 was settled or declined</div>
+<div style="display:flex;gap:12px"><span style="width:6px;height:6px;border-radius:50%;background:var(--accent);margin-top:9px;flex-shrink:0"></span>That the payer is a PayHole pocket, if it looks</div>
+      </div>
+    </div>
+    <div class="ph-glass" style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:32px;display:flex;flex-direction:column;gap:20px">
+      <div style="font:500 12px Inter;color:#FF4D4D;letter-spacing:0.08em;text-transform:uppercase">Cannot see</div>
+      <div style="display:flex;flex-direction:column;gap:14px;font:400 16px/1.5 Inter">
+        <div style="display:flex;gap:12px"><span style="width:12px;height:1.5px;background:#FF4D4D;margin-top:11px;flex-shrink:0"></span>Your seed or any other site's address</div>
+<div style="display:flex;gap:12px"><span style="width:12px;height:1.5px;background:#FF4D4D;margin-top:11px;flex-shrink:0"></span>Your pocket balance or its cap</div>
+<div style="display:flex;gap:12px"><span style="width:12px;height:1.5px;background:#FF4D4D;margin-top:11px;flex-shrink:0"></span>Where else you have paid</div>
+<div style="display:flex;gap:12px"><span style="width:12px;height:1.5px;background:#FF4D4D;margin-top:11px;flex-shrink:0"></span>Your blocklist, your swarm peers, or your DNS queries</div>
+      </div>
+    </div>
+  </div>
+</div></div>
 
-<section class="wrap section stack" style="gap:40px">
-  <div class="row" style="justify-content:space-between;align-items:flex-end"><h2 class="h2">Contracts</h2><div class="mono" style="font-size:13px;color:var(--muted)">Robinhood Chain · chain id 4663</div></div>
-  <div class="table">
-    <div class="thead" style="grid-template-columns:1.4fr 3fr 1fr 1fr"><span>Name</span><span>Address</span><span>Verified</span><span class="right">Explorer</span></div>
-    <div class="tr" style="grid-template-columns:1.4fr 3fr 1fr 1fr"><span style="font-weight:600">BudgetAccountFactory</span><span class="mono" style="color:var(--muted);word-break:break-all">0x68b5bb42fec83db9582758bbcb1fc43f748970d6</span><a style="color:var(--accent);font-weight:500" href="https://repo.sourcify.dev/contracts/full_match/4663/0x68b5bb42fec83db9582758bbcb1fc43f748970d6/">Sourcify</a><a class="right" style="color:var(--muted);font-weight:500" href="https://robinhoodchain.blockscout.com/address/0x68b5bb42fec83db9582758bbcb1fc43f748970d6">Blockscout</a></div>
-    <div class="tr" style="grid-template-columns:1.4fr 3fr 1fr 1fr"><span style="font-weight:600">BudgetAccount implementation</span><span class="mono" style="color:var(--muted);word-break:break-all">0x1Cc03Bab3B6d9a5059cEC6a1BEFa86982D492C23</span><a style="color:var(--accent);font-weight:500" href="https://repo.sourcify.dev/contracts/full_match/4663/0x1Cc03Bab3B6d9a5059cEC6a1BEFa86982D492C23/">Sourcify</a><a class="right" style="color:var(--muted);font-weight:500" href="https://robinhoodchain.blockscout.com/address/0x1Cc03Bab3B6d9a5059cEC6a1BEFa86982D492C23">Blockscout</a></div>
-    <div class="tr" style="grid-template-columns:1.4fr 3fr 1fr 1fr"><span style="font-weight:600">BurnVault</span><span class="mono" style="color:var(--muted);word-break:break-all">0x298712ca3a1367bbd8caabd5269b05985228eedf</span><a style="color:var(--accent);font-weight:500" href="https://repo.sourcify.dev/contracts/full_match/4663/0x298712ca3a1367bbd8caabd5269b05985228eedf/">Sourcify</a><a class="right" style="color:var(--muted);font-weight:500" href="https://robinhoodchain.blockscout.com/address/0x298712ca3a1367bbd8caabd5269b05985228eedf">Blockscout</a></div>
-    <div class="tr" style="grid-template-columns:1.4fr 3fr 1fr 1fr"><span style="font-weight:600">CreatorRegistry</span><span class="mono" style="color:var(--muted);word-break:break-all">0x5d483aec0735d550d09018a2e89c49c190962deb</span><a style="color:var(--accent);font-weight:500" href="https://repo.sourcify.dev/contracts/full_match/4663/0x5d483aec0735d550d09018a2e89c49c190962deb/">Sourcify</a><a class="right" style="color:var(--muted);font-weight:500" href="https://robinhoodchain.blockscout.com/address/0x5d483aec0735d550d09018a2e89c49c190962deb">Blockscout</a></div>
-    <div class="tr" style="grid-template-columns:1.4fr 3fr 1fr 1fr;background:var(--bg)"><span style="font-weight:600">Owner Safe</span><span class="mono" style="color:var(--muted);word-break:break-all">0xfCeB8905E316D383Cd90Aa1Ab04ab1650611445b</span><span style="color:var(--muted)">Owns all three</span><a class="right" style="color:var(--muted);font-weight:500" href="https://robinhoodchain.blockscout.com/address/0xfCeB8905E316D383Cd90Aa1Ab04ab1650611445b">Blockscout</a></div>
+<div style="max-width:1200px;margin:0 auto;padding:clamp(64px,9vw,112px) 24px;display:flex;flex-direction:column;gap:40px">
+  <div style="display:flex;justify-content:space-between;align-items:flex-end"><div style="font:600 clamp(32px,4.5vw,44px) 'Space Grotesk';letter-spacing:-0.03em;line-height:1.05">Contracts</div><div style="font:400 13px 'JetBrains Mono';color:var(--muted)">Robinhood Chain · chain id 4663</div></div>
+  <div data-r="table" class="ph-glass" style="border-radius:12px;overflow:hidden">
+    <div style="display:grid;grid-template-columns:1.4fr 3fr 1fr 1fr;padding:14px 24px;font:500 12px Inter;color:var(--muted);letter-spacing:0.06em;text-transform:uppercase"><span>Name</span><span>Address</span><span>Verified</span><span style="text-align:right">Explorer</span></div>
+    <div style="display:grid;grid-template-columns:1.4fr 3fr 1fr 1fr;padding:18px 24px;border-top:1px solid var(--border);align-items:center;gap:12px"><span style="font:600 15px Inter">BudgetAccountFactory</span><span style="font:400 14px 'JetBrains Mono';color:var(--muted);word-break:break-all">0x68b5bb42fec83db9582758bbcb1fc43f748970d6</span><a href="https://repo.sourcify.dev/contracts/full_match/4663/0x68b5bb42fec83db9582758bbcb1fc43f748970d6/" style="font:500 14px Inter;color:var(--accent-text)">Sourcify</a><a href="https://robinhoodchain.blockscout.com/address/0x68b5bb42fec83db9582758bbcb1fc43f748970d6" style="font:500 14px Inter;color:var(--muted);text-align:right">Blockscout</a></div>
+<div style="display:grid;grid-template-columns:1.4fr 3fr 1fr 1fr;padding:18px 24px;border-top:1px solid var(--border);align-items:center;gap:12px"><span style="font:600 15px Inter">BurnVault</span><span style="font:400 14px 'JetBrains Mono';color:var(--muted);word-break:break-all">0x298712ca3a1367bbd8caabd5269b05985228eedf</span><a href="https://repo.sourcify.dev/contracts/full_match/4663/0x298712ca3a1367bbd8caabd5269b05985228eedf/" style="font:500 14px Inter;color:var(--accent-text)">Sourcify</a><a href="https://robinhoodchain.blockscout.com/address/0x298712ca3a1367bbd8caabd5269b05985228eedf" style="font:500 14px Inter;color:var(--muted);text-align:right">Blockscout</a></div>
+<div style="display:grid;grid-template-columns:1.4fr 3fr 1fr 1fr;padding:18px 24px;border-top:1px solid var(--border);align-items:center;gap:12px"><span style="font:600 15px Inter">CreatorRegistry</span><span style="font:400 14px 'JetBrains Mono';color:var(--muted);word-break:break-all">0x5d483aec0735d550d09018a2e89c49c190962deb</span><a href="https://repo.sourcify.dev/contracts/full_match/4663/0x5d483aec0735d550d09018a2e89c49c190962deb/" style="font:500 14px Inter;color:var(--accent-text)">Sourcify</a><a href="https://robinhoodchain.blockscout.com/address/0x5d483aec0735d550d09018a2e89c49c190962deb" style="font:500 14px Inter;color:var(--muted);text-align:right">Blockscout</a></div>
+    <div style="display:grid;grid-template-columns:1.4fr 3fr 1fr 1fr;padding:18px 24px;border-top:1px solid var(--border);align-items:center;gap:12px;background:var(--bg)"><span style="font:600 15px Inter">Owner Safe</span><span style="font:400 14px 'JetBrains Mono';color:var(--muted);word-break:break-all">0xfCeB8905E316D383Cd90Aa1Ab04ab1650611445b</span><span style="font:400 14px Inter;color:var(--muted)">Owns all three</span><a href="https://robinhoodchain.blockscout.com/address/0xfCeB8905E316D383Cd90Aa1Ab04ab1650611445b" style="font:500 14px Inter;color:var(--muted);text-align:right">Blockscout</a></div>
   </div>
-  <div class="two">
-    <div class="card flat" style="padding:32px;gap:12px"><div class="eyebrow muted">Disclosure</div><h3 class="h2" style="font-size:24px">Open source and tested. Not audited.</h3><p class="small" style="font-size:15px">Unit, fuzz, invariant, and mainnet-fork suites pass and Slither reports no high or medium findings. No third party has audited the code. Fund a pocket with what you can afford to lose. Read the code first.</p></div>
-    <div class="card flat" style="padding:32px;gap:12px"><div class="eyebrow muted">Read the code</div><div class="stack" style="gap:10px;font:400 15px var(--body)"><a href="https://repo.sourcify.dev/contracts/full_match/4663/0x298712ca3a1367bbd8caabd5269b05985228eedf/">Contract sources on Sourcify</a><a href="/docs.html">Documentation</a><a href="/extension.html">Extension package</a><a href="/api/healthz">Verifier status</a></div></div>
+  <div data-r="split" style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+    <div class="ph-glass" style="border:1px solid var(--border);border-radius:12px;padding:32px;display:flex;flex-direction:column;gap:12px"><div style="font:500 12px Inter;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase">Disclosure</div><div style="font:600 24px 'Space Grotesk';letter-spacing:-0.02em">The contracts are open source and tested.</div><div style="font:400 15px/1.6 Inter;color:var(--muted)">Fund a pocket with what you can afford to lose. Read the code first.</div></div>
+    <div class="ph-glass" style="border:1px solid var(--border);border-radius:12px;padding:32px;display:flex;flex-direction:column;gap:12px"><div style="font:500 12px Inter;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase">Read the code</div><div style="display:flex;flex-direction:column;gap:10px;font:400 15px Inter"><a href="https://repo.sourcify.dev/contracts/full_match/4663/0x298712ca3a1367bbd8caabd5269b05985228eedf/">Contracts repository</a><a href="/extension.html">Extension repository</a><a href="/docs.html#sdk">@payhole/sdk</a><a href="/#sinkhole">Sinkhole</a><a href="/trust.html">Test reports</a></div></div>
   </div>
-</section>
-</main>
-<footer class="footer"><div class="wrap" style="padding:32px 24px;display:flex;justify-content:space-between;gap:16px;font:400 13px var(--mono);color:var(--muted);flex-wrap:wrap"><span>Robinhood Chain, chain id 4663, settlement in USDG only</span><span>payhole.org</span></div></footer>
+</div>
+<div style="border-top:1px solid var(--border)"><div style="max-width:1200px;margin:0 auto;padding:32px 24px;display:flex;justify-content:space-between;gap:16px;font:400 13px 'JetBrains Mono';color:var(--muted)"><span>Robinhood Chain, chain id 4663, settlement in USDG only</span><span>payhole.org</span></div></div>
+</div>
+
 </body>
 </html>

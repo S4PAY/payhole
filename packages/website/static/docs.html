@@ -5,54 +5,58 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Documentation · PayHole</title>
 <meta name="description" content="SDK reference, CLI commands, and how a server accepts x402 payments in USDG on Robinhood Chain.">
-<meta property="og:title" content="Documentation · PayHole">
-<meta property="og:description" content="SDK reference, CLI commands, and how a server accepts x402 payments in USDG on Robinhood Chain.">
-<meta property="og:type" content="website">
-<meta name="theme-color" content="#000000">
+<meta property="og:title" content="Documentation · PayHole"><meta property="og:description" content="SDK reference, CLI commands, and how a server accepts x402 payments in USDG on Robinhood Chain."><meta property="og:type" content="website"><meta name="theme-color" content="#000000">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-<header class="nav"><div class="wrap">
-  <a class="brand" href="/">PayH<span class="mark"></span>le</a>
-  <nav class="links"><a href="/creators.html">Creators</a><a href="/developers.html">Developers</a><a href="/token.html">Token</a><a href="/#sinkhole">Sinkhole</a><a href="/trust.html">Trust</a></nav>
-  <a class="btn sm lava" href="/extension.html">Get the extension</a>
-</div></header>
-
-<main>
-<section class="wrap" style="padding:clamp(64px,9vw,112px) 24px 40px"><div class="stack"><div class="eyebrow">Documentation</div><h1 class="h1">Reference</h1><p class="lead">The SDK, the CLI, and what a server needs to get paid. Each package in the repository also carries a README with setup, environment, and test commands.</p></div></section>
-
-<section class="wrap section stack" id="sdk" style="gap:24px;padding-top:40px">
-  <h2 class="h2">@payhole/sdk</h2>
-  <p class="copy">Node 22 or newer. The x402 core is isomorphic and is what the extension uses; <code>payholeFetch</code> and the CLI are Node only.</p>
-  <div class="two">
-    <div class="stack" style="gap:12px"><h3 class="h3" style="font-size:18px">payholeFetch(options)</h3><p class="small">Returns a <code>fetch</code> that pays 402s with a session key against a BudgetAccount. Options: <code>sessionKey</code>, <code>budgetAccount</code>, optional <code>rpcUrl</code>, <code>chainId</code>, <code>usdg</code>, <code>maxAmount</code> (base units), <code>onPaid</code>, <code>onPull</code>. Under the key's cap the payment is silent; over it the call throws <code>PaymentRefusedError</code> with a <code>reason</code> of <code>cap-exceeded</code>, <code>key-not-live</code>, or a contract error name. Nothing is signed when refused.</p></div>
-    <div class="stack" style="gap:12px"><h3 class="h3" style="font-size:18px">Lower level</h3><p class="small"><code>parsePaymentRequired</code> reads a 402 (version 2 header or version 1 body); <code>selectOffer</code> keeps only exact, USDG, EIP-3009 offers on chain 4663; <code>preparePayment</code> signs the authorization and encodes the header; <code>parseSettleResponse</code> reads the settlement. <code>readSessionKey</code> and <code>ensureKeyFunds</code> talk to the BudgetAccount. <code>domainHash</code> and <code>claimTypedData</code> cover the registry.</p></div>
+<div style="width:100%">
+<div style="position:sticky;top:0;z-index:20;background:rgba(0,0,0,.45);backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%);border-bottom:1px solid rgba(255,255,255,.08)">
+  <div class="ph-nav" style="max-width:1200px;margin:0 auto;padding:0 24px;height:68px;display:flex;align-items:center;justify-content:space-between;gap:24px">
+    <a href="/" style="display:inline-flex;align-items:center;font:600 22px 'Space Grotesk';letter-spacing:-0.03em;color:var(--text)">PayH<span class="ph-mark" style="display:inline-block;width:17px;height:17px;border-radius:50%;margin:0 1px"></span>le</a>
+    <div data-r="navlinks" style="display:flex;gap:28px;font:500 15px Inter"><a href="/creators.html">Creators</a><a href="/developers.html">Developers</a><a href="/token.html">Token</a><a href="/#sinkhole">Sinkhole</a><a href="/trust.html">Trust</a></div>
+    <div style="display:flex;gap:10px;align-items:center"><a href="/extension.html" class="ph-lava" style="font:600 14px Inter;padding:10px 16px;border-radius:8px;white-space:nowrap">Get the extension</a></div>
   </div>
-<pre><span class="c">import</span> { parsePaymentRequired, selectOffer, preparePayment, USDG_ADDRESS } <span class="c">from</span> <span class="s">"@payhole/sdk"</span>;
+</div>
 
-<span class="c">const</span> required = parsePaymentRequired((n) =&gt; res.headers.get(n), <span class="c">await</span> res.text());
-<span class="c">const</span> offer = selectOffer(required, { chainId: 4663, asset: USDG_ADDRESS });
-<span class="c">const</span> payment = <span class="c">await</span> preparePayment(signer, offer); <span class="c">// headerName, headerValue, authorization, signature</span></pre>
-</section>
 
-<section class="wrap section stack" id="cli" style="gap:24px;padding-top:0">
-  <h2 class="h2">payhole CLI</h2>
-  <div class="table">
-    <div class="tr" style="grid-template-columns:1.4fr 3fr;border-top:0"><span class="mono">payhole key create</span><span style="color:var(--muted)">Generate a session key into the key file and print its address. The pocket owner registers it from the extension's Agents tab with a cap and an expiry.</span></div>
-    <div class="tr" style="grid-template-columns:1.4fr 3fr"><span class="mono">payhole key import | address | export</span><span style="color:var(--muted)">Store an existing key, print the address, or print the private key.</span></div>
-    <div class="tr" style="grid-template-columns:1.4fr 3fr"><span class="mono">payhole status</span><span style="color:var(--muted)">Cap, spent, remaining, expiry, and the key's USDG and ETH balances.</span></div>
-    <div class="tr" style="grid-template-columns:1.4fr 3fr"><span class="mono">payhole pay &lt;url&gt; [--method] [--data] [--header] [--max] [--quiet]</span><span style="color:var(--muted)">Fetch a URL and pay its 402 if the cap allows. Exit codes: 0 success, 1 error, 2 refused, 3 no acceptable offer.</span></div>
-    <div class="tr" style="grid-template-columns:1.4fr 3fr"><span class="mono">PAYHOLE_BUDGET_ACCOUNT, PAYHOLE_KEY_FILE, PAYHOLE_SESSION_KEY, PAYHOLE_RPC_URL</span><span style="color:var(--muted)">Environment. Without a budget account the CLI pays from the key's own USDG balance, which is only meant for interop checks.</span></div>
+<div style="max-width:1200px;margin:0 auto;padding:clamp(64px,9vw,112px) 24px 40px;display:flex;flex-direction:column;gap:24px">
+  <div style="font:500 12px Inter;color:var(--accent-text);letter-spacing:0.08em;text-transform:uppercase">Documentation</div>
+  <div style="font:600 clamp(48px,6vw,80px) 'Space Grotesk';letter-spacing:-0.045em;line-height:0.98">Reference</div>
+  <div style="font:400 20px/1.5 Inter;color:var(--muted);max-width:620px">The SDK, the CLI, and what a server needs to get paid. Each package in the repository also carries a README with setup, environment, and test commands.</div>
+</div>
+<div id="sdk" style="max-width:1200px;margin:0 auto;padding:40px 24px clamp(64px,9vw,112px);display:flex;flex-direction:column;gap:24px">
+  <div style="font:600 clamp(32px,4.5vw,44px) 'Space Grotesk';letter-spacing:-0.03em;line-height:1.05">@payhole/sdk</div>
+  <div style="font:400 17px/1.6 Inter;color:var(--muted)">Node 22 or newer. The x402 core is isomorphic and is what the extension uses; <span style="font-family:'JetBrains Mono';color:var(--text)">payholeFetch</span> and the CLI are Node only.</div>
+  <div data-r="split" style="display:grid;grid-template-columns:1fr 1fr;gap:24px">
+    <div class="ph-glass" style="border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:12px"><div style="font:600 22px 'Space Grotesk';letter-spacing:-0.02em;font-size:18px">payholeFetch(options)</div><div style="font:400 15px/1.55 Inter;color:var(--muted)">Returns a <span style="font-family:'JetBrains Mono';color:var(--text)">fetch</span> that pays 402s with a session key against a BudgetAccount. Options: <span style="font-family:'JetBrains Mono';color:var(--text)">sessionKey</span>, <span style="font-family:'JetBrains Mono';color:var(--text)">budgetAccount</span>, optional <span style="font-family:'JetBrains Mono';color:var(--text)">rpcUrl</span>, <span style="font-family:'JetBrains Mono';color:var(--text)">chainId</span>, <span style="font-family:'JetBrains Mono';color:var(--text)">usdg</span>, <span style="font-family:'JetBrains Mono';color:var(--text)">maxAmount</span> (base units), <span style="font-family:'JetBrains Mono';color:var(--text)">onPaid</span>, <span style="font-family:'JetBrains Mono';color:var(--text)">onPull</span>. Under the key's cap the payment is silent; over it the call throws <span style="font-family:'JetBrains Mono';color:var(--text)">PaymentRefusedError</span> with a <span style="font-family:'JetBrains Mono';color:var(--text)">reason</span> of <span style="font-family:'JetBrains Mono';color:var(--text)">cap-exceeded</span>, <span style="font-family:'JetBrains Mono';color:var(--text)">key-not-live</span>, or a contract error name. Nothing is signed when refused.</div></div>
+    <div class="ph-glass" style="border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:12px"><div style="font:600 22px 'Space Grotesk';letter-spacing:-0.02em;font-size:18px">Lower level</div><div style="font:400 15px/1.55 Inter;color:var(--muted)"><span style="font-family:'JetBrains Mono';color:var(--text)">parsePaymentRequired</span> reads a 402 (version 2 header or version 1 body); <span style="font-family:'JetBrains Mono';color:var(--text)">selectOffer</span> keeps only exact, USDG, EIP-3009 offers on chain 4663; <span style="font-family:'JetBrains Mono';color:var(--text)">preparePayment</span> signs the authorization and encodes the header; <span style="font-family:'JetBrains Mono';color:var(--text)">parseSettleResponse</span> reads the settlement. <span style="font-family:'JetBrains Mono';color:var(--text)">readSessionKey</span> and <span style="font-family:'JetBrains Mono';color:var(--text)">ensureKeyFunds</span> talk to the BudgetAccount. <span style="font-family:'JetBrains Mono';color:var(--text)">domainHash</span> and <span style="font-family:'JetBrains Mono';color:var(--text)">claimTypedData</span> cover the registry.</div></div>
   </div>
-  <p class="small">The session key needs a little ETH for gas: pulling USDG from the BudgetAccount is a transaction the key sends itself. Signing the x402 authorization costs nothing; the facilitator settles it.</p>
-</section>
+<pre class="ph-glass" style="margin:0;border-radius:12px;padding:24px;font:400 14px/1.7 'JetBrains Mono';white-space:pre-wrap"><span style="color:var(--muted)">import</span> { payholeFetch, PaymentRefusedError } <span style="color:var(--muted)">from</span> <span style="color:var(--accent-text)">"@payhole/sdk"</span>;
 
-<section class="wrap section stack" id="server" style="gap:24px;padding-top:0">
-  <h2 class="h2">Accept x402 on your server</h2>
-  <p class="copy">Answer an unpaid request with 402 and a <code>PAYMENT-REQUIRED</code> header carrying a base64 JSON payment request. Verify and settle the retried request through any facilitator that supports the exact scheme on Robinhood Chain. The extension reads the header from the response even when your CORS policy does not expose it, because it observes responses from a privileged context.</p>
-<pre>HTTP/1.1 402 Payment Required
+<span style="color:var(--muted)">const</span> fetchPaid = payholeFetch({
+  sessionKey: process.env.PAYHOLE_SESSION_KEY,
+  budgetAccount: <span style="color:var(--accent-text)">"0xYourBudgetAccount"</span>,
+  maxAmount: <span style="color:var(--accent-text)">500_000n</span>, <span style="color:var(--muted)">// USDG base units, 6 decimals</span>
+});
+<span style="color:var(--muted)">const</span> res = <span style="color:var(--muted)">await</span> fetchPaid(<span style="color:var(--accent-text)">"https://api.example.com/report"</span>);</pre>
+</div>
+<div id="cli" style="max-width:1200px;margin:0 auto;padding:0 24px clamp(64px,9vw,112px);display:flex;flex-direction:column;gap:24px">
+  <div style="font:600 clamp(32px,4.5vw,44px) 'Space Grotesk';letter-spacing:-0.03em;line-height:1.05">payhole CLI</div>
+  <div class="ph-glass" style="border-radius:12px;overflow:hidden">
+    <div style="display:grid;grid-template-columns:1.4fr 3fr;padding:18px 24px;border-top:1px solid var(--border);font:400 14px Inter;gap:16px;border-top:0"><span style="font-family:'JetBrains Mono';color:var(--text)">payhole key create</span><span style="color:var(--muted)">Generate a session key into the key file and print its address. The pocket owner registers it from the extension's Agents tab with a cap and an expiry.</span></div>
+    <div style="display:grid;grid-template-columns:1.4fr 3fr;padding:18px 24px;border-top:1px solid var(--border);font:400 14px Inter;gap:16px"><span style="font-family:'JetBrains Mono';color:var(--text)">payhole key import | address | export</span><span style="color:var(--muted)">Store an existing key, print the address, or print the private key.</span></div>
+    <div style="display:grid;grid-template-columns:1.4fr 3fr;padding:18px 24px;border-top:1px solid var(--border);font:400 14px Inter;gap:16px"><span style="font-family:'JetBrains Mono';color:var(--text)">payhole status</span><span style="color:var(--muted)">Cap, spent, remaining, expiry, and the key's USDG and ETH balances.</span></div>
+    <div style="display:grid;grid-template-columns:1.4fr 3fr;padding:18px 24px;border-top:1px solid var(--border);font:400 14px Inter;gap:16px"><span style="font-family:'JetBrains Mono';color:var(--text)">payhole pay &lt;url&gt; [--method] [--data] [--header] [--max] [--quiet]</span><span style="color:var(--muted)">Fetch a URL and pay its 402 if the cap allows. Exit codes: 0 success, 1 error, 2 refused, 3 no acceptable offer.</span></div>
+    <div style="display:grid;grid-template-columns:1.4fr 3fr;padding:18px 24px;border-top:1px solid var(--border);font:400 14px Inter;gap:16px"><span style="font-family:'JetBrains Mono';color:var(--text)">PAYHOLE_BUDGET_ACCOUNT, PAYHOLE_KEY_FILE, PAYHOLE_SESSION_KEY, PAYHOLE_RPC_URL</span><span style="color:var(--muted)">Environment. Without a budget account the CLI pays from the key's own USDG balance, which is only meant for interop checks.</span></div>
+  </div>
+  <div style="font:400 15px/1.55 Inter;color:var(--muted)">The session key needs a little ETH for gas: pulling USDG from the BudgetAccount is a transaction the key sends itself. Signing the x402 authorization costs nothing; the facilitator settles it.</div>
+</div>
+<div id="server" style="background:var(--surface);position:relative;overflow:hidden"><div class="ph-rule"></div><div class="ph-glow"></div><div style="max-width:1200px;margin:0 auto;position:relative;padding:clamp(64px,9vw,112px) 24px;display:flex;flex-direction:column;gap:24px">
+  <div style="font:600 clamp(32px,4.5vw,44px) 'Space Grotesk';letter-spacing:-0.03em;line-height:1.05">Accept x402 on your server</div>
+  <div style="font:400 17px/1.6 Inter;color:var(--muted);max-width:820px">Answer an unpaid request with 402 and a <span style="font-family:'JetBrains Mono';color:var(--text)">PAYMENT-REQUIRED</span> header carrying a base64 JSON payment request. Verify and settle the retried request through any facilitator that supports the exact scheme on Robinhood Chain. The extension reads the header from the response even when your CORS policy does not expose it, because it observes responses from a privileged context.</div>
+<pre class="ph-glass" style="margin:0;border-radius:12px;padding:24px;font:400 14px/1.7 'JetBrains Mono';white-space:pre-wrap">HTTP/1.1 402 Payment Required
 Cache-Control: no-store
 PAYMENT-REQUIRED: base64({
   "x402Version": 2,
@@ -67,9 +71,9 @@ PAYMENT-REQUIRED: base64({
     "extra": { "name": "Global Dollar", "version": "1" }
   }]
 })</pre>
-  <p class="small"><code>amount</code> is in USDG base units (6 decimals; 20000 is 0.02 USDG). The retried request carries <code>PAYMENT-SIGNATURE</code>. Post it with the same requirements to a facilitator's <code>/verify</code> and <code>/settle</code>, then answer 200 with <code>PAYMENT-RESPONSE</code>. Facilitators confirmed on chain 4663: Naven at facilitator.naven.network and Primer at x402.primer.systems.</p>
-</section>
-</main>
-<footer class="footer"><div class="wrap" style="padding:32px 24px;display:flex;justify-content:space-between;gap:16px;font:400 13px var(--mono);color:var(--muted);flex-wrap:wrap"><span>Robinhood Chain, chain id 4663, settlement in USDG only</span><span>payhole.org</span></div></footer>
+  <div style="font:400 15px/1.55 Inter;color:var(--muted);max-width:820px"><span style="font-family:'JetBrains Mono';color:var(--text)">amount</span> is in USDG base units (6 decimals; 20000 is 0.02 USDG). The retried request carries <span style="font-family:'JetBrains Mono';color:var(--text)">PAYMENT-SIGNATURE</span>. Post it with the same requirements to a facilitator's <span style="font-family:'JetBrains Mono';color:var(--text)">/verify</span> and <span style="font-family:'JetBrains Mono';color:var(--text)">/settle</span>, then answer 200 with <span style="font-family:'JetBrains Mono';color:var(--text)">PAYMENT-RESPONSE</span>. Facilitators confirmed on chain 4663: Naven at facilitator.naven.network and Primer at x402.primer.systems.</div>
+</div></div>
+<div style="border-top:1px solid var(--border)"><div style="max-width:1200px;margin:0 auto;padding:32px 24px;display:flex;justify-content:space-between;gap:16px;font:400 13px 'JetBrains Mono';color:var(--muted)"><span>Robinhood Chain, chain id 4663, settlement in USDG only</span><span>payhole.org</span></div></div>
+</div>
 </body>
 </html>

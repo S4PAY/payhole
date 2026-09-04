@@ -2,15 +2,8 @@ import { renderLiveValues } from "../lib/live.js";
 
 const track = document.getElementById("track");
 const canvas = document.getElementById("aperture") as HTMLCanvasElement | null;
-const layers = Array.from(document.querySelectorAll<HTMLElement>(".layer"));
+const layers = Array.from(document.querySelectorAll<HTMLElement>(".ph-layer"));
 const dots = Array.from(document.querySelectorAll<HTMLElement>("#dots span"));
-const ring = document.getElementById("hero-ring");
-
-if (ring) {
-  const deg = Math.round((0.12 / 5) * 360);
-  ring.style.background = `conic-gradient(var(--accent) 0deg ${deg}deg, var(--border) ${deg}deg 360deg)`;
-}
-
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
 function progress(): number {
@@ -91,7 +84,9 @@ function apply(): void {
       el.style.pointerEvents = vis > 0.5 ? "auto" : "none";
     });
     const step = Math.min(dots.length - 1, Math.floor(p * dots.length));
-    dots.forEach((dot, i) => dot.classList.toggle("on", i === step));
+    dots.forEach((dot, i) => {
+      dot.style.background = i === step ? "var(--accent)" : "var(--border)";
+    });
   }
 }
 

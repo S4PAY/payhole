@@ -37,7 +37,7 @@ export async function renderLiveValues(): Promise<TokenInfo | null> {
   try {
     const address = await tokenAddress();
     if (address.toLowerCase() === ZERO) {
-      if (noteEl) noteEl.textContent = "live · not launched yet · fixed supply once it is";
+      if (burnedEl) burnedEl.textContent = "0";
     } else {
       info = await tokenInfo(address);
       if (burnedEl) burnedEl.textContent = formatUnits(info.burned, info.decimals, 0);
@@ -59,11 +59,11 @@ export async function renderLiveValues(): Promise<TokenInfo | null> {
       Array.from(tierCells).map(async (cell) => {
         const tier = Number(cell.dataset["tier"]);
         const cost = await tierCost(tier);
-        cell.textContent = cost === 0n ? "not set" : `${formatUnits(cost, decimals, 0)} PAYHOLE`;
+        if (cost !== 0n) cell.textContent = formatUnits(cost, decimals, 0);
       }),
     );
   } catch (error) {
-    if (noteEl) noteEl.textContent = `live values unavailable: ${error instanceof Error ? error.message : String(error)}`;
+    console.warn("live values unavailable", error);
   }
   return info;
 }
