@@ -71,7 +71,7 @@ IMPORTMAP = '<script type="importmap">{"imports":{"three":"/js/vendor/three/buil
 def social(title, desc, name):
     url = "https://payhole.org/" + ("" if name == "index.html" else name)
     return (f'<meta property="og:title" content="{title}"><meta property="og:description" content="{desc}"><meta property="og:type" content="website"><meta property="og:site_name" content="PayHole"><meta property="og:url" content="{url}">'
-            f'<meta property="og:image" content="https://payhole.org/og.jpg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="PayHole. It pays itself.">'
+            f'<meta property="og:image" content="https://payhole.org/og.jpg"><meta property="og:image:secure_url" content="https://payhole.org/og.jpg"><meta property="og:image:type" content="image/jpeg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="PayHole. It pays itself.">'
             f'<meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@payhole_x402"><meta name="twitter:title" content="{title}"><meta name="twitter:description" content="{desc}"><meta name="twitter:image" content="https://payhole.org/og.jpg">'
             f'<link rel="me" href="https://x.com/payhole_x402"><link rel="canonical" href="{url}">')
 
@@ -88,7 +88,7 @@ def common(body):
     for a, b in HREFS: body = body.replace(f'href="{a}"', f'href="{b}"')
     body = body.replace('<a class="ph-lava" style=', '<a href="/extension.html" class="ph-lava" style=')
     body = body.replace("<a>Extension</a>", '<a href="/extension.html">Extension</a>')
-    body = body.replace('<span>payhole.org</span></div>', '<span style="display:flex;gap:16px"><a href="/privacy.html">Privacy</a><a href="https://x.com/payhole_x402" rel="me">x.com/payhole_x402</a><span>payhole.org</span></span></div>')
+    body = body.replace('<span>payhole.org</span></div>', '<span style="display:flex;gap:16px"><a href="/privacy.html">Privacy</a><a href="https://github.com/S4PAY/payhole">github.com/S4PAY/payhole</a><a href="https://www.npmjs.com/package/@payhole/sdk">npm @payhole/sdk</a><a href="https://x.com/payhole_x402" rel="me">x.com/payhole_x402</a><span>payhole.org</span></span></div>')
     body = body.replace('display:flex;justify-content:space-between;gap:16px;border-top:1px solid var(--border);padding-top:24px;font:400 13px', 'display:flex;justify-content:space-between;gap:16px;border-top:1px solid var(--border);padding-top:24px;font:400 13px').replace("<div style=\"max-width:1200px;margin:0 auto;padding:32px 24px;display:flex;justify-content:space-between;gap:16px;font:400 13px 'JetBrains Mono';color:var(--muted)\">", "<div data-r=\"foot\" style=\"max-width:1200px;margin:0 auto;padding:32px 24px;display:flex;justify-content:space-between;gap:16px;font:400 13px 'JetBrains Mono';color:var(--muted)\">").replace("<div style=\"display:flex;justify-content:space-between;gap:16px;border-top:1px solid var(--border);padding-top:24px;font:400 13px 'JetBrains Mono';color:var(--muted)\">", "<div data-r=\"foot\" style=\"display:flex;justify-content:space-between;gap:16px;border-top:1px solid var(--border);padding-top:24px;font:400 13px 'JetBrains Mono';color:var(--muted)\">")
     body = body.replace("<a>@payhole/sdk</a>", '<a href="/docs.html#sdk">@payhole/sdk</a>')
     body = body.replace("<a>verifier.payhole.org</a>", '<a href="/api/healthz">verifier.payhole.org</a>')
