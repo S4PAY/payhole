@@ -1,0 +1,27 @@
+{
+  "name": "@payhole/verifier",
+  "version": "0.0.0",
+  "private": true,
+  "description": "PayHole creator verifier: checks a _payhole DNS TXT record and signs the EIP-712 claim attestation.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "start": "node dist/main.js",
+    "dev": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@payhole/sdk": "workspace:*",
+    "viem": "^2.56.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "tsx": "^4.23.13",
+    "vitest": "^5.0.0"
+  }
+}
