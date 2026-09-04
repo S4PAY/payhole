@@ -50,4 +50,9 @@ export default defineConfig(
     extends: [js.configs.recommended],
     languageOptions: { globals: { ...globals.node } },
   },
+  {
+    // Browser modules served as-is from the website (the design's aperture scene).
+    files: ["packages/website/static/js/**/*.js"],
+    languageOptions: { globals: { ...globals.browser } },
+  },
 );
