@@ -1,0 +1,29 @@
+# Home and edge deployment: the box becomes the resolver for the whole network, the way a Pi-hole does.
+# Run on that box, from the repository root or anywhere (paths are relative to this file):
+#   docker compose -f packages/sinkhole/docker-compose.home.yml up -d --build
+# Copy .env.example to .env next to this file first and set ADMIN_TOKEN. Bindings come from .env too:
+#   DNS_BIND    interface DNS listens on, default 0.0.0.0 (all interfaces, so every device can use it)
+#   ADMIN_BIND  admin API and page, default 127.0.0.1; set to the LAN address to let the extension sync
+#   SWARM_BIND  libp2p listener, default 0.0.0.0; forward TCP 4001 on the router to take inbound peers
+services:
+  sinkhole:
+    build:
+      context: ../..
+      dockerfile: packages/sinkhole/Dockerfile
+    image: payhole-sinkhole
+    container_name: payhole-sinkhole
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATA_DIR: /data
+    ports:
+      - "${DNS_BIND:-0.0.0.0}:53:53/udp"
+      - "${DNS_BIND:-0.0.0.0}:53:53/tcp"
+      - "${ADMIN_BIND:-127.0.0.1}:8053:8053/tcp"
+      - "${SWARM_BIND:-0.0.0.0}:4001:4001/tcp"
+    volumes:
+      - sinkhole-data:/data
+
+volumes:
+  sinkhole-data:

@@ -171,3 +171,28 @@ To run the agent outside Docker, dnsmasq must be installed (`DNSMASQ_BINARY` if 
 - Gossipsub is awaited on the directory probe (up to 5 seconds per new entry) before forwarding, which is deliberate so unverified entries never propagate, but it slows directory gossip on busy nodes.
 - IPv6 blocking answers `::` for AAAA; a client that ignores the AAAA answer and only has IPv4 is unaffected either way.
 - The admin page keeps the token in `sessionStorage` for the tab's lifetime; use it from a trusted browser.
+
+## Run it at home on a Raspberry Pi or another edge box
+
+Sinkhole runs where a Pi-hole runs: one always-on Linux box that the router hands out as the network's DNS server.
+The image is built from `node:24-alpine` and Alpine's `dnsmasq`, both published for 64-bit ARM and x86, so a
+Raspberry Pi 4 or 5 on the 64-bit OS, a NAS with Docker, or a mini PC all work. Build on the device itself; a Pi 4
+takes a few minutes the first time.
+
+1. Install Docker on the box, for example with Docker's convenience script, and give the box a fixed address on the
+   router so clients can rely on it.
+2. Make sure nothing else holds port 53. Raspberry Pi OS leaves it free; Ubuntu runs `systemd-resolved` on it, see
+   "Ports and the firewall" for the two-line fix.
+3. Clone the repository, copy `packages/sinkhole/.env.example` to `packages/sinkhole/.env`, set `ADMIN_TOKEN`
+   (`openssl rand -hex 32`), and if the extension should sync its blocklist to this box add `ADMIN_BIND=<box LAN address>`.
+4. Start it: `docker compose -f packages/sinkhole/docker-compose.home.yml up -d --build`.
+5. Check it answers and blocks: `dig @<box LAN address> example.com` returns an address, and a domain on the list
+   returns nothing. `curl -H "Authorization: Bearer $ADMIN_TOKEN" http://<box LAN address>:8053/healthz` shows the
+   resolver, list size, and peer count.
+6. Point the network at it: set the router's DHCP DNS server to the box's address, or set it per device. Every phone,
+   laptop, and TV on the network now gets the list with no software installed on them.
+7. In the extension's Blocklist settings, enter `http://<box LAN address>:8053` and the token so your own reports
+   reach the box.
+
+Ports on a home network: 53 is open to the LAN on purpose, the admin API stays on the box unless you bind it, and the
+swarm on TCP 4001 works outbound-only behind NAT; forward 4001 on the router only if you want to accept inbound peers.
