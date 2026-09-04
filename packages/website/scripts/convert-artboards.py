@@ -22,7 +22,7 @@ def find(prefix):
     return max(matches, key=os.path.getmtime)
 
 pages = {"index": find("Home"), "creators": find("Creators"), "developers": find("Developers"), "token": find("Token"), "trust": find("Trust")}
-HREFS = [("Home.dc.html#sinkhole", "/#sinkhole"), ("Home.dc.html", "/"), ("Creators.dc.html", "/creators.html"),
+HREFS = [("Home.dc.html#sinkhole", "/sinkhole.html"), ("Home.dc.html", "/"), ("Creators.dc.html", "/creators.html"),
          ("Developers.dc.html", "/developers.html"), ("Token.dc.html", "/token.html"), ("Trust.dc.html", "/trust.html")]
 
 def between(s, a, b):
@@ -50,7 +50,7 @@ input:focus{border-color:var(--accent)!important}
 @media (max-width:720px){
 [data-r=split]>*,[data-r=three]>*,[data-r=four]>*{min-width:0}
 [data-r=table]{min-width:0;max-width:100%;overflow-x:auto!important}
-[data-r=foot]{flex-wrap:wrap}
+[data-r=foot],[data-r=foot]>span{flex-wrap:wrap}
 pre,code{overflow-wrap:anywhere}
 .ph-nav[style*="2fr 1fr 1fr 1fr"]{grid-template-columns:1fr 1fr!important}
 .ph-nav[style*="2fr 1fr 1fr 1fr"]>div:first-child{grid-column:1/-1}
@@ -86,6 +86,7 @@ def head(title, desc, script=None, scene=False, name="index.html"):
 
 def common(body):
     for a, b in HREFS: body = body.replace(f'href="{a}"', f'href="{b}"')
+    body = body.replace('href="#sinkhole"', 'href="/sinkhole.html"')
     body = body.replace('<span class="ph-mark" style="display:inline-block;width:17px;height:17px;border-radius:50%;margin:0 1px"></span>', '<img src="/logo.png" alt="" width="19" height="19" style="display:inline-block;width:19px;height:19px;margin:0 1px;vertical-align:-2px">')
     body = body.replace('<a class="ph-lava" style=', '<a href="/extension.html" class="ph-lava" style=')
     body = body.replace("<a>Extension</a>", '<a href="/extension.html">Extension</a><a href="/try.html">Try it</a>')

@@ -42,7 +42,7 @@ input:focus{border-color:var(--accent)!important}
 @media (max-width:720px){
 [data-r=split]>*,[data-r=three]>*,[data-r=four]>*{min-width:0}
 [data-r=table]{min-width:0;max-width:100%;overflow-x:auto!important}
-[data-r=foot]{flex-wrap:wrap}
+[data-r=foot],[data-r=foot]>span{flex-wrap:wrap}
 pre,code{overflow-wrap:anywhere}
 .ph-nav[style*="2fr 1fr 1fr 1fr"]{grid-template-columns:1fr 1fr!important}
 .ph-nav[style*="2fr 1fr 1fr 1fr"]>div:first-child{grid-column:1/-1}
