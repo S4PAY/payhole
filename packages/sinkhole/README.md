@@ -21,7 +21,7 @@ Hostnames are validated everywhere they enter: lowercase, punycode, no scheme, p
 
 The curated sources (extension, manual, swarm) are rendered to `DATA_DIR/dnsmasq/blocklist.conf` as `address=/<domain>/0.0.0.0` lines, which sink the domain and every subdomain. dnsmasq only reads `address=` rules at startup, so a change to that set is applied with a quick graceful restart; a burst of changes is coalesced into one restart, and clients that query during the few milliseconds of restart retry on their own.
 
-Subscribed lists go to `DATA_DIR/dnsmasq/blocked.hosts` as `0.0.0.0 <name>` lines, loaded with `addn-hosts`. Public lists enumerate exact hostnames, and dnsmasq answers a name it knows locally without forwarding it (A gets 0.0.0.0, AAAA gets NODATA), so this is the right shape for them, and it keeps the config parser out of the picture: a hosts file is re-read on SIGHUP, so a list refresh never restarts the resolver. Rendering the 300 000 names of a large list takes about 150 ms in the agent (measured in `test/dnsmasq.test.ts`); the file is about 9.5 MB, and dnsmasq loads it into its cache table on the reload. On the Rock Pi 4B+ where the swarm test ran, a list of that size is expected to cost dnsmasq tens of megabytes of memory and a second or two per reload; measure it there before subscribing to several very large lists on a 2 GB box.
+Subscribed lists go to `DATA_DIR/dnsmasq/blocked.hosts` as `0.0.0.0 <name>` lines, loaded with `addn-hosts`. Public lists enumerate exact hostnames, and dnsmasq answers a name it knows locally without forwarding it (A gets 0.0.0.0, AAAA gets NODATA), so this is the right shape for them, and it keeps the config parser out of the picture: a hosts file is re-read on SIGHUP, so a list refresh never restarts the resolver. Rendering the 300 000 names of a large list takes about 150 ms in the agent (measured in `test/dnsmasq.test.ts`); the file is about 9.5 MB, and dnsmasq loads it into its cache table on the reload. On the Radxa Rock Pi where the swarm test ran, a list of that size is expected to cost dnsmasq tens of megabytes of memory and a second or two per reload; measure it there before subscribing to several very large lists on a 2 GB box.
 
 ## Query statistics
 
@@ -205,7 +205,7 @@ To run the agent outside Docker, dnsmasq must be installed (`DNSMASQ_BINARY` if 
 
 Sinkhole runs where a Pi-hole runs: one always-on Linux box that the router hands out as the network's DNS server.
 The image is built from `node:24-alpine` and Alpine's `dnsmasq`, both published for 64-bit ARM and x86, so a
-Raspberry Pi 4 or 5 on the 64-bit OS, a NAS with Docker, or a mini PC all work. Build on the device itself; a Pi 4
+Raspberry Pi 4 or 5 on the 64-bit OS, a NAS with Docker, or a mini PC all work. Build on the device itself; a Rock Pi
 takes a few minutes the first time.
 
 1. Install Docker on the box, for example with Docker's convenience script, and give the box a fixed address on the
@@ -218,7 +218,7 @@ takes a few minutes the first time.
    daemon is older than its compose plugin (Debian 12 ships Docker 20.10; the build fails with "client version is too
    new"), build the image directly and let compose only run it:
    `DOCKER_BUILDKIT=0 docker build -f packages/sinkhole/Dockerfile -t payhole-sinkhole .` from the repository root,
-   then `docker compose -f packages/sinkhole/docker-compose.home.yml up -d --no-build`. Verified on a Rock Pi 4B+
+   then `docker compose -f packages/sinkhole/docker-compose.home.yml up -d --no-build`. Verified on a Radxa Rock Pi
    (64-bit ARM, Debian 12): the build takes about fifteen minutes and the running container uses about 120 MB.
 5. Check it answers and blocks: `dig @<box LAN address> example.com` returns an address, and a domain on the list
    returns nothing. `curl -H "Authorization: Bearer $ADMIN_TOKEN" http://<box LAN address>:8053/healthz` shows the
