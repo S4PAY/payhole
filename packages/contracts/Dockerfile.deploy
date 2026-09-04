@@ -1,0 +1,14 @@
+# Deploy toolchain for the VPS: the Foundry version the repository was validated with, plus the tools
+# scripts/deploy.sh, scripts/fork-test.sh, and scripts/snapshot-state.sh need. Nothing is installed on the host.
+#
+#   docker build -t payhole-deploy -f packages/contracts/Dockerfile.deploy packages/contracts
+#   docker run --rm -it --network host -v /opt/payhole/repo:/repo -w /repo/packages/contracts \
+#     --env-file /opt/payhole/contracts/.env -e GIT_AUTHOR_NAME -e GIT_AUTHOR_EMAIL \
+#     -e GIT_COMMITTER_NAME -e GIT_COMMITTER_EMAIL payhole-deploy scripts/deploy.sh all
+FROM ghcr.io/foundry-rs/foundry:v1.7.1
+USER root
+RUN (command -v apk >/dev/null && apk add --no-cache jq curl bash git) \
+ || (apt-get update && apt-get install -y --no-install-recommends jq curl bash git && rm -rf /var/lib/apt/lists/*)
+ENV FOUNDRY_DISABLE_NIGHTLY_WARNING=1
+ENTRYPOINT ["/bin/bash", "-c"]
+CMD ["forge --version"]

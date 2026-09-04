@@ -79,6 +79,23 @@ Every contract takes the Safe as `initialOwner` in its constructor, so the deplo
 
 Keep the deployer funded with only what the next deploy needs.
 
+### Running the deploy on the VPS
+
+Nothing is installed on the host: `Dockerfile.deploy` pins the Foundry version this repository was validated with (1.7.1) and adds `jq`, `curl`, `bash`, and `git`. The box holds a real git clone (the deploy script commits backups and the deployment record) and the contracts `.env` outside the clone:
+
+```sh
+docker build -t payhole-deploy -f packages/contracts/Dockerfile.deploy packages/contracts
+docker run --rm -it --network host -v /opt/payhole/repo:/repo -w /repo/packages/contracts \
+  --env-file /opt/payhole/contracts/.env \
+  -e GIT_AUTHOR_NAME=<name> -e GIT_AUTHOR_EMAIL=<email> -e GIT_COMMITTER_NAME=<name> -e GIT_COMMITTER_EMAIL=<email> \
+  payhole-deploy "scripts/deploy.sh all"              # simulate
+docker run ... payhole-deploy "scripts/deploy.sh all --broadcast"
+```
+
+`--network host` lets the fork-test step reach its own anvil on localhost. Newer Foundry releases add linters that fail the build under `deny = "warnings"`; upgrade deliberately, fixing or excluding the new lints, and re-run every suite before changing the pinned version.
+
+
+
 ## Safe operations
 
 Owner actions are executed from the Safe UI. Generate calldata with `cast`, paste it as a custom transaction to the contract, and describe it in one line.
