@@ -1,0 +1,23 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "types": ["react", "react-native"]
+  },
+  "include": [
+    "index.ts",
+    "app.config.ts",
+    "vitest.config.mts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "modules/payhole-dns/index.ts",
+    "modules/payhole-dns/src/**/*.ts"
+  ]
+}
