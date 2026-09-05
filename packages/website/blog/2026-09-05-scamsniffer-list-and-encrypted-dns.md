@@ -30,7 +30,7 @@ The public PayHole resolver now speaks DNS over HTTPS at `https://dns.payhole.or
 That is what makes it useful on a phone away from home:
 
 - Android: Settings, Network and internet, Private DNS, hostname `dns.payhole.org`. Every app, on Wi-Fi and on mobile data.
-- iPhone and iPad: install the [profile](/dns/payhole-dns.mobileconfig), which sets DNS over HTTPS system wide.
+- iPhone and iPad: install the [profile](/dns/payhole-dns-signed.mobileconfig), which sets DNS over HTTPS system wide.
 - Desktop browsers: the HTTPS address works as a custom secure DNS provider in Chrome, Edge, Brave, and Firefox.
 
 Operators can do the same for their own node: the DoH and DoT listeners ship in this release, off by default, and take a certificate from the environment. The [Sinkhole page](/sinkhole.html) has the steps and the [README](https://github.com/S4PAY/payhole/tree/main/packages/sinkhole) has every variable.
