@@ -45,6 +45,7 @@ class DnsVpnService : VpnService() {
 
   override fun onCreate() {
     super.onCreate()
+    TunnelState.attach(this)
     workers = Executors.newFixedThreadPool(8)
   }
 
@@ -80,7 +81,6 @@ class DnsVpnService : VpnService() {
       TunnelState.update(TunnelState.Status.ERROR, label, "no resolver configured")
       return
     }
-    TunnelState.resetCounters()
     TunnelState.update(TunnelState.Status.CONNECTING, label, null)
     try {
       val builder = Builder()
@@ -116,7 +116,7 @@ class DnsVpnService : VpnService() {
       }
       if (length <= 0) continue
       val query = DnsPacket.parse(buffer, length) ?: continue
-      TunnelState.queries.incrementAndGet()
+      TunnelState.recordQuery()
       val resolver = upstream ?: continue
       try {
         workers.execute { answer(query, resolver, output) }

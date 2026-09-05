@@ -2,7 +2,7 @@ import { requireOptionalNativeModule, type NativeModule } from "expo-modules-cor
 
 import type { NativeState, StartConfig } from "./src/types";
 
-export type { DnsStatus, NativeState, StartConfig } from "./src/types";
+export type { DnsStatus, HistoryBucket, NativeState, StartConfig } from "./src/types";
 
 type PayholeDnsEvents = Record<"stateChanged", (state: NativeState) => void>;
 

@@ -6,7 +6,8 @@ import { Display, Eyebrow, Muted } from "./Typo";
 
 interface ScreenProps {
   eyebrow: string;
-  title: string;
+  /** A plain string renders as the display title; pass an element such as the Wordmark for anything else. */
+  title: ReactNode;
   intro?: string;
   children: ReactNode;
 }
@@ -16,7 +17,7 @@ export function Screen({ eyebrow, title, intro, children }: ScreenProps) {
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       <View style={styles.header}>
         <Eyebrow>{eyebrow}</Eyebrow>
-        <Display>{title}</Display>
+        {typeof title === "string" ? <Display>{title}</Display> : title}
         {intro === undefined ? null : <Muted>{intro}</Muted>}
       </View>
       {children}

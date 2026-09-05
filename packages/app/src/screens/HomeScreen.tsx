@@ -1,15 +1,22 @@
 import { Pressable, StyleSheet, View } from "react-native";
 
 import type { Protection } from "../hooks/useProtection";
+import { describeHistory, summarizeHistory } from "../stats/bars";
 import { colors, fonts, formatCount } from "../theme";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
+import { Histogram } from "../ui/Histogram";
 import { Screen } from "../ui/Screen";
 import { Body, Display, Eyebrow, Mono, Muted, Subtitle } from "../ui/Typo";
+import { Vortex, type VortexMode } from "../ui/Vortex";
+import { Wordmark } from "../ui/Wordmark";
 
 interface HomeScreenProps {
   protection: Protection;
 }
+
+const RING = 232;
+const RING_BORDER = 2;
 
 function statusWord(protection: Protection): string {
   const { state, busy } = protection;
@@ -34,13 +41,20 @@ function statusLine(protection: Protection): string {
     : "Tap to route this device's DNS through an encrypted tunnel.";
 }
 
+function vortexMode(protection: Protection): VortexMode {
+  if (protection.busy || protection.state.status === "connecting") return "rushing";
+  if (protection.state.status === "on") return "turning";
+  return "still";
+}
+
 export function HomeScreen({ protection }: HomeScreenProps) {
   const { state } = protection;
   const on = state.status === "on";
   const android = protection.platform === "android";
+  const summary = summarizeHistory(state.history);
 
   return (
-    <Screen eyebrow="Protection" title="PayHole" intro="Drainers, phishing pages, and trackers stop at the resolver before your phone ever connects.">
+    <Screen eyebrow="Protection" title={<Wordmark />} intro="Drainers, phishing pages, and trackers stop at the resolver before your phone ever connects.">
       <View style={styles.hero}>
         <Pressable
           accessibilityRole="switch"
@@ -52,10 +66,15 @@ export function HomeScreen({ protection }: HomeScreenProps) {
           }}
           style={({ pressed }) => [styles.ring, on && styles.ringOn, state.status === "error" && styles.ringError, pressed && styles.ringPressed]}
         >
-          <Display style={styles.ringWord} color={on ? colors.accent : colors.text}>
-            {statusWord(protection)}
-          </Display>
-          <Muted>{on ? "tap to turn off" : "tap to turn on"}</Muted>
+          <View style={styles.ringClip} pointerEvents="none">
+            <Vortex size={RING + 28} mode={vortexMode(protection)} />
+          </View>
+          <View style={styles.ringLabel} pointerEvents="none">
+            <Display style={styles.ringWord} color={on ? colors.accent : colors.text}>
+              {statusWord(protection)}
+            </Display>
+            <Muted style={styles.ringHint}>{on ? "tap to turn off" : "tap to turn on"}</Muted>
+          </View>
         </Pressable>
         <Body style={styles.statusLine}>{statusLine(protection)}</Body>
         {state.needsUserAction ? <Button label="Open Settings" variant="ghost" onPress={() => protection.openSettings()} /> : null}
@@ -73,7 +92,7 @@ export function HomeScreen({ protection }: HomeScreenProps) {
         <Card style={styles.stat}>
           <Eyebrow>Queries</Eyebrow>
           <Display>{formatCount(state.queries)}</Display>
-          <Muted>{android ? "since the tunnel started" : "counted on Android only"}</Muted>
+          <Muted>{android ? "in the last 24 hours" : "counted on Android only"}</Muted>
         </Card>
         <Card style={styles.stat}>
           <Eyebrow>Blocked</Eyebrow>
@@ -81,6 +100,22 @@ export function HomeScreen({ protection }: HomeScreenProps) {
           <Muted>{android ? "answers sent to nowhere" : "counted on Android only"}</Muted>
         </Card>
       </View>
+
+      {android ? (
+        <Card>
+          <View style={styles.chartHead}>
+            <Eyebrow>Last 24 hours</Eyebrow>
+            <View style={styles.legend}>
+              <View style={[styles.swatch, styles.swatchTotal]} />
+              <Muted style={styles.legendText}>lookups</Muted>
+              <View style={[styles.swatch, styles.swatchBlocked]} />
+              <Muted style={styles.legendText}>blocked</Muted>
+            </View>
+          </View>
+          <Histogram buckets={state.history} />
+          <Muted>{describeHistory(summary)}</Muted>
+        </Card>
+      ) : null}
 
       <Card>
         <Eyebrow>Last blocked</Eyebrow>
@@ -107,22 +142,64 @@ export function HomeScreen({ protection }: HomeScreenProps) {
 const styles = StyleSheet.create({
   hero: { alignItems: "center", gap: 16, paddingVertical: 8 },
   ring: {
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    borderWidth: 2,
+    width: RING,
+    height: RING,
+    borderRadius: RING / 2,
+    borderWidth: RING_BORDER,
     borderColor: colors.border,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.bg,
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
   },
   ringOn: { borderColor: colors.accent, shadowColor: colors.accent, shadowOpacity: 0.35, shadowRadius: 24, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
   ringError: { borderColor: colors.danger },
   ringPressed: { opacity: 0.85 },
-  ringWord: { fontFamily: fonts.display, fontSize: 40, lineHeight: 46 },
+  ringClip: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: RING / 2 - RING_BORDER,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.bg,
+  },
+  ringLabel: {
+    width: 136,
+    height: 136,
+    borderRadius: 68,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+  },
+  ringWord: {
+    fontFamily: fonts.display,
+    fontSize: 40,
+    lineHeight: 46,
+    textAlign: "center",
+    textShadowColor: "rgba(0,0,0,0.9)",
+    textShadowRadius: 10,
+    textShadowOffset: { width: 0, height: 0 },
+  },
+  ringHint: {
+    width: 120,
+    textAlign: "center",
+    color: "#C9C9D2",
+    textShadowColor: "rgba(0,0,0,0.9)",
+    textShadowRadius: 8,
+    textShadowOffset: { width: 0, height: 0 },
+  },
   statusLine: { textAlign: "center", paddingHorizontal: 8 },
   stats: { flexDirection: "row", gap: 12 },
   stat: { flex: 1 },
+  chartHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 },
+  legend: { flexDirection: "row", alignItems: "center", gap: 6 },
+  legendText: { fontSize: 12, lineHeight: 16 },
+  swatch: { width: 10, height: 10, borderRadius: 2 },
+  swatchTotal: { backgroundColor: "#2A2A33" },
+  swatchBlocked: { backgroundColor: colors.accent, marginLeft: 6 },
   blockedRow: { paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: colors.border },
 });

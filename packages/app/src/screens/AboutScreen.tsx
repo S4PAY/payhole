@@ -6,6 +6,7 @@ import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
 import { Screen } from "../ui/Screen";
 import { Body, Eyebrow, Muted, Subtitle } from "../ui/Typo";
+import { Wordmark } from "../ui/Wordmark";
 
 const LINK_ROWS: { label: string; url: string }[] = [
   { label: "payhole.org", url: LINKS.site },
@@ -20,7 +21,7 @@ const LINK_ROWS: { label: string; url: string }[] = [
 export function AboutScreen() {
   const version = Constants.expoConfig?.version ?? "0.1.0";
   return (
-    <Screen eyebrow="About" title={`PayHole ${version}`} intro="A small app with one job for now: keep this phone's DNS encrypted and pointed at a resolver that drops drainers, phishing pages, and trackers.">
+    <Screen eyebrow="About" title={<Wordmark suffix={` ${version}`} />} intro="A small app with one job for now: keep this phone's DNS encrypted and pointed at a resolver that drops drainers, phishing pages, and trackers.">
       <Card>
         <Eyebrow>How it works</Eyebrow>
         <Body>
@@ -33,7 +34,7 @@ export function AboutScreen() {
 
       <Card>
         <Eyebrow>What it does not do</Eyebrow>
-        <Body>No account, no sign-in, no analytics. The public resolver keeps no query log. Blocked names on the Home tab live only on your phone until the tunnel restarts.</Body>
+        <Body>No account, no sign-in, no analytics. The public resolver keeps no query log. Counts and blocked names on the Home tab stay on your phone, cover the last 24 hours, and are never sent anywhere.</Body>
         <Body>
           The PayHole token is never paid out to anyone, including for using this app or running a node. Payments in PayHole are USDG, and the protocol's share only ever buys and burns.
         </Body>

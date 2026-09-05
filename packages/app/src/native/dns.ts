@@ -25,6 +25,7 @@ export const OFF_STATE: NativeState = {
   queries: 0,
   blocked: 0,
   recentBlocked: [],
+  history: [],
   error: null,
 };
 

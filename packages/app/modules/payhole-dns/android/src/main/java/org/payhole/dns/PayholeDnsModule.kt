@@ -39,7 +39,10 @@ class PayholeDnsModule : Module() {
 
     Events("stateChanged")
 
-    OnCreate { TunnelState.addListener(stateListener) }
+    OnCreate {
+      appContext.reactContext?.let { TunnelState.attach(it) }
+      TunnelState.addListener(stateListener)
+    }
 
     OnDestroy { TunnelState.removeListener(stateListener) }
 

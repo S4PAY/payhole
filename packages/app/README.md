@@ -12,7 +12,7 @@ strict, a local Expo module for the native pieces, and Vitest for the pure logic
 
 | Tab | What is there |
 | --- | --- |
-| Home | One protection toggle, status, queries and blocked counters, the last blocked names. |
+| Home | One protection toggle with the vortex turning while the tunnel is up, 24-hour counters, a half-hour histogram of lookups and blocked answers, the last blocked names. |
 | Resolver | The public PayHole resolver (`https://dns.payhole.org/dns-query`, `dns.payhole.org:853`) or a custom DoH URL and/or DoT host, with a one-query reachability check. |
 | Lists | The two lists on the public resolver, license, and when each was last updated upstream (GitHub API, fails quietly offline). |
 | About | How it works, what it does not do, what comes next, project links. |
@@ -24,9 +24,10 @@ strict, a local Expo module for the native pieces, and Vitest for the pure logic
 other traffic keeps its normal path. Every UDP/53 query is parsed out of the IPv4 packet, sent to
 the resolver over HTTPS (RFC 8484 POST) with DNS-over-TLS on 853 as the fallback, and written back
 as a UDP reply. The service runs in the foreground with a notification and a "Turn off" action,
-counts queries and blocked answers (an A record of `0.0.0.0` or an AAAA of `::`), and keeps the
-last 20 blocked names in memory. The app excludes itself from the tunnel so it can reach the
-resolver directly.
+counts queries and blocked answers (an A record of `0.0.0.0` or an AAAA of `::`) into half-hour
+slices covering the last 24 hours, and keeps those slices plus the last 20 blocked names in the
+app's private preferences so they survive restarts and reboots. Nothing leaves the phone. The app
+excludes itself from the tunnel so it can reach the resolver directly.
 
 Not covered in 0.1: DNS over TCP/53, IPv6 transport for the queries themselves (the answers can
 still carry AAAA records), and Android's own Private DNS setting, which should be off or set to
