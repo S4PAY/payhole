@@ -147,3 +147,19 @@ describe("Subscriptions", () => {
     await rm(dir2, { recursive: true, force: true });
   });
 });
+
+describe("json lists", () => {
+  it("reads a json array of hostnames", () => {
+    const { domains, invalid } = parseListText(JSON.stringify(["Drainer.Example", "phish.example", "not a host name", 42]));
+    expect([...domains].sort()).toEqual(["drainer.example", "phish.example"]);
+    expect(invalid).toBe(1);
+  });
+  it("reads an object with a domains array", () => {
+    const { domains } = parseListText(JSON.stringify({ updated: "2026-09-05", domains: ["a.example", "b.example"] }));
+    expect([...domains].sort()).toEqual(["a.example", "b.example"]);
+  });
+  it("leaves hosts files alone even when a line starts with a bracket", () => {
+    const { domains } = parseListText("[section]\n0.0.0.0 ads.example\n");
+    expect(domains.has("ads.example")).toBe(true);
+  });
+});

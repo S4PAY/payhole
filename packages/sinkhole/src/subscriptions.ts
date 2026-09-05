@@ -72,9 +72,36 @@ export function normalizeListUrl(input: string): string | null {
  * line. `#` starts a comment. Names that are not real hostnames (localhost, IP literals, AdBlock syntax) are
  * counted as invalid and skipped.
  */
+/**
+ * Lists published as JSON: an array of hostnames, or an object with a `domains` array (the ScamSniffer scam
+ * database uses the array form). Anything else returns null so the text parser takes over.
+ */
+function parseJsonList(text: string): string[] | null {
+  const head = text.slice(0, 64).trimStart();
+  if (!head.startsWith("[") && !head.startsWith("{")) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const items = Array.isArray(value) ? value : typeof value === "object" && value !== null && Array.isArray((value as { domains?: unknown }).domains) ? (value as { domains: unknown[] }).domains : null;
+  if (!items) return null;
+  return items.filter((v): v is string => typeof v === "string");
+}
+
 export function parseListText(text: string): { domains: Set<string>; invalid: number } {
   const domains = new Set<string>();
   let invalid = 0;
+  const json = parseJsonList(text);
+  if (json) {
+    for (const name of json) {
+      const domain = normalizeHostname(name);
+      if (domain) domains.add(domain);
+      else invalid += 1;
+    }
+    return { domains, invalid };
+  }
   for (const rawLine of text.split(/\r?\n/)) {
     const hash = rawLine.indexOf("#");
     const line = (hash >= 0 ? rawLine.slice(0, hash) : rawLine).trim();
