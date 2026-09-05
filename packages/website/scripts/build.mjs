@@ -28,6 +28,7 @@ if (existsSync(kit)) {
   const files = readdirSync(kit).filter((f) => f.endsWith(".png") || f.endsWith(".md"));
   for (const f of files) cpSync(join(kit, f), join(dest, f));
   cpSync(join(root, "..", "extension", "public", "icon", "128.png"), join(dest, "icon-128.png"));
+  if (existsSync(join(kit, "raw"))) cpSync(join(kit, "raw"), join(dest, "raw"), { recursive: true });
   const rows = ["icon-128.png", ...files]
     .map((f) => `<li><a href="/store/${f}">${f}</a></li>`)
     .join("");
