@@ -23,6 +23,12 @@ The curated sources (extension, manual, swarm) are rendered to `DATA_DIR/dnsmasq
 
 Subscribed lists go to `DATA_DIR/dnsmasq/blocked.hosts` as `0.0.0.0 <name>` lines, loaded with `addn-hosts`. Public lists enumerate exact hostnames, and dnsmasq answers a name it knows locally without forwarding it (A gets 0.0.0.0, AAAA gets NODATA), so this is the right shape for them, and it keeps the config parser out of the picture: a hosts file is re-read on SIGHUP, so a list refresh never restarts the resolver. Rendering the 300 000 names of a large list takes about 150 ms in the agent (measured in `test/dnsmasq.test.ts`); the file is about 9.5 MB, and dnsmasq loads it into its cache table on the reload. On the Radxa Rock Pi where the swarm test ran, a list of that size is expected to cost dnsmasq tens of megabytes of memory and a second or two per reload; measure it there before subscribing to several very large lists on a 2 GB box.
 
+Formats: hosts files (`0.0.0.0 name`, `127.0.0.1 name`, comments), one hostname per line, and JSON, either an array of
+hostnames or an object with a `domains` array. Two lists worth starting with: the ScamSniffer scam database for payment
+drainers and phishing (`https://raw.githubusercontent.com/scamsniffer/scam-database/refs/heads/main/blacklist/domains.json`,
+about 350,000 names, GPL-3.0, updated daily) and the StevenBlack unified hosts file for ads and trackers
+(`https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts`).
+
 ## Query statistics
 
 With `QUERY_LOG_ENABLED=1` (the default) dnsmasq runs with `log-queries=extra` and writes its log to the agent, which reads each line and keeps fixed-size counters: 24 hours at one-minute resolution and 7 days at one-hour resolution (total, blocked, cached, forwarded), the last 24 hours per client, the top blocked and top permitted names, query types, upstreams, and a ring of the last 1000 queries. A snapshot goes to `DATA_DIR/stats.json` once a minute when something changed, so a restart keeps the history. Memory is bounded by the ring sizes: at most 256 clients and 1500 distinct names per source are ranked per hour; a busier hour still counts in the totals. `GET /api/stats` and `GET /api/queries` serve the admin page's Queries tab: the stacked 24-hour chart, the 7-day chart, the ranked lists, and the query log with client, domain and status filters.
