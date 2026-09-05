@@ -39,6 +39,10 @@ export interface SubscriptionsOptions {
   maxBytes?: number;
   clock?: () => number;
   log?: (line: string) => void;
+  /** Turns a fetched body into names; blocklists by default, allowlist rules for an allowlist instance. */
+  parse?: (text: string) => { domains: Set<string>; invalid: number };
+  /** Name of the environment variable the URLs came from, for error messages. */
+  label?: string;
 }
 
 interface StateFile {
@@ -176,6 +180,8 @@ export class Subscriptions {
   private readonly dir: string;
   private readonly log: (line: string) => void;
   private readonly inFlight = new Map<string, Promise<RefreshResult>>();
+  private readonly parse: (text: string) => { domains: Set<string>; invalid: number };
+  private readonly label: string;
 
   private constructor(options: SubscriptionsOptions) {
     this.dir = options.dir;
@@ -185,6 +191,8 @@ export class Subscriptions {
     this.maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
     this.clock = options.clock ?? Date.now;
     this.log = options.log ?? (() => undefined);
+    this.parse = options.parse ?? parseListText;
+    this.label = options.label ?? "BLOCKLIST_URLS";
   }
 
   /** Loads the saved subscriptions and their cached lists; `urls` from the environment are added when missing. */
@@ -206,7 +214,7 @@ export class Subscriptions {
     }
     for (const raw of urls) {
       const url = normalizeListUrl(raw);
-      if (!url) throw new Error(`BLOCKLIST_URLS entry ${JSON.stringify(raw)} is not an http(s) URL`);
+      if (!url) throw new Error(`${subs.label} entry ${JSON.stringify(raw)} is not an http(s) URL`);
       if (!subs.byUrl(url)) subs.items.set(subscriptionId(url), subs.fresh(url));
     }
     await subs.cleanOrphans();
@@ -330,7 +338,7 @@ export class Subscriptions {
         await this.persist();
         return { ok: true, changed: false, entries: item.entries, error: null };
       }
-      const { domains, invalid } = parseListText(outcome.text);
+      const { domains, invalid } = this.parse(outcome.text);
       const previous = this.lists.get(item.id);
       const changed = previous?.size !== domains.size || [...domains].some((d) => !previous.has(d));
       this.lists.set(item.id, domains);

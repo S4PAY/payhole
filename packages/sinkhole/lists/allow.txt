@@ -1,0 +1,182 @@
+# PayHole Sinkhole allowlist.
+#
+# Names on this list are never blocked by a Sinkhole node, whatever a subscribed blocklist or a swarm
+# verdict says. Public phishing lists are built from URLs, and when a phishing page sits on a shared
+# platform the platform's own name ends up on the list: Google Sites, a video CDN, an IPFS gateway.
+# Blocking such a name by DNS takes the whole platform down for the user while the phishing page
+# lives at one path on it. This list takes those names back out.
+#
+# One rule per line. `example.com` protects that exact name only, so `evil.example.com` can still be
+# blocked. `.example.com` protects the name and everything under it; use it only where no stranger can
+# register a subdomain. `#` starts a comment.
+#
+# Every node fetches this file on the list refresh interval (ALLOWLIST_URLS). Run your own node with
+# your own copy, or point MANUAL_ALLOWLIST_FILE at a local file to add rules. To report a name that
+# should be here, open an issue at https://github.com/S4PAY/payhole.
+
+# ---- PayHole and the payment rails it depends on ----
+.payhole.org
+.naven.network
+.primer.systems
+.robinhood.com
+.pons.fun
+
+# ---- Corporate domains where no outsider can create a subdomain ----
+.google.com
+.gstatic.com
+.googleapis.com
+.googleusercontent.com
+.googleweblight.com
+.share.google
+.youtube.com
+.microsoft.com
+.microsoft.design
+.live.com
+.office.com
+.apple.com
+.icloud.com
+.amazon.com
+.amazon.ie
+.amazonlogistics.eu
+.cloudflare.com
+.github.com
+.paypal.com
+.stripe.com
+.coinbase.com
+.binance.com
+.metamask.io
+.uniswap.org
+.opensea.io
+.etherscan.io
+.arbiscan.io
+.ens.domains
+.unstoppabledomains.com
+.gravatar.com
+.nflxvideo.net
+.netflix.com
+.spotify.com
+.lifeatspotify.com
+.x.com
+.twitter.com
+.facebook.com
+.instagram.com
+.whatsapp.com
+.telegram.org
+.t.me
+.discord.com
+.linkedin.com
+.mercadolibre.com
+.mercadolibre.com.ar
+.mercadolibre.cl
+.mercadolibre.com.uy
+.mercadolibre.com.bo
+.mercadopago.com
+.mpago.la
+.banrisul.com.br
+.dhl24.com.pl
+.asurion.com
+.yotpo.com
+.anaconda.org
+.canarytokens.com
+.ardupilot.org
+.nibe.eu
+.greenworkstools.com
+.printify.com
+.pinkoi.com
+.coinpaprika.com
+
+# ---- Shared platforms: the apex stays reachable, a stranger's subdomain can still be blocked ----
+github.io
+vercel.app
+netlify.app
+web.app
+firebaseapp.com
+pages.dev
+workers.dev
+r2.dev
+amazonaws.com
+s3.amazonaws.com
+cloudfront.net
+azurewebsites.net
+herokuapp.com
+wordpress.com
+wp.me
+blogspot.com
+wixsite.com
+filesusr.com
+weebly.com
+webflow.io
+glitch.me
+cdpn.io
+plesk.page
+unbouncepages.com
+123formbuilder.com
+opinionstage.com
+miricanvas.com
+sites.google.com
+docs.google.com
+drive.google.com
+telegra.ph
+pastebin.com
+paste.ee
+angelfire.com
+geocities.ws
+abload.de
+filedn.com
+filedn.eu
+getpocket.com
+ffm.to
+apkpure.com
+apkpure.net
+apkcombo.com
+picclick.fr
+picclick.com.au
+genspark.ai
+goomer.app
+qrfy.io
+
+# ---- Link-in-bio services: one bad page should not take every creator's page down ----
+linktr.ee
+bio.link
+lynk.id
+linklist.bio
+msha.ke
+mssg.me
+hoo.be
+magic.ly
+allmy.bio
+blinq.me
+mez.ink
+biolinky.co
+biolink.info
+link.space
+
+# ---- IPFS and Arweave gateways: content lives at a path or a CID subdomain, which stays blockable ----
+ipfs.io
+dweb.link
+cloudflare-ipfs.com
+cf-ipfs.com
+infura-ipfs.io
+nftstorage.link
+w3s.link
+4everland.io
+arweave.net
+eth.limo
+
+# ---- Media, universities, ISPs, and other ordinary sites the lists have caught by their apex ----
+inews.co.uk
+digiday.com
+robbreport.com
+investnews.com.br
+ccm.net
+ebible.com
+bobmarley.com
+musical-artifacts.com
+justingredients.com
+kpfu.ru
+ipb.ac.id
+mmarau.ac.ke
+iol.ie
+idola.net.id
+conecttelecom.com.br
+name.com

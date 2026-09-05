@@ -16,6 +16,7 @@ replace one: it subscribes to the same public hosts-format blocklists, and its a
 | Manual entries | `MANUAL_BLOCKLIST_FILE` (one hostname per line, hosts-file lines and `#` comments accepted) plus `POST /api/blocklist/manual` and `DELETE /api/blocklist/manual/:domain` | Always |
 | Swarm flags | Flag messages from other nodes | Only after `FLAG_THRESHOLD` distinct reporters (default 5) with valid membership proofs have flagged the domain within `FLAG_TTL_DAYS` (default 30) |
 | Subscribed lists | `BLOCKLIST_URLS` plus `POST /api/subscriptions` on the admin page; hosts format or one name per line, refetched every `BLOCKLIST_REFRESH_HOURS` (default 24) with `ETag` and `If-Modified-Since` | Always, by exact name |
+| Allowlist | `ALLOWLIST_URLS` (default: the curated `lists/allow.txt` in this repository, fetched from GitHub) plus `MANUAL_ALLOWLIST_FILE`; `example.com` protects the exact name, `.example.com` the name and everything under it | Never: a protected name is removed from every source above, swarm verdicts included |
 
 Hostnames are validated everywhere they enter: lowercase, punycode, no scheme, path, port or IP literal, at least two labels. Anything else is rejected and reported, never silently repaired.
 
@@ -24,10 +25,18 @@ The curated sources (extension, manual, swarm) are rendered to `DATA_DIR/dnsmasq
 Subscribed lists go to `DATA_DIR/dnsmasq/blocked.hosts` as `0.0.0.0 <name>` lines, loaded with `addn-hosts`. Public lists enumerate exact hostnames, and dnsmasq answers a name it knows locally without forwarding it (A gets 0.0.0.0, AAAA gets NODATA), so this is the right shape for them, and it keeps the config parser out of the picture: a hosts file is re-read on SIGHUP, so a list refresh never restarts the resolver. Rendering the 300 000 names of a large list takes about 150 ms in the agent (measured in `test/dnsmasq.test.ts`); the file is about 9.5 MB, and dnsmasq loads it into its cache table on the reload. On the Radxa Rock Pi where the swarm test ran, a list of that size is expected to cost dnsmasq tens of megabytes of memory and a second or two per reload; measure it there before subscribing to several very large lists on a 2 GB box.
 
 Formats: hosts files (`0.0.0.0 name`, `127.0.0.1 name`, comments), one hostname per line, and JSON, either an array of
-hostnames or an object with a `domains` array. Two lists worth starting with: the ScamSniffer scam database for payment
-drainers and phishing (`https://raw.githubusercontent.com/scamsniffer/scam-database/refs/heads/main/blacklist/domains.json`,
-about 350,000 names, GPL-3.0, updated daily) and the StevenBlack unified hosts file for ads and trackers
-(`https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts`).
+hostnames or an object with a `domains` array. Three lists worth starting with: the ScamSniffer scam database for payment
+drainers and web3 phishing (`https://raw.githubusercontent.com/scamsniffer/scam-database/refs/heads/main/blacklist/domains.json`,
+about 350,000 names, GPL-3.0, updated daily), the Phishing.Database active domains for phishing at large
+(`https://raw.githubusercontent.com/Phishing-Database/Phishing.Database/master/phishing-domains-ACTIVE.txt`, about
+390,000 names, MIT, rebuilt hourly), and the StevenBlack unified hosts file for ads and trackers
+(`https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts`, about 80,000 names, MIT).
+
+Phishing lists are built from URLs, so when a phishing page sits on a shared platform the platform's own name lands on
+the list: `sites.google.com`, Netflix's video CDN, Gravatar, IPFS gateways, link-in-bio services. The allowlist exists for
+that. Every node fetches `lists/allow.txt` from this repository on the same refresh interval and removes those names from
+every source, and a node can add its own rules with `MANUAL_ALLOWLIST_FILE` or replace the list with `ALLOWLIST_URLS`.
+An allowlisted name still shows up in the swarm flags tab; it is only kept out of the resolver.
 
 ## Query statistics
 

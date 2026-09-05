@@ -1,4 +1,5 @@
 import { cleanReason, normalizeHostname } from "./hostname.js";
+import { Allowlist } from "./allowlist.js";
 
 export interface LocalEntry {
   domain: string;
@@ -119,6 +120,9 @@ export class Blocklist {
   private readonly manual = new Map<string, ManualEntry>();
   private readonly swarm = new Map<string, Map<string, SwarmFlag>>();
   private lists: ReadonlySet<string> = new Set();
+  /** The list-source domains before the allowlist is applied, kept so a new allowlist can re-filter them. */
+  private rawLists: ReadonlySet<string> = new Set();
+  private allow = new Allowlist([]);
   private readonly listeners = new Set<() => void>();
   /** Merged set as of the last notification; expiry can change the set without any mutation. */
   private lastNotified: Set<string>;
@@ -180,8 +184,20 @@ export class Blocklist {
 
   /** Replaces the subscribed-list set (owned by the subscriptions module; not copied). */
   setLists(domains: ReadonlySet<string>): void {
-    this.lists = domains;
+    this.rawLists = domains;
+    this.lists = this.allow.filter(domains);
     this.checkChanged();
+  }
+
+  /** Names that are never blocked, whatever a list or the swarm says. Applied to every source. */
+  setAllowlist(rules: ReadonlySet<string>): void {
+    this.allow = new Allowlist(rules);
+    this.lists = this.allow.filter(this.rawLists);
+    this.checkChanged();
+  }
+
+  allowlistSize(): number {
+    return this.allow.size;
   }
 
   /** The list-source domains as last set. */
@@ -328,6 +344,7 @@ export class Blocklist {
   curatedEntries(now = this.clock()): MergedEntry[] {
     const out = new Map<string, MergedEntry>();
     const add = (domain: string, source: Source, reason: string): void => {
+      if (this.allow.allows(domain)) return;
       const existing = out.get(domain);
       if (existing) existing.sources.push(source);
       else out.set(domain, { domain, sources: [source], reason });
@@ -387,9 +404,11 @@ export class Blocklist {
   /** Domains blocked by the curated sources: extension, manual, swarm. Rendered as dnsmasq `address=` rules. */
   curated(now = this.clock()): Set<string> {
     const out = new Set<string>();
-    for (const domain of this.local.keys()) out.add(domain);
-    for (const domain of this.manual.keys()) out.add(domain);
-    for (const [domain, flags] of this.swarm) if (this.liveFlags(flags, now).length >= this.threshold) out.add(domain);
+    for (const domain of this.local.keys()) if (!this.allow.allows(domain)) out.add(domain);
+    for (const domain of this.manual.keys()) if (!this.allow.allows(domain)) out.add(domain);
+    for (const [domain, flags] of this.swarm) {
+      if (this.liveFlags(flags, now).length >= this.threshold && !this.allow.allows(domain)) out.add(domain);
+    }
     return out;
   }
 

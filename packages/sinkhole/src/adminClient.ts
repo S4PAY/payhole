@@ -35,6 +35,7 @@ interface Status {
   uptimeSeconds?: number;
   queryLog?: { enabled: boolean };
   lists?: number;
+  allowlist?: { rules: number; sources: number };
   node?: { hostname: string; version: string; startedAt: number };
   config?: {
     dns: { listen: string; port: number; upstream: string[]; cacheSize: number };
@@ -292,7 +293,10 @@ function renderHealth(health: Health | null): void {
 function renderStatus(status: Status): void {
   const c = status.counts;
   text("s-blocked", c.merged.toLocaleString(), "value");
-  text("s-blocked-sub", `${c.local} from the extension, ${c.manual} manual, ${c.swarmConfirmed} from the swarm${c.list ? `, ${c.list.toLocaleString()} from lists` : ""}`);
+  text(
+    "s-blocked-sub",
+    `${c.local} from the extension, ${c.manual} manual, ${c.swarmConfirmed} from the swarm${c.list ? `, ${c.list.toLocaleString()} from lists` : ""}${status.allowlist?.rules ? `; ${status.allowlist.rules} allowlist rules` : ""}`,
+  );
   statsEnabled = status.queryLog?.enabled ?? c.queries24h !== undefined;
   if (!statsEnabled) {
     text("s-queries", "off", "value small");

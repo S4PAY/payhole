@@ -3,6 +3,9 @@ import { isAddress, type Address, type Hex } from "viem";
 import { chainConfig, deployments } from "@payhole/sdk";
 import { isUpstream } from "./render/dnsmasq.js";
 
+/** The curated allowlist every node fetches unless ALLOWLIST_URLS says otherwise. */
+export const DEFAULT_ALLOWLIST_URL = "https://raw.githubusercontent.com/S4PAY/payhole/main/packages/sinkhole/lists/allow.txt";
+
 export interface SinkholeConfig {
   dns: { listen: string; port: number; upstream: string[]; cacheSize: number; user: string | undefined; binary: string };
   admin: { listen: string; port: number; token: string | undefined };
@@ -23,6 +26,8 @@ export interface SinkholeConfig {
   probe: { allowPrivate: boolean };
   queryLog: { enabled: boolean };
   lists: { urls: string[]; refreshHours: number };
+  /** Names never blocked: fetched rule lists plus an optional local file. Refreshed with the blocklists. */
+  allow: { urls: string[]; file: string | undefined };
   /** DNS over HTTPS on plain HTTP, meant to sit behind a TLS-terminating reverse proxy. */
   doh: { enabled: boolean; listen: string; port: number };
   /** DNS over TLS with the node's own certificate files. */
@@ -134,6 +139,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): SinkholeConfig
     probe: { allowPrivate: flag(env["PROBE_ALLOW_PRIVATE"]) },
     queryLog: { enabled: flag(env["QUERY_LOG_ENABLED"], true) },
     lists: { urls: list(env["BLOCKLIST_URLS"]), refreshHours: integer(env["BLOCKLIST_REFRESH_HOURS"], 24, "BLOCKLIST_REFRESH_HOURS") },
+    allow: {
+      urls: env["ALLOWLIST_URLS"] === undefined ? [DEFAULT_ALLOWLIST_URL] : list(env["ALLOWLIST_URLS"]),
+      file: optional(env["MANUAL_ALLOWLIST_FILE"]),
+    },
     doh: { enabled: flag(env["DOH_ENABLED"]), listen: dohListen, port: integer(env["DOH_PORT"], 8054, "DOH_PORT") },
     dot: { enabled: dotEnabled, listen: dotListen, port: integer(env["DOT_PORT"], 853, "DOT_PORT"), certFile, keyFile },
     dnsRateLimitPerMinute: integer(env["DNS_RATE_LIMIT_PER_MINUTE"], 300, "DNS_RATE_LIMIT_PER_MINUTE"),

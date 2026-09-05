@@ -143,3 +143,26 @@ describe("parseExtensionPush", () => {
     expect(parseExtensionPush({ version: 1, updatedAt: "2026-09-04T10:00:00.000Z", entries: {} })).toMatchObject({ ok: false });
   });
 });
+
+describe("Blocklist allowlist", () => {
+  it("removes protected names from lists and curated sources, and re-filters when the allowlist changes", () => {
+    const { blocklist } = make(1);
+    blocklist.addManual("sites.google.com", "test");
+    blocklist.addManual("evil.example", "test");
+    blocklist.setLists(new Set(["cdn1.nflxvideo.net", "phish.example"]));
+    expect(blocklist.domains()).toEqual(new Set(["sites.google.com", "evil.example", "cdn1.nflxvideo.net", "phish.example"]));
+
+    blocklist.setAllowlist(new Set(["sites.google.com", ".nflxvideo.net"]));
+    expect(blocklist.domains()).toEqual(new Set(["evil.example", "phish.example"]));
+    expect(blocklist.counts().list).toBe(1);
+    expect(blocklist.curatedEntries().map((e) => e.domain)).toEqual(["evil.example"]);
+    expect(blocklist.allowlistSize()).toBe(2);
+
+    blocklist.setLists(new Set(["cdn2.nflxvideo.net", "drainer.example"]));
+    expect(blocklist.listDomains()).toEqual(new Set(["drainer.example"]));
+
+    blocklist.setAllowlist(new Set());
+    expect(blocklist.domains()).toEqual(new Set(["sites.google.com", "evil.example", "cdn2.nflxvideo.net", "drainer.example"]));
+    expect(blocklist.allowlistSize()).toBe(0);
+  });
+});

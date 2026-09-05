@@ -16,6 +16,7 @@ import { RateLimiter } from "./rateLimit.js";
 import { createAdminServer } from "./server.js";
 import { debounce, readJson, writeJsonAtomic } from "./store.js";
 import { Subscriptions } from "./subscriptions.js";
+import { parseAllowlistText } from "./allowlist.js";
 import { Directory, type DirectoryEntry } from "./swarm/directory.js";
 import { cachedTierReader, createTierReader, type TierReader } from "./swarm/membership.js";
 import {
@@ -119,6 +120,22 @@ function listen(server: Server, port: number, host: string): Promise<void> {
   });
 }
 
+async function loadAllowFile(path: string): Promise<Set<string>> {
+  let text: string;
+  try {
+    text = await readFile(path, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      log(`manual allowlist ${path} does not exist yet`);
+      return new Set();
+    }
+    throw error;
+  }
+  const { domains, invalid } = parseAllowlistText(text);
+  log(`manual allowlist ${path}: ${domains.size} rules, ${invalid} invalid lines skipped`);
+  return domains;
+}
+
 async function run(config: SinkholeConfig): Promise<void> {
   const token = config.admin.token;
   if (!token) throw new Error("ADMIN_TOKEN is required");
@@ -134,6 +151,16 @@ async function run(config: SinkholeConfig): Promise<void> {
   blocklist.setLists(subscriptions.domains());
   subscriptions.onChange(() => blocklist.setLists(subscriptions.domains()));
   if (subscriptions.size > 0) log(`${subscriptions.size} list subscriptions, ${subscriptions.domains().size} domains cached from earlier fetches`);
+
+  const allowlists = await Subscriptions.load(
+    { dir: join(config.dataDir, "allow"), refreshMs: config.lists.refreshHours * HOUR, log, parse: parseAllowlistText, label: "ALLOWLIST_URLS" },
+    config.allow.urls,
+  );
+  const manualAllow = config.allow.file ? await loadAllowFile(config.allow.file) : new Set<string>();
+  const applyAllowlist = (): void => blocklist.setAllowlist(new Set([...allowlists.domains(), ...manualAllow]));
+  applyAllowlist();
+  allowlists.onChange(applyAllowlist);
+  log(`allowlist: ${blocklist.allowlistSize()} rules from ${allowlists.size} fetched list${allowlists.size === 1 ? "" : "s"}${manualAllow.size > 0 ? " and the manual file" : ""}`);
 
   const statsPath = join(config.dataDir, "stats.json");
   let stats: QueryStats | null = null;
@@ -334,6 +361,7 @@ async function run(config: SinkholeConfig): Promise<void> {
       counts: { ...blocklist.counts(), ...(stats ? { queries24h: stats.snapshot().summary.queries24h, blocked24h: stats.snapshot().summary.blocked24h } : {}) },
       queryLog: { enabled: config.queryLog.enabled },
       lists: subscriptions.size,
+      allowlist: { rules: blocklist.allowlistSize(), sources: allowlists.size + (manualAllow.size > 0 ? 1 : 0) },
       flagThreshold: blocklist.threshold,
       flagTtlDays: config.flags.ttlDays,
       directory: directory.size,
@@ -356,6 +384,7 @@ async function run(config: SinkholeConfig): Promise<void> {
         flags: { threshold: config.flags.threshold, ttlDays: config.flags.ttlDays, reannounceMinutes: config.flags.reannounceMinutes },
         queryLog: { enabled: config.queryLog.enabled },
         lists: { refreshHours: config.lists.refreshHours },
+        allow: { urls: config.allow.urls, file: config.allow.file ?? null },
         encryptedDns: {
           doh: { enabled: config.doh.enabled, listen: config.doh.listen, port: config.doh.port },
           dot: { enabled: config.dot.enabled, listen: config.dot.listen, port: config.dot.port },
@@ -401,8 +430,10 @@ async function run(config: SinkholeConfig): Promise<void> {
       directory.prune();
     }, MINUTE),
     setInterval(() => void subscriptions.refreshDue(), 5 * MINUTE),
+    setInterval(() => void allowlists.refreshDue(), 5 * MINUTE),
   ];
   void subscriptions.refreshDue();
+  void allowlists.refreshDue();
   if (stats) {
     const live = stats;
     timers.push(setInterval(() => live.sweep(), 5_000));
