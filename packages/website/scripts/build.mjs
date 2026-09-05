@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildBlog } from "./blog.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 rmSync(join(root, "dist"), { recursive: true, force: true });
@@ -42,9 +43,15 @@ cpSync(join(root, "..", "extension", "assets", "brand", "vortex.png"), join(bran
 cpSync(join(root, "..", "extension", "assets", "brand", "banner.png"), join(brand, "banner-1731x909.png"));
 cpSync(join(root, "static", "logo.png"), join(brand, "logo-256.png"));
 
+// Blog pages from blog/*.md, plus their sitemap entries.
+const blogPages = buildBlog(root, join(root, "dist"));
+const sitemapPath = join(root, "dist", "sitemap.xml");
+writeFileSync(sitemapPath, readFileSync(sitemapPath, "utf8").replace("</urlset>", `  <url><loc>https://payhole.org/blog/</loc></url>\n${blogPages.map((p) => `  <url><loc>${p.url}</loc><lastmod>${p.date}</lastmod></url>`).join("\n")}\n</urlset>`));
+
 // Stamp stylesheet and script URLs so browsers fetch new assets after every deploy.
 const stamp = Date.now().toString(36);
-for (const file of readdirSync(join(root, "dist")).filter((f) => f.endsWith(".html"))) {
+const htmlFiles = [...readdirSync(join(root, "dist")).filter((f) => f.endsWith(".html")), "blog/index.html", ...blogPages.map((p) => `blog/${p.url.split("/blog/")[1]}index.html`)];
+for (const file of htmlFiles) {
   const path = join(root, "dist", file);
   const html = readFileSync(path, "utf8")
     .replace('href="/styles.css"', `href="/styles.css?v=${stamp}"`)
