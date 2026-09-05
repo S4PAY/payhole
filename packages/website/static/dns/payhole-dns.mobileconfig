@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>PayloadContent</key>
+  <array>
+    <dict>
+      <key>DNSSettings</key>
+      <dict>
+        <key>DNSProtocol</key>
+        <string>HTTPS</string>
+        <key>ServerURL</key>
+        <string>https://dns.payhole.org/dns-query</string>
+      </dict>
+      <key>PayloadDescription</key>
+      <string>Sends every DNS lookup on this device to PayHole DNS over HTTPS, which blocks payment drainers and trackers.</string>
+      <key>PayloadDisplayName</key>
+      <string>PayHole DNS</string>
+      <key>PayloadIdentifier</key>
+      <string>org.payhole.dns.doh</string>
+      <key>PayloadType</key>
+      <string>com.apple.dnsSettings.managed</string>
+      <key>PayloadUUID</key>
+      <string>76AC4CC6-C298-4934-9E26-A9E8B539225F</string>
+      <key>PayloadVersion</key>
+      <integer>1</integer>
+      <key>ProhibitDisablement</key>
+      <false/>
+    </dict>
+  </array>
+  <key>PayloadDescription</key>
+  <string>Encrypted DNS through PayHole. Remove the profile at any time to go back to your network's resolver.</string>
+  <key>PayloadDisplayName</key>
+  <string>PayHole DNS</string>
+  <key>PayloadIdentifier</key>
+  <string>org.payhole.dns</string>
+  <key>PayloadOrganization</key>
+  <string>PayHole</string>
+  <key>PayloadRemovalDisallowed</key>
+  <false/>
+  <key>PayloadType</key>
+  <string>Configuration</string>
+  <key>PayloadUUID</key>
+  <string>E5D7FC02-7880-4E31-8157-EC40B5A71835</string>
+  <key>PayloadVersion</key>
+  <integer>1</integer>
+</dict>
+</plist>
