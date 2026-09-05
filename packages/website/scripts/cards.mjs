@@ -32,6 +32,9 @@ p{margin:16px 0 0;font:400 21px/1.45 Inter,sans-serif;color:#A1A1AA;position:rel
 .board .trace{position:absolute;height:2px;background:rgba(43,255,136,.35);border-radius:1px}
 .board .cap{position:absolute;width:10px;height:10px;border-radius:50%;background:#1d221f;border:1px solid rgba(255,255,255,.2)}
 .label{position:absolute;font:500 13px 'JetBrains Mono',monospace;color:#A1A1AA;letter-spacing:.06em}
+.chips{position:absolute;left:0;right:-8px;bottom:-6px;display:flex;flex-wrap:wrap;gap:6px}
+.chips span{padding:5px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);font:500 12px 'JetBrains Mono',monospace;color:#D4D4D8;white-space:nowrap}
+.chips span:last-child{border-color:rgba(43,255,136,.5);color:#2BFF88}
 /* blog stack */
 .stack{position:absolute;right:0;top:0;width:440px;display:flex;flex-direction:column;gap:12px}
 .postcard{padding:16px 18px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12)}
@@ -50,9 +53,11 @@ function headline(h) {
 }
 
 export const BOARD_ART = `<div class="art">
-  <div class="board" style="left:70px;top:40px;transform:rotate(-6deg);opacity:.55;filter:blur(.3px)"><div class="gpio"></div><div class="soc">ARM64</div><div class="ram"></div><div class="ram ram2"></div><div class="usb" style="top:60px"></div><div class="usb" style="top:108px"></div><div class="eth"></div><div class="usbc"></div><div class="hdmi"></div></div>
-  <div class="board" style="left:0;top:96px"><div class="hole" style="left:10px;top:10px"></div><div class="hole" style="right:10px;top:10px"></div><div class="hole" style="left:10px;bottom:10px"></div><div class="hole" style="right:10px;bottom:10px"></div><div class="gpio"></div><div class="soc">ARM64</div><div class="ram"></div><div class="ram ram2"></div><div class="usb" style="top:60px"></div><div class="usb" style="top:108px"></div><div class="eth"></div><div class="usbc"></div><div class="hdmi"></div><div class="trace" style="left:40px;top:120px;width:50px"></div><div class="trace" style="left:184px;top:104px;width:14px"></div><div class="trace" style="left:184px;top:144px;width:14px"></div><div class="trace" style="left:130px;top:170px;width:2px;height:40px"></div><div class="cap" style="left:44px;top:170px"></div><div class="cap" style="left:60px;top:170px"></div><div class="cap" style="left:270px;top:60px"></div></div>
-  <div class="label" style="left:0;bottom:0">RASPBERRY PI · ROCK PI · JETSON · ANY 64-BIT ARM BOARD · 2 GB</div>
+  <div class="board" style="left:70px;top:0;transform:rotate(-6deg) scale(.9);opacity:.5;filter:blur(.3px)"><div class="gpio"></div><div class="soc">ARM64</div><div class="ram"></div><div class="ram ram2"></div><div class="usb" style="top:60px"></div><div class="usb" style="top:108px"></div><div class="eth"></div><div class="usbc"></div><div class="hdmi"></div></div>
+  <div class="board" style="left:0;top:44px;transform:scale(.92);transform-origin:left top"><div class="hole" style="left:10px;top:10px"></div><div class="hole" style="right:10px;top:10px"></div><div class="hole" style="left:10px;bottom:10px"></div><div class="hole" style="right:10px;bottom:10px"></div><div class="gpio"></div><div class="soc">ARM64</div><div class="ram"></div><div class="ram ram2"></div><div class="usb" style="top:60px"></div><div class="usb" style="top:108px"></div><div class="eth"></div><div class="usbc"></div><div class="hdmi"></div><div class="trace" style="left:40px;top:120px;width:50px"></div><div class="trace" style="left:184px;top:104px;width:14px"></div><div class="trace" style="left:184px;top:144px;width:14px"></div><div class="trace" style="left:130px;top:170px;width:2px;height:40px"></div><div class="cap" style="left:44px;top:170px"></div><div class="cap" style="left:60px;top:170px"></div><div class="cap" style="left:270px;top:60px"></div></div>
+  <div class="chips">
+    <span>Raspberry Pi 4 / 5</span><span>Radxa Rock Pi</span><span>NVIDIA Jetson</span><span>Orange Pi</span><span>ODROID</span><span>Pine64</span><span>Banana Pi</span><span>Libre Computer</span><span>Helium hotspots</span><span>ARM NAS</span><span>any 64-bit ARM · 2 GB</span>
+  </div>
 </div>`;
 
 export const BLOG_ART = `<div class="art"><div class="stack">
