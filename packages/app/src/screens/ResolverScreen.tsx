@@ -80,7 +80,7 @@ export function ResolverScreen({ settings, protection }: ResolverScreenProps) {
     <Screen eyebrow="Resolver" title="Where lookups go" intro="Pick the resolver the tunnel talks to. Both choices are encrypted end to end.">
       <Choice
         title="PayHole public resolver"
-        detail="Runs the merged ScamSniffer and StevenBlack lists, keeps no query log, and is refreshed every six hours."
+        detail="Runs the merged ScamSniffer, Phishing.Database, and StevenBlack lists, keeps no query log, and is refreshed every six hours."
         selected={draft.kind === "public"}
         onSelect={() => setDraft({ ...draft, kind: "public" })}
       />

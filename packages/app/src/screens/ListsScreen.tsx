@@ -28,7 +28,7 @@ export function ListsScreen() {
   }, []);
 
   return (
-    <Screen eyebrow="Lists" title="What gets blocked" intro="The public resolver merges two open lists. Together they cover about 433,000 names and reload every six hours.">
+    <Screen eyebrow="Lists" title="What gets blocked" intro="The public resolver merges three open lists. Together they cover about 820,000 names and reload every six hours.">
       {LIST_SOURCES.map((source) => {
         const state = freshness[source.id] ?? { kind: "loading" };
         const updated =

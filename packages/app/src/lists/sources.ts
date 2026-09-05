@@ -24,6 +24,17 @@ export const LIST_SOURCES: readonly ListSource[] = [
     path: "blacklist/domains.json",
   },
   {
+    id: "phishing-database",
+    name: "Phishing.Database active domains",
+    summary:
+      "Phishing domains confirmed live by automated testing, across banks, mail providers, parcel services, and everything else that gets impersonated.",
+    approximateEntries: "about 390,000 domains",
+    license: "MIT",
+    homepage: "https://github.com/Phishing-Database/Phishing.Database",
+    repo: "Phishing-Database/Phishing.Database",
+    path: "phishing-domains-ACTIVE.txt",
+  },
+  {
     id: "stevenblack",
     name: "StevenBlack unified hosts",
     summary:
