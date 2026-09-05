@@ -20,8 +20,9 @@ is forwarded to the resolver over HTTPS, with DNS over TLS as the fallback when 
 HTTPS resolvers. It covers every app on the phone, on Wi-Fi and on mobile data, and it stays up
 when the screen is locked.
 
-The resolver is the public PayHole node by default. It runs the merged ScamSniffer scam database
-and the StevenBlack ad and tracker list, reloads them every six hours, and keeps no query log. If
+The resolver is the public PayHole node by default. It runs the merged ScamSniffer scam database,
+the Phishing.Database active phishing domains, and the StevenBlack ad and tracker list, about 820,000
+names, reloads them every six hours, and keeps no query log. If
 you run your own Sinkhole node with the encrypted listeners on, point the app at it from the
 Resolver tab and your phone follows your node instead.
 
