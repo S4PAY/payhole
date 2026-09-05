@@ -11,8 +11,8 @@ interface WordmarkProps {
 }
 
 const SIZES = {
-  display: { fontSize: 34, lineHeight: 40, mark: 31 },
-  nav: { fontSize: 18, lineHeight: 24, mark: 17 },
+  display: { fontSize: 34, lineHeight: 40, mark: 22 },
+  nav: { fontSize: 18, lineHeight: 24, mark: 12 },
 } as const;
 
 /** The PayHole name with the vortex in place of the "o", the same way payhole.org writes it. */
@@ -32,5 +32,5 @@ export function Wordmark({ size = "display", suffix }: WordmarkProps) {
 
 const styles = StyleSheet.create({
   text: { fontFamily: fonts.display, color: colors.text, letterSpacing: -0.5 },
-  mark: { marginHorizontal: 1 },
+  mark: { marginHorizontal: 2 },
 });
