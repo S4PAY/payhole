@@ -35,6 +35,7 @@ p{margin:16px 0 0;font:400 21px/1.45 Inter,sans-serif;color:#A1A1AA;position:rel
 .chips{position:absolute;left:0;right:-8px;bottom:-6px;display:flex;flex-wrap:wrap;gap:6px}
 .chips span{padding:5px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);font:500 12px 'JetBrains Mono',monospace;color:#D4D4D8;white-space:nowrap}
 .chips span:last-child{border-color:rgba(43,255,136,.5);color:#2BFF88}
+.chips span.chrome{display:inline-flex;align-items:center;gap:7px;border-color:rgba(255,255,255,.3);color:#fff}
 .steps{position:absolute;left:0;top:12px;width:196px;display:flex;flex-direction:column;gap:14px}
 .steps span{display:flex;align-items:center;gap:10px;font:500 14px 'JetBrains Mono',monospace;color:#D4D4D8}
 .steps b{display:inline-flex;width:24px;height:24px;border-radius:50%;align-items:center;justify-content:center;background:rgba(43,255,136,.12);border:1px solid rgba(43,255,136,.5);color:#2BFF88;font:600 12px 'JetBrains Mono',monospace}
@@ -63,12 +64,13 @@ export const BOARD_ART = `<div class="art">
   </div>
 </div>`;
 
+const CHROME_SVG = `<svg viewBox="0 0 100 100" width="18" height="18" aria-hidden="true"><path d="M50 50 L91.57 26 A48 48 0 0 0 8.43 26 Z" fill="#DB4437"/><path d="M50 50 L8.43 26 A48 48 0 0 0 50 98 Z" fill="#0F9D58"/><path d="M50 50 L50 98 A48 48 0 0 0 91.57 26 Z" fill="#F4B400"/><circle cx="50" cy="50" r="23" fill="#fff"/><circle cx="50" cy="50" r="18" fill="#4285F4"/></svg>`;
 export function extensionArt(root) {
   const popup = `data:image/png;base64,${readFileSync(join(root, "..", "extension", "store", "raw", "popup.png")).toString("base64")}`;
   return `<div class="art">
     <div style="position:absolute;right:0;top:-8px;width:224px;height:392px;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.14);box-shadow:0 30px 60px rgba(0,0,0,.65);background:#000"><img src="${popup}" style="display:block;width:224px"></div>
     <div class="steps"><span><b>1</b>Download</span><span><b>2</b>Load unpacked</span><span><b>3</b>Create seed</span><span><b>4</b>Fund the pocket</span><span><b>5</b>Pay for a page</span></div>
-    <div class="chips" style="bottom:-6px"><span>Chrome</span><span>Brave</span><span>Edge</span><span>Arc</span><span>Opera</span><span>Vivaldi</span><span>2 minutes · no account</span></div>
+    <div class="chips" style="bottom:-6px"><span class="chrome">${CHROME_SVG}Chrome</span><span>Brave</span><span>Edge</span><span>Arc</span><span>Opera</span><span>Vivaldi</span><span>2 minutes · no account</span></div>
   </div>`;
 }
 
