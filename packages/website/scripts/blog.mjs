@@ -49,6 +49,7 @@ const ARTICLE_CSS = `<style>
 .ph-post li{margin:6px 0}.ph-post ul,.ph-post ol{padding-left:22px}
 .ph-post a{color:var(--accent-text)}
 .ph-post strong{color:var(--text);font-weight:600}
+.ph-post img{display:block;max-width:min(100%,360px);height:auto;margin:28px auto;border-radius:18px;border:1px solid var(--line)}
 .ph-post code{font:400 14px 'JetBrains Mono';background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:1px 6px;color:var(--text)}
 .ph-post pre{margin:16px 0;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:18px 20px;overflow-x:auto}
 .ph-post pre code{border:0;padding:0;background:none;font:400 13.5px/1.7 'JetBrains Mono'}
