@@ -74,6 +74,15 @@ export function extensionArt(root) {
   </div>`;
 }
 
+export function appArt(root) {
+  const shot = `data:image/png;base64,${readFileSync(join(root, "static", "app", "home.png")).toString("base64")}`;
+  return `<div class="art">
+    <div style="position:absolute;right:0;top:-8px;width:206px;height:458px;border-radius:26px;overflow:hidden;border:1px solid rgba(255,255,255,.16);box-shadow:0 30px 60px rgba(0,0,0,.65),0 0 80px rgba(43,255,136,.18);background:#000"><img src="${shot}" style="display:block;width:206px;height:458px"></div>
+    <div class="steps"><span><b>1</b>Download the APK</span><span><b>2</b>Allow the install</span><span><b>3</b>Tap the ring</span></div>
+    <div class="chips" style="bottom:-6px;right:230px"><span>Android beta</span><span>Encrypted DNS</span><span>Every app covered</span><span>24-hour graph</span><span>No account</span><span>iPhone: profile for now</span></div>
+  </div>`;
+}
+
 export const BLOG_ART = `<div class="art"><div class="stack">
   <div class="postcard"><div class="d">Release · 2026-09-05</div><div class="t">Sinkhole gets a dashboard, statistics, lists, and encrypted DNS</div></div>
   <div class="postcard"><div class="d">Token · 2026-09-05</div><div class="t">PAYHOLE is on Pons, and how tiers are priced</div></div>
@@ -94,6 +103,7 @@ export async function renderCards(root, items) {
       continue;
     }
     if (it.art === "extension") it.art = extensionArt(root);
+    if (it.art === "app") it.art = appArt(root);
     const wide = !it.art;
     const size = it.title.length > 64 ? 40 : it.title.length > 44 ? 46 : 54;
     await page.setContent(`<!doctype html><html><head><meta charset="utf-8">${FONTS}${CSS}</head><body><div class="f"><div class="glow"></div>

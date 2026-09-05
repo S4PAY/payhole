@@ -2,6 +2,7 @@
 title: PayHole for Android
 date: 2026-09-06
 tag: Release
+card: app
 summary: One tap routes every lookup on the phone through encrypted DNS to the PayHole resolver. The app shows what it blocked and keeps a 24-hour graph. Beta APK today, the stores next.
 ---
 

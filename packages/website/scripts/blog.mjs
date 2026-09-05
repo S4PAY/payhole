@@ -90,5 +90,5 @@ export function buildBlog(root, dist) {
   writeFileSync(join(dist, "blog", "index.html"), index);
   const rss = `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>PayHole blog</title><link>${SITE}/blog/</link><description>Release notes and progress from PayHole.</description>${posts.map((p) => `<item><title>${escapeHtml(p.title)}</title><link>${p.url}</link><guid>${p.url}</guid><pubDate>${new Date(p.date + "T12:00:00Z").toUTCString()}</pubDate><description>${escapeHtml(p.summary)}</description></item>`).join("")}</channel></rss>\n`;
   writeFileSync(join(dist, "blog", "feed.xml"), rss);
-  return posts.map((p) => ({ url: p.url, date: p.date, slug: p.slug, tag: p.tag || "Release", title: p.title, summary: p.summary }));
+  return posts.map((p) => ({ url: p.url, date: p.date, slug: p.slug, tag: p.tag || "Release", title: p.title, summary: p.summary, card: p.card }));
 }
