@@ -35,6 +35,9 @@ p{margin:16px 0 0;font:400 21px/1.45 Inter,sans-serif;color:#A1A1AA;position:rel
 .chips{position:absolute;left:0;right:-8px;bottom:-6px;display:flex;flex-wrap:wrap;gap:6px}
 .chips span{padding:5px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);font:500 12px 'JetBrains Mono',monospace;color:#D4D4D8;white-space:nowrap}
 .chips span:last-child{border-color:rgba(43,255,136,.5);color:#2BFF88}
+.steps{position:absolute;left:0;top:12px;width:196px;display:flex;flex-direction:column;gap:14px}
+.steps span{display:flex;align-items:center;gap:10px;font:500 14px 'JetBrains Mono',monospace;color:#D4D4D8}
+.steps b{display:inline-flex;width:24px;height:24px;border-radius:50%;align-items:center;justify-content:center;background:rgba(43,255,136,.12);border:1px solid rgba(43,255,136,.5);color:#2BFF88;font:600 12px 'JetBrains Mono',monospace}
 /* blog stack */
 .stack{position:absolute;right:0;top:0;width:440px;display:flex;flex-direction:column;gap:12px}
 .postcard{padding:16px 18px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.12)}
@@ -60,6 +63,15 @@ export const BOARD_ART = `<div class="art">
   </div>
 </div>`;
 
+export function extensionArt(root) {
+  const popup = `data:image/png;base64,${readFileSync(join(root, "..", "extension", "store", "raw", "popup.png")).toString("base64")}`;
+  return `<div class="art">
+    <div style="position:absolute;right:0;top:-8px;width:224px;height:392px;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.14);box-shadow:0 30px 60px rgba(0,0,0,.65);background:#000"><img src="${popup}" style="display:block;width:224px"></div>
+    <div class="steps"><span><b>1</b>Download</span><span><b>2</b>Load unpacked</span><span><b>3</b>Create seed</span><span><b>4</b>Fund the pocket</span><span><b>5</b>Pay for a page</span></div>
+    <div class="chips" style="bottom:-6px"><span>Chrome</span><span>Brave</span><span>Edge</span><span>Arc</span><span>Opera</span><span>Vivaldi</span><span>2 minutes · no account</span></div>
+  </div>`;
+}
+
 export const BLOG_ART = `<div class="art"><div class="stack">
   <div class="postcard"><div class="d">Release · 2026-09-05</div><div class="t">Sinkhole gets a dashboard, statistics, lists, and encrypted DNS</div></div>
   <div class="postcard"><div class="d">Token · 2026-09-05</div><div class="t">PAYHOLE is on Pons, and how tiers are priced</div></div>
@@ -79,6 +91,7 @@ export async function renderCards(root, items) {
       copyFileSync(override, it.file);
       continue;
     }
+    if (it.art === "extension") it.art = extensionArt(root);
     const wide = !it.art;
     const size = it.title.length > 64 ? 40 : it.title.length > 44 ? 46 : 54;
     await page.setContent(`<!doctype html><html><head><meta charset="utf-8">${FONTS}${CSS}</head><body><div class="f"><div class="glow"></div>
@@ -100,7 +113,7 @@ export const PAGE_CARDS = {
   sinkhole: { kind: "Tutorial", title: "Run Sinkhole on a Raspberry Pi or any ARM board.", text: "Step by step: Docker, one container, point your network at it. Blocks drainers, phishing, and trackers for every device, and learns from every other node.", art: BOARD_ART, footer: "payhole.org/sinkhole.html" },
   blog: { kind: "Blog", title: "The PayHole blog.", text: "Release notes and progress: the extension, the contracts, Sinkhole, the token. Dated, in order, with an RSS feed.", art: BLOG_ART, footer: "payhole.org/blog" },
   try: { kind: "Try it", title: "This article costs 0.01 USDG.", text: "A real page behind a real 402. With PayHole installed it pays for itself. Without it you see what every paying page starts with." },
-  extension: { kind: "Tutorial", title: "Install PayHole and fund your first pocket.", text: "Download, load it in Chrome, create a seed, send a little USDG and ETH, create the pocket, and pay for a page. Every step with the real screens.", footer: "payhole.org/extension.html" },
+  extension: { kind: "Tutorial", title: "How to install the PayHole extension.", text: "Two minutes from download to a funded pocket, with the real screens: load it in Chrome, create a seed, send a little USDG, pay for a page.", art: "extension", footer: "payhole.org/extension.html" },
   token: { kind: "Token", title: "Only ever bought and burned.", text: "PAYHOLE unlocks tiers: bigger pockets, more keys, the right to report into the swarm. No emissions, no rewards." },
   creators: { kind: "Creators", title: "Get paid per visit, in USDG.", text: "One DNS record with your wallet, verified on payhole.org. Visitors with tips on pay you directly, no platform in the middle." },
   developers: { kind: "Developers", title: "Accept payments with one header.", text: "Answer 402 with a price, verify and settle through any x402 facilitator on Robinhood Chain. SDK, CLI, and docs." },
