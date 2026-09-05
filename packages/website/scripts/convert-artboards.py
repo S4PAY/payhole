@@ -68,11 +68,14 @@ open(os.path.join(S, "styles.css"), "w").write(shared + "\n")
 
 FONTS = '<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">'
 IMPORTMAP = '<script type="importmap">{"imports":{"three":"/js/vendor/three/build/three.module.js","three/addons/":"/js/vendor/three/examples/jsm/"}}</script>'
+CARD_PAGES = {"creators.html", "developers.html", "token.html", "trust.html"}
 def social(title, desc, name):
     url = "https://payhole.org/" + ("" if name == "index.html" else name)
+    image = f"https://payhole.org/cards/{name[:-5]}.png" if name in CARD_PAGES else "https://payhole.org/og.jpg"
+    itype = "image/png" if name in CARD_PAGES else "image/jpeg"
     return (f'<meta property="og:title" content="{title}"><meta property="og:description" content="{desc}"><meta property="og:type" content="website"><meta property="og:site_name" content="PayHole"><meta property="og:url" content="{url}">'
-            f'<meta property="og:image" content="https://payhole.org/og.jpg"><meta property="og:image:secure_url" content="https://payhole.org/og.jpg"><meta property="og:image:type" content="image/jpeg"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="PayHole. It pays itself.">'
-            f'<meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@payhole_x402"><meta name="twitter:title" content="{title}"><meta name="twitter:description" content="{desc}"><meta name="twitter:image" content="https://payhole.org/og.jpg">'
+            f'<meta property="og:image" content="{image}"><meta property="og:image:secure_url" content="{image}"><meta property="og:image:type" content="{itype}"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="{title}">'
+            f'<meta name="twitter:card" content="summary_large_image"><meta name="twitter:site" content="@payhole_x402"><meta name="twitter:title" content="{title}"><meta name="twitter:description" content="{desc}"><meta name="twitter:image" content="{image}">'
             f'<link rel="me" href="https://x.com/payhole_x402"><link rel="canonical" href="{url}">')
 
 def head(title, desc, script=None, scene=False, name="index.html"):

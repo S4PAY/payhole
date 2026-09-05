@@ -28,8 +28,10 @@ function skeleton(docsHtml) {
   return { head: docsHtml.slice(0, headEnd), nav: docsHtml.slice(headEnd, navEnd), foot: docsHtml.slice(footStart) };
 }
 
-function head(base, title, desc, url, extra = "") {
+function head(base, title, desc, url, extra = "", image = `${SITE}/og.jpg`) {
   let h = base.replace(/<title>.*?<\/title>/, `<title>${escapeHtml(title)}</title>`);
+  h = h.replace(/https:\/\/payhole\.org\/(?:og\.jpg|cards\/[a-z-]+\.png)/g, image);
+  if (image.endsWith(".png")) h = h.replace('content="image/jpeg"', 'content="image/png"').replace('content="630"', 'content="630"');
   h = h.replace(/<meta name="description" content="[^"]*">/, `<meta name="description" content="${escapeHtml(desc)}">`);
   for (const k of ["og:title", "twitter:title"]) h = h.replace(new RegExp(`(<meta (?:property|name)="${k}" content=")[^"]*(">)`), `$1${escapeHtml(title)}$2`);
   for (const k of ["og:description", "twitter:description"]) h = h.replace(new RegExp(`(<meta (?:property|name)="${k}" content=")[^"]*(">)`), `$1${escapeHtml(desc)}$2`);
@@ -76,16 +78,16 @@ export function buildBlog(root, dist) {
   });
   const back = `<a href="/blog/" style="font:500 14px Inter;color:var(--muted)">All posts</a>`;
   for (const p of posts) {
-    const page = head(sk.head, `${p.title} · PayHole`, p.summary, p.url, ARTICLE_CSS) + sk.nav +
+    const page = head(sk.head, `${p.title} · PayHole`, p.summary, p.url, ARTICLE_CSS, `${p.url}card.png`) + sk.nav +
       `<article class="ph-post"><div class="ph-meta">${fmtDate(p.date)} · ${escapeHtml(p.tag || "Release")}</div><h1>${escapeHtml(p.title)}</h1><p class="ph-lead">${escapeHtml(p.summary)}</p><hr>${p.html}<hr>${back}</article>\n` + sk.foot;
     mkdirSync(join(dist, "blog", p.slug), { recursive: true });
     writeFileSync(join(dist, "blog", p.slug, "index.html"), page);
   }
   const items = posts.map((p) => `<a class="ph-item ph-glass" href="${p.path}"><div class="ph-meta">${fmtDate(p.date)} · ${escapeHtml(p.tag || "Release")}</div><h2>${escapeHtml(p.title)}</h2><p>${escapeHtml(p.summary)}</p></a>`).join("\n");
-  const index = head(sk.head, "Blog · PayHole", "Release notes and progress from PayHole: the extension, the contracts, Sinkhole, and the token.", `${SITE}/blog/`, ARTICLE_CSS + `<link rel="alternate" type="application/rss+xml" title="PayHole blog" href="/blog/feed.xml">`) + sk.nav +
+  const index = head(sk.head, "Blog · PayHole", "Release notes and progress from PayHole: the extension, the contracts, Sinkhole, and the token.", `${SITE}/blog/`, ARTICLE_CSS + `<link rel="alternate" type="application/rss+xml" title="PayHole blog" href="/blog/feed.xml">`, `${SITE}/cards/blog.png`) + sk.nav +
     `<div class="ph-list"><div><div class="ph-meta">Blog</div><h1 style="font:600 clamp(32px,4.6vw,48px) 'Space Grotesk';letter-spacing:-0.03em;margin:12px 0 4px">Release notes and progress.</h1><p style="font:400 16px/1.6 Inter;color:var(--muted);margin:0">What shipped, what changed, and why. <a href="/blog/feed.xml" style="color:var(--accent-text)">RSS</a></p></div>${items}</div>\n` + sk.foot;
   writeFileSync(join(dist, "blog", "index.html"), index);
   const rss = `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>PayHole blog</title><link>${SITE}/blog/</link><description>Release notes and progress from PayHole.</description>${posts.map((p) => `<item><title>${escapeHtml(p.title)}</title><link>${p.url}</link><guid>${p.url}</guid><pubDate>${new Date(p.date + "T12:00:00Z").toUTCString()}</pubDate><description>${escapeHtml(p.summary)}</description></item>`).join("")}</channel></rss>\n`;
   writeFileSync(join(dist, "blog", "feed.xml"), rss);
-  return posts.map((p) => ({ url: p.url, date: p.date }));
+  return posts.map((p) => ({ url: p.url, date: p.date, slug: p.slug, tag: p.tag || "Release", title: p.title, summary: p.summary }));
 }
