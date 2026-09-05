@@ -50,8 +50,8 @@ const sitemapPath = join(root, "dist", "sitemap.xml");
 writeFileSync(sitemapPath, readFileSync(sitemapPath, "utf8").replace("</urlset>", `  <url><loc>https://payhole.org/blog/</loc></url>\n${blogPages.map((p) => `  <url><loc>${p.url}</loc><lastmod>${p.date}</lastmod></url>`).join("\n")}\n</urlset>`));
 
 // Social cards: one per fixed page under /cards, one per post next to it.
-const cardItems = Object.entries(PAGE_CARDS).map(([name, c]) => ({ ...c, file: join(root, "dist", "cards", `${name}.png`) }));
-for (const p of blogPages) cardItems.push({ tag: `${p.tag} · ${p.date}`, title: p.title, text: p.summary, file: join(root, "dist", "blog", p.slug, "card.png") });
+const cardItems = Object.entries(PAGE_CARDS).map(([name, c]) => ({ ...c, name, file: join(root, "dist", "cards", `${name}.png`) }));
+for (const p of blogPages) cardItems.push({ kind: `Blog · ${p.tag}`, title: p.title, text: p.summary, footer: `${p.date} · payhole.org/blog`, file: join(root, "dist", "blog", p.slug, "card.png") });
 console.log("cards rendered:", await renderCards(root, cardItems));
 
 // Stamp stylesheet and script URLs so browsers fetch new assets after every deploy.
