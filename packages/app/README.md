@@ -107,6 +107,14 @@ it with the debug keystore, which is fine for side-loading onto a test phone (`a
 not for the Play Store. Keep the values above in step with `node_modules/react-native/gradle/libs.versions.toml`
 when Expo is upgraded.
 
+## Looking at a build before shipping it
+
+`scripts/emulator-shots.sh <apk> <out-dir>` boots a headless emulator, installs the APK, and
+writes screenshots of the Home tab, the Resolver check, and About into the output directory. It
+needs the SDK `emulator` package, a system image, and an AVD called `payhole`
+(`avdmanager create avd -n payhole -k "system-images;android-35;google_apis;x86_64" -d pixel_7`),
+plus a user that may open `/dev/kvm`. A cold boot takes under a minute.
+
 ## Building with EAS
 
 1. Create an Expo account and run `npx eas-cli login`, then `npx eas-cli init` in `packages/app`.

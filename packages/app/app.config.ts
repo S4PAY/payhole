@@ -21,7 +21,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   name: "PayHole",
   slug: "payhole",
   scheme: "payhole",
-  version: "0.1.2",
+  version: "0.1.3",
   orientation: "portrait",
   icon: "./assets/icon.png",
   userInterfaceStyle: "dark",
@@ -29,14 +29,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ios: {
     bundleIdentifier: "org.payhole.app",
     supportsTablet: true,
-    buildNumber: "3",
+    buildNumber: "4",
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
     },
   },
   android: {
     package: "org.payhole.app",
-    versionCode: 3,
+    versionCode: 4,
     adaptiveIcon: {
       foregroundImage: "./assets/adaptive-icon.png",
       backgroundColor: "#000000",

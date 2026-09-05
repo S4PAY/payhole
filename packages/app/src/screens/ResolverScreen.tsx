@@ -22,8 +22,9 @@ const PROBE_NAME = "payhole.org";
 
 function describeProbe(result: ProbeResult): string {
   if (!result.ok) return `No answer: ${result.error ?? "unknown error"} (${result.millis} ms)`;
-  const where = result.addresses !== undefined && result.addresses.length > 0 ? result.addresses.join(", ") : "no address";
-  return `Answered in ${result.millis} ms with ${result.rcode ?? "?"}: ${where}${result.blocked === true ? " (blocked)" : ""}`;
+  const count = result.addresses?.length ?? 0;
+  const records = count === 0 ? "no address record" : count === 1 ? "one address record" : `${count} address records`;
+  return `Answered in ${result.millis} ms with ${result.rcode ?? "?"}, ${records}${result.blocked === true ? " (blocked)" : ""}.`;
 }
 
 export function ResolverScreen({ settings, protection }: ResolverScreenProps) {
