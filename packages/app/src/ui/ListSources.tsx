@@ -3,14 +3,14 @@ import { Linking, StyleSheet, View } from "react-native";
 
 import { fetchLastUpdated, formatAge, LIST_SOURCES } from "../lists/sources";
 import { LINKS } from "../links";
-import { Button } from "../ui/Button";
-import { Card } from "../ui/Card";
-import { Screen } from "../ui/Screen";
-import { Body, Eyebrow, Muted, Subtitle, Title } from "../ui/Typo";
+import { Button } from "./Button";
+import { Card } from "./Card";
+import { Body, Eyebrow, Muted, Subtitle, Title } from "./Typo";
 
 type Freshness = { kind: "loading" } | { kind: "known"; date: Date } | { kind: "unknown" };
 
-export function ListsScreen() {
+/** The three lists the public resolver runs, with their licenses and how fresh each is upstream. */
+export function ListSources() {
   const [freshness, setFreshness] = useState<Record<string, Freshness>>({});
 
   useEffect(() => {
@@ -28,7 +28,7 @@ export function ListsScreen() {
   }, []);
 
   return (
-    <Screen eyebrow="Lists" title="What gets blocked" intro="The public resolver merges three open lists. Together they cover about 820,000 names and reload every six hours.">
+    <>
       {LIST_SOURCES.map((source) => {
         const state = freshness[source.id] ?? { kind: "loading" };
         const updated =
@@ -71,7 +71,7 @@ export function ListsScreen() {
           />
         </View>
       </Card>
-    </Screen>
+    </>
   );
 }
 

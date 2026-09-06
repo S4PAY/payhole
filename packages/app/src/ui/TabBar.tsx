@@ -2,13 +2,13 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { colors, fonts } from "../theme";
 
-export type Tab = "home" | "check" | "resolver" | "lists" | "about";
+export type Tab = "home" | "check" | "resolver" | "radar" | "about";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "home", label: "Home" },
   { id: "check", label: "Check" },
   { id: "resolver", label: "Resolver" },
-  { id: "lists", label: "Lists" },
+  { id: "radar", label: "Radar" },
   { id: "about", label: "About" },
 ];
 

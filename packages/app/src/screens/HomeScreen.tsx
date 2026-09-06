@@ -6,6 +6,7 @@ import { describeVerdict, fetchVerdict, type Verdict } from "../dns/verdict";
 import type { Protection } from "../hooks/useProtection";
 import { LINKS } from "../links";
 import { describeHistory, summarizeHistory } from "../stats/bars";
+import { ago } from "../time";
 import { colors, fonts, formatCount } from "../theme";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
@@ -138,15 +139,6 @@ export function HomeScreen({ protection }: HomeScreenProps) {
       </Card>
     </Screen>
   );
-}
-
-function ago(at: number): string {
-  if (!at) return "";
-  const minutes = Math.max(0, Math.round((Date.now() - at) / 60_000));
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  return hours < 24 ? `${hours} h ago` : `${Math.round(hours / 24)} d ago`;
 }
 
 /** One blocked name: what it was and when; tap for what the resolver knows and a way to report a mistake. */

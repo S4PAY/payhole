@@ -10,7 +10,7 @@ import { dns } from "./native/dns";
 import { AboutScreen } from "./screens/AboutScreen";
 import { CheckScreen } from "./screens/CheckScreen";
 import { HomeScreen } from "./screens/HomeScreen";
-import { ListsScreen } from "./screens/ListsScreen";
+import { RadarScreen } from "./screens/RadarScreen";
 import { ResolverScreen } from "./screens/ResolverScreen";
 import { colors } from "./theme";
 import { TabBar, type Tab } from "./ui/TabBar";
@@ -47,7 +47,7 @@ function Root() {
         {tab === "home" ? <HomeScreen protection={protection} /> : null}
         {tab === "check" ? <CheckScreen shared={shared} onSharedConsumed={sharedConsumed} /> : null}
         {tab === "resolver" ? <ResolverScreen settings={settings} protection={protection} /> : null}
-        {tab === "lists" ? <ListsScreen /> : null}
+        {tab === "radar" ? <RadarScreen /> : null}
         {tab === "about" ? <AboutScreen /> : null}
       </View>
       <TabBar tab={tab} onChange={setTab} bottomInset={insets.bottom} />

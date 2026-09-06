@@ -16,7 +16,7 @@ strict, a local Expo module for the native pieces, and Vitest for the pure logic
 | Home | One protection toggle with the vortex turning while the tunnel is up, 24-hour counters, a half-hour histogram of lookups and blocked answers, the last blocked names with their category, each expandable to the resolver's verdict and a report-a-mistake link. |
 | Check | Paste or share a link, a domain, or a message; the resolver's public verdict endpoint answers with blocked or not, the category, and who confirmed it. Verdicts share back out as text. Android's share sheet opens this tab with the shared text already checked. |
 | Resolver | The public PayHole resolver (`https://dns.payhole.org/dns-query`, `dns.payhole.org:853`) or a custom DoH URL and/or DoT host, with a one-query reachability check. |
-| Lists | The three lists on the public resolver, license, and when each was last updated upstream (GitHub API, fails quietly offline). |
+| Radar | What the network learned in the last 24 hours from the resolver's public radar: swarm confirmations with category and reporters, names pending confirmation, each list's growth with a sample of new names, new names by kind, and the brands they impersonate. Below it, the three lists on the public resolver, license, and when each was last updated upstream (GitHub API, fails quietly offline). |
 | About | How it works, what it does not do, what comes next, project links. |
 
 ### Android
