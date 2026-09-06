@@ -19,6 +19,7 @@ import { Subscriptions } from "./subscriptions.js";
 import { parseAllowlistText } from "./allowlist.js";
 import { Directory, type DirectoryEntry } from "./swarm/directory.js";
 import { cachedTierReader, createTierReader, type TierReader } from "./swarm/membership.js";
+import { createMembership, type Membership } from "./membership.js";
 import {
   membershipText,
   parseProof,
@@ -296,6 +297,18 @@ async function run(config: SinkholeConfig): Promise<void> {
     log("swarm disabled");
   }
 
+  let membership: Membership | undefined;
+  if (config.membership.vault) {
+    membership = createMembership({
+      rpcUrl: config.membership.rpcUrl,
+      chainId: config.membership.chainId,
+      vault: config.membership.vault,
+      account: identity?.account ?? null,
+      address: identity?.address ?? null,
+      log,
+    });
+  }
+
   const publishFlags = async (entries: { domain: string; reason: string }[]): Promise<void> => {
     if (!swarm || !identity?.account) return;
     let sent = 0;
@@ -352,6 +365,7 @@ async function run(config: SinkholeConfig): Promise<void> {
   const server = createAdminServer({
     token,
     blocklist,
+    membership,
     health: () => ({ ok: dnsmasq.running, dnsmasq: dnsmasq.running, peers: swarm?.peers().length ?? 0 }),
     status: () => ({
       peerId: swarm?.peerId ?? null,

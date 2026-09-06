@@ -9,6 +9,8 @@ import { isExportFormat, renderExport } from "./render/export.js";
 import type { RefreshResult, SubscriptionInfo } from "./subscriptions.js";
 import type { AnnouncementResult, DirectoryEntry } from "./swarm/directory.js";
 import type { EndpointAnnouncement } from "./swarm/probe.js";
+import { TierError } from "@payhole/sdk";
+import { MembershipError, type Membership } from "./membership.js";
 
 export interface AdminDeps {
   token: string;
@@ -30,6 +32,8 @@ export interface AdminDeps {
         refresh: (id: string) => Promise<RefreshResult>;
       }
     | undefined;
+  /** The operator wallet's BurnVault tier and the unlock action; absent when the node has no vault. */
+  membership?: Membership | undefined;
   maxBodyBytes?: number;
 }
 
@@ -210,6 +214,28 @@ export function createAdminServer(deps: AdminDeps): Server {
       }
       const entries = deps.stats.queries(filter);
       return json(res, 200, { count: entries.length, entries });
+    }
+    if (path === "/api/membership") {
+      if (!deps.membership) throw new HttpError(404, "membership_disabled", "no BurnVault is configured on this node");
+      if (method !== "GET") throw new HttpError(405, "method_not_allowed", "use GET");
+      const view = await deps.membership.read();
+      return json(res, 200, view ? { configured: true, ...view } : { configured: false });
+    }
+    if (path === "/api/membership/unlock") {
+      if (!deps.membership) throw new HttpError(404, "membership_disabled", "no BurnVault is configured on this node");
+      if (method !== "POST") throw new HttpError(405, "method_not_allowed", "use POST");
+      const body = await readJson(req, maxBody);
+      const tier = isRecord(body) ? body["tier"] : undefined;
+      if (typeof tier !== "number" || !Number.isInteger(tier) || tier < 1 || tier > 255) {
+        throw new HttpError(400, "invalid_tier", "body must carry a tier number from 1 to 255");
+      }
+      try {
+        return json(res, 200, await deps.membership.unlock(tier));
+      } catch (error) {
+        if (error instanceof MembershipError) throw new HttpError(409, error.code, error.message);
+        if (error instanceof TierError) throw new HttpError(400, error.code, error.message);
+        throw error;
+      }
     }
     if (path === "/api/subscriptions") {
       const subs = deps.subscriptions;

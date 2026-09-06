@@ -1,5 +1,6 @@
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { TierError } from "@payhole/sdk";
 import { Blocklist } from "../src/blocklist.js";
 import { QueryStats } from "../src/queryLog.js";
 import { createAdminServer } from "../src/server.js";
@@ -68,6 +69,23 @@ const server = createAdminServer({
       const item = subscriptions.get(id);
       if (item) item.entries = 42;
       return Promise.resolve({ ok: true, changed: true, entries: 42, error: null });
+    },
+  },
+  membership: {
+    read: () =>
+      Promise.resolve({
+        address: PAY_TO,
+        tier: 0,
+        prices: { "1": "10000000", "2": "50000000", "3": "250000000" },
+        usdgBalance: "12000000",
+        ethBalance: "1000000000000000",
+        allowance: "0",
+        routeSet: false,
+        canUnlock: true,
+      }),
+    unlock: (tier: number) => {
+      if (tier === 3) return Promise.reject(new TierError("no_usdg", "tier 3 costs 250 USDG"));
+      return Promise.resolve({ tier, price: "10000000", approveHash: "0xaa", unlockHash: "0xbb", tokensBurned: "0", held: true });
     },
   },
   maxBodyBytes: 2048,
@@ -289,5 +307,29 @@ describe("admin page assets", () => {
     expect((await call("/admin/../package.json", {}, null)).status).toBe(404);
     expect((await call("/admin/other.js", {}, null)).status).toBe(404);
     expect((await call("/admin/styles.css", { method: "POST" }, null)).status).toBe(405);
+  });
+});
+
+describe("membership api", () => {
+  it("reports the operator's tier, prices, and balances", async () => {
+    const res = await call("/api/membership");
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { configured: boolean; tier: number; prices: Record<string, string>; canUnlock: boolean };
+    expect(body.configured).toBe(true);
+    expect(body.tier).toBe(0);
+    expect(body.prices["1"]).toBe("10000000");
+    expect(body.canUnlock).toBe(true);
+  });
+
+  it("validates the tier, runs an unlock, and maps tier errors to 400", async () => {
+    expect((await call("/api/membership/unlock", { method: "POST", body: JSON.stringify({ tier: "1" }) })).status).toBe(400);
+    expect((await call("/api/membership/unlock", { method: "POST", body: JSON.stringify({ tier: 0 }) })).status).toBe(400);
+    const ok = await call("/api/membership/unlock", { method: "POST", body: JSON.stringify({ tier: 1 }) });
+    expect(ok.status).toBe(200);
+    const result = (await ok.json()) as { tier: number; held: boolean; unlockHash: string };
+    expect(result).toMatchObject({ tier: 1, held: true, unlockHash: "0xbb" });
+    const refused = await call("/api/membership/unlock", { method: "POST", body: JSON.stringify({ tier: 3 }) });
+    expect(refused.status).toBe(400);
+    expect(((await refused.json()) as { error: string }).error).toBe("no_usdg");
   });
 });

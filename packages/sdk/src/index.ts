@@ -6,4 +6,5 @@ export * from "./chain.js";
 export * from "./domain.js";
 export * from "./payholeFetch.js";
 export * from "./usdg.js";
+export * from "./tier.js";
 export { budgetAccountFactoryAbi, burnVaultAbi } from "./generated/abi.js";

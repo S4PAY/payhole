@@ -743,6 +743,92 @@ function lines(values: string[], empty: string): HTMLElement {
   return wrap;
 }
 
+interface MembershipView {
+  configured: boolean;
+  address?: string;
+  tier?: number;
+  prices?: Record<string, string>;
+  usdgBalance?: string;
+  ethBalance?: string;
+  allowance?: string;
+  routeSet?: boolean;
+  canUnlock?: boolean;
+}
+
+let membershipEnabled = true;
+
+function usdgText(base: string | undefined): string {
+  if (base === undefined) return "?";
+  const value = BigInt(base);
+  const whole = value / 1_000_000n;
+  const cents = ((value % 1_000_000n) / 10_000n).toString().padStart(2, "0");
+  return `${whole.toLocaleString()}.${cents} USDG`;
+}
+
+function ethText(wei: string | undefined): string {
+  if (wei === undefined) return "?";
+  const value = BigInt(wei);
+  const whole = value / 10n ** 18n;
+  const frac = ((value % 10n ** 18n) / 10n ** 14n).toString().padStart(4, "0");
+  return `${whole}.${frac} ETH`;
+}
+
+async function unlockTier(tier: number, price: string, address: string, button: HTMLButtonElement): Promise<void> {
+  if (!window.confirm(`Unlock tier ${tier} for ${usdgText(price)} from ${address}? The USDG leaves the operator wallet and is burned into PAYHOLE.`)) return;
+  button.disabled = true;
+  button.textContent = "Working";
+  try {
+    const result = await api<{ tier: number; held: boolean; unlockHash: string }>("/api/membership/unlock", { method: "POST", body: { tier } });
+    toast(`Tier ${result.tier} unlocked in ${result.unlockHash.slice(0, 10)}…${result.held ? "; the USDG is held until the pool exists" : ""}`, "good");
+  } catch (error) {
+    toast(describe(error));
+  }
+  await loadMembership();
+}
+
+function renderMembership(view: MembershipView | null): void {
+  const show = view?.configured === true;
+  for (const id of ["membership-head", "membership-grid", "membership-actions", "membership-hint"]) el(id).hidden = !show;
+  if (view === null || !show) return;
+  const tier = view.tier ?? 0;
+  const rows: [string, string | Node][] = [
+    ["Operator wallet", view.address ?? "?"],
+    ["Tier", tier === 0 ? "none yet" : String(tier)],
+    ["USDG", `${usdgText(view.usdgBalance)}, ${usdgText(view.allowance)} approved for the vault`],
+    ["Gas", ethText(view.ethBalance)],
+    ["Burn", view.routeSet ? "the vault buys and burns PAYHOLE in the same transaction" : "no swap route yet: the vault holds the USDG until the pool exists, and the tier is granted at once"],
+  ];
+  define(el<HTMLDListElement>("membership-grid"), rows);
+  text("membership-meta", tier === 0 ? "no tier" : `tier ${tier}`);
+  const actions = el("membership-actions");
+  actions.innerHTML = "";
+  const prices = view.prices ?? {};
+  for (const [key, price] of Object.entries(prices)) {
+    const n = Number(key);
+    if (n <= tier || BigInt(price) === 0n) continue;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "small";
+    button.textContent = `Unlock tier ${n} · ${usdgText(price)}`;
+    button.disabled = view.canUnlock !== true;
+    button.addEventListener("click", () => void unlockTier(n, price, view.address ?? "?", button));
+    actions.append(button);
+  }
+  text(
+    "membership-hint",
+    view.canUnlock === true
+      ? "The operator key on this node pays: one approval and one unlock transaction, gas from the operator wallet. Tiers gate what the swarm accepts from this node."
+      : "The operator key is not on this node, so unlock from a machine that has it: payhole tier unlock <n>.",
+  );
+}
+
+async function loadMembership(): Promise<void> {
+  if (!membershipEnabled) return;
+  const view = await optional(api<MembershipView>("/api/membership"));
+  if (view === null) membershipEnabled = false;
+  renderMembership(view);
+}
+
 function renderNode(status: Status): void {
   const cfg = status.config;
   const left: [string, string | Node][] = [
@@ -830,6 +916,7 @@ async function refreshAll(): Promise<void> {
     renderFlags(flags);
     renderDirectory(directory);
     renderNode(status);
+    await loadMembership();
     if (stats === null) statsEnabled = false;
     renderStats(stats);
     if (subscriptions === null) listsEnabled = false;

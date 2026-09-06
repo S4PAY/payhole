@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-import { createPublicClient, erc20Abi, http, isAddress, type Address, type Hex } from "viem";
+import { createPublicClient, createWalletClient, erc20Abi, http, isAddress, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { budgetAccountAbi, readSessionKey } from "../budget/index.js";
-import { chainConfig, customChain, robinhoodChain, USDG_ADDRESS } from "../chain.js";
+import { chainConfig, customChain, deployedAddress, robinhoodChain, USDG_ADDRESS } from "../chain.js";
+import { readTierState, TIERS, TierError, unlockTier } from "../tier.js";
 import { NoAcceptableOfferError, PayholeError, PaymentRefusedError, X402ProtocolError } from "../errors.js";
 import { payholeFetch } from "../payholeFetch.js";
 import { formatUsdg, parseUsdg } from "../usdg.js";
@@ -18,6 +19,9 @@ Usage:
   payhole key address [--key <name>]                 print a key's address (give it to the pocket owner)
   payhole key export --key <name>                    print a key's private key
   payhole status                                     pocket balance, every key's spend, sinkhole state
+  payhole tier [--key <name>]                        a key's unlock tier, the tier prices, and its USDG and gas
+  payhole tier unlock <1|2|3> [--key <name>]         buy a tier: the key pays the USDG price, the vault buys and burns PAYHOLE
+      --slippage <bps>                               tolerance on the burn when a swap route exists (default 300)
   payhole pay <url> [options]                        fetch a URL, paying its 402 if the caps allow
   payhole <url> [options]                            same as pay
       --key <name>                                   which stored key pays (default: the only key)
@@ -34,6 +38,7 @@ Environment:
   PAYHOLE_RPC_URL          RPC endpoint (default: the official Robinhood Chain RPC)
   PAYHOLE_CHAIN_ID         chain id (default 4663)
   PAYHOLE_USDG             USDG address override (tests only)
+  PAYHOLE_BURN_VAULT       BurnVault address override (default: the deployed vault)
   SINKHOLE_ADMIN_URL       Sinkhole admin API for the status line (default http://127.0.0.1:8053)
 
 Exit codes: 0 success, 1 error, 2 payment refused (cap, policy, or key not live), 3 no acceptable offer.
@@ -47,6 +52,7 @@ interface Settings {
   sessionKey: Hex | undefined;
   store: KeyStore;
   sinkholeUrl: string;
+  burnVault: Address | undefined;
 }
 
 function settings(): Settings {
@@ -55,6 +61,8 @@ function settings(): Settings {
   if (budgetAccount && !isAddress(budgetAccount)) fail("PAYHOLE_BUDGET_ACCOUNT is not an address");
   if (usdg && !isAddress(usdg)) fail("PAYHOLE_USDG is not an address");
   const sessionKey = process.env["PAYHOLE_SESSION_KEY"];
+  const vaultOverride = process.env["PAYHOLE_BURN_VAULT"];
+  if (vaultOverride && !isAddress(vaultOverride)) fail("PAYHOLE_BURN_VAULT is not an address");
   return {
     rpcUrl: process.env["PAYHOLE_RPC_URL"] ?? chainConfig.rpc,
     chainId: Number(process.env["PAYHOLE_CHAIN_ID"] ?? chainConfig.chainId),
@@ -63,6 +71,7 @@ function settings(): Settings {
     sessionKey: sessionKey ? normalizeKey(sessionKey) : undefined,
     store: new KeyStore(defaultKeyStorePath()),
     sinkholeUrl: process.env["SINKHOLE_ADMIN_URL"] ?? "http://127.0.0.1:8053",
+    burnVault: vaultOverride ? (vaultOverride as Address) : deployedAddress("BurnVault"),
   };
 }
 
@@ -103,7 +112,7 @@ interface Flags {
   positional: string[];
 }
 
-const VALUE_FLAGS = new Set(["--name", "--cap", "--key", "--max", "--method", "--data"]);
+const VALUE_FLAGS = new Set(["--name", "--cap", "--key", "--max", "--method", "--data", "--slippage"]);
 
 function parseFlags(args: string[]): Flags {
   const out: Flags = { values: {}, headers: [], quiet: false, positional: [] };
@@ -328,6 +337,66 @@ async function commandPay(s: Settings, args: string[]): Promise<void> {
   }
 }
 
+function vaultOf(s: Settings): Address {
+  if (!s.burnVault) fail("no BurnVault on this chain; set PAYHOLE_BURN_VAULT");
+  return s.burnVault;
+}
+
+async function commandTier(s: Settings, args: string[]): Promise<void> {
+  const [sub, ...rest] = args[0] === "unlock" ? args : ["status", ...args];
+  const flags = parseFlags(rest);
+  const { chain, publicClient } = clients(s);
+  const { privateKey } = chooseKey(s, flags);
+  const account = privateKeyToAccount(privateKey);
+  const vault = vaultOf(s);
+  if (sub === "status") {
+    const state = await readTierState(publicClient, { vault, usdg: s.usdg, address: account.address });
+    const lines = [
+      row("wallet", `${account.address}  tier ${state.tier}`),
+      row("usdg", `${amount(state.usdgBalance)}  approved ${formatUsdg(state.allowance)}`),
+      row("gas", `${formatEth(state.ethBalance)} ETH${state.ethBalance === 0n ? "  (unlocking needs a little ETH)" : ""}`),
+    ];
+    for (const tier of TIERS) {
+      const price = state.prices[tier] ?? 0n;
+      const mark = tier <= state.tier ? "held" : price === 0n ? "not offered" : `${amount(price)}`;
+      lines.push(row(tier === 1 ? "tiers" : "", `${tier}  ${mark}`));
+    }
+    lines.push(row("burn", state.routeSet ? "the vault buys and burns PAYHOLE in the same transaction" : "no swap route yet; the vault holds the USDG until the pool exists and the tier is granted at once"));
+    process.stdout.write(`${lines.join("\n")}
+`);
+    return;
+  }
+  const tier = Number(flags.positional[0]);
+  if (!Number.isInteger(tier) || tier < 1 || tier > 255) fail("usage: payhole tier unlock <1|2|3> [--key <name>] [--slippage <bps>]");
+  const slippage = flags.values["slippage"] === undefined ? 300 : Number(flags.values["slippage"]);
+  if (!Number.isInteger(slippage) || slippage < 0 || slippage > 10_000) fail("--slippage must be whole basis points, 0 to 10000");
+  const wallet = createWalletClient({ account, chain, transport: http(s.rpcUrl) });
+  try {
+    const result = await unlockTier(publicClient, wallet, {
+      vault,
+      usdg: s.usdg,
+      tier,
+      slippageBps: slippage,
+      log: (line) => process.stderr.write(`${line}\n`),
+    });
+    const lines = [row("tier", `${result.tier} unlocked for ${account.address}`), row("paid", amount(result.price))];
+    if (result.approveHash) lines.push(row("approve", result.approveHash));
+    lines.push(row("unlock", result.unlockHash));
+    lines.push(row("burned", result.held ? "held by the vault until the pool exists" : `${result.tokensBurned} PAYHOLE base units`));
+    process.stdout.write(`${lines.join("\n")}
+`);
+  } catch (error) {
+    if (error instanceof TierError) fail(error.message, 2);
+    throw error;
+  }
+}
+
+function formatEth(wei: bigint): string {
+  const whole = wei / 10n ** 18n;
+  const frac = (wei % 10n ** 18n).toString().padStart(18, "0").slice(0, 6).replace(/0+$/, "");
+  return frac.length > 0 ? `${whole}.${frac}` : whole.toString();
+}
+
 async function main(argv: string[]): Promise<void> {
   const [command, ...rest] = argv;
   switch (command) {
@@ -335,6 +404,8 @@ async function main(argv: string[]): Promise<void> {
       return commandKey(settings(), rest);
     case "status":
       return commandStatus(settings());
+    case "tier":
+      return commandTier(settings(), rest);
     case "pay":
       return commandPay(settings(), rest);
     case "help":

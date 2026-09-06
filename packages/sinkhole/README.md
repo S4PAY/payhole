@@ -104,6 +104,14 @@ configuration. It loads only from this origin (fonts,
 logo, and script are bundled under `/admin/`), keeps the token in the browser's local storage, and refreshes every 30
 seconds. Preview it with seeded data and no resolver: `pnpm exec tsx scripts/demo-admin.ts 18053`, token `demo`.
 
+### Membership
+
+The Node tab shows the operator wallet's BurnVault tier, the tier prices in USDG, and the wallet's USDG and gas, and offers
+an unlock button per tier when the operator key is on the node (`NODE_OPERATOR_KEY`). An unlock is one USDG approval and
+one `unlock` transaction paid by the operator wallet; the vault buys PAYHOLE with the USDG and burns it, or holds the USDG
+until its swap route exists. The same is available as `GET /api/membership` and `POST /api/membership/unlock` with
+`{"tier": 1}`, and from any machine with the key as `payhole tier unlock 1`.
+
 ## Encrypted DNS for phones
 
 A phone cannot use a plain resolver on someone else's network, but every recent phone can use an encrypted one

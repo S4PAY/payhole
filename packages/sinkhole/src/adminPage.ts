@@ -167,6 +167,10 @@ export const ADMIN_PAGE = `<!doctype html>
       <dl class="grid" id="node-left"></dl>
       <dl class="grid" id="node-right"></dl>
     </div>
+    <div class="card-head" id="membership-head" hidden><h2>Membership</h2><div class="meta" id="membership-meta"></div></div>
+    <dl class="grid" id="membership-grid" hidden></dl>
+    <div class="row" id="membership-actions" hidden></div>
+    <p class="hint" id="membership-hint" hidden></p>
   </section>
 
   <footer class="foot"><span id="foot-left">not connected</span><span id="foot-right"><a href="https://payhole.org">payhole.org</a></span></footer>

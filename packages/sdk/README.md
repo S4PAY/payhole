@@ -34,6 +34,7 @@ Requirements: Node 22 or newer (24 in this repo), pnpm, and Foundry (`anvil`) fo
 | `PAYHOLE_RPC_URL` | RPC endpoint, default the official Robinhood Chain RPC from `config/4663.json`. |
 | `PAYHOLE_CHAIN_ID`, `PAYHOLE_USDG` | Overrides for local anvil runs. |
 | `SINKHOLE_ADMIN_URL` | Sinkhole admin API probed by `payhole status`, default `http://127.0.0.1:8053`. |
+| `PAYHOLE_BURN_VAULT` | BurnVault address override for `payhole tier`; defaults to the deployed vault. |
 
 ## CLI
 
@@ -43,6 +44,8 @@ payhole key import --name agent --cap 1 0x...    # store an existing key under a
 payhole key list                                 # name, address, spent / cap
 payhole key address --key research               # the address the pocket owner registers with setSessionKey
 payhole key export --key research                # the private key
+payhole tier                                     # the key's unlock tier, the tier prices in USDG, its USDG and gas
+payhole tier unlock 1                            # buy tier 1: approve the vault for the price, then unlock; the vault buys and burns PAYHOLE
 
 payhole status                                   # pocket   24.88 USDG  cap 100.00  spent 0.12  0x4b86…9931
                                                  # keys     research  0.12 / 5.00  live on chain, 0.88 left
