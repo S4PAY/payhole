@@ -23,8 +23,9 @@ export async function tokenInfo(address: string): Promise<TokenInfo> {
   return { address, decimals: Number(decimals), symbol: "PAYHOLE", supply, burned };
 }
 
-export function tierCost(tier: number): Promise<bigint> {
-  return call(config.burnVault, SELECTORS.tierCost + encodeUint(BigInt(tier))).then(decodeUint);
+/** USDG (6 decimals) paid to unlock `tier`; zero when the tier is not offered. */
+export function tierPrice(tier: number): Promise<bigint> {
+  return call(config.burnVault, SELECTORS.tierPrice + encodeUint(BigInt(tier))).then(decodeUint);
 }
 
 /** Fills the total-burned figure and the tier price cells present on the page. */
@@ -58,8 +59,8 @@ export async function renderLiveValues(): Promise<TokenInfo | null> {
     await Promise.all(
       Array.from(tierCells).map(async (cell) => {
         const tier = Number(cell.dataset["tier"]);
-        const cost = await tierCost(tier);
-        if (cost !== 0n) cell.textContent = formatUnits(cost, decimals, 0);
+        const price = await tierPrice(tier);
+        if (price !== 0n) cell.textContent = `${formatUnits(price, 6, 0)} USDG`;
       }),
     );
   } catch (error) {

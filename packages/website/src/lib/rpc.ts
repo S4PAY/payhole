@@ -2,7 +2,7 @@ import { config } from "./config.js";
 
 export const SELECTORS = {
   token: "0xfc0c546a",
-  tierCost: "0xffdbd60d",
+  tierPrice: "0x8b542526",
   tierOf: "0xc8f74bb8",
   balanceOf: "0x70a08231",
   walletOf: "0x09521458",
