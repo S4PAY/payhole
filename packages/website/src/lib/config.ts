@@ -7,7 +7,7 @@ export const config = {
   safe: "0xfCeB8905E316D383Cd90Aa1Ab04ab1650611445b",
   factory: "0x68b5bb42fec83db9582758bbcb1fc43f748970d6",
   implementation: "0x1Cc03Bab3B6d9a5059cEC6a1BEFa86982D492C23",
-  burnVault: "0x298712ca3a1367bbd8caabd5269b05985228eedf",
+  burnVault: "0x80d9bc2412853030f259ea7056654888b2b0d768",
   registry: "0x5d483aec0735d550d09018a2e89c49c190962deb",
   verifierApi: "/api",
 } as const;
