@@ -42,6 +42,33 @@ it. Confirmed names still expire with `FLAG_TTL_DAYS`, and the allowlist still w
 `sources`, `reasons`, the live `reporters`, and whether the swarm `confirmed` it. The public route shares the encrypted DNS rate
 limit and allows cross-origin reads, so the app and the website can call it directly.
 
+### Reports from phones and browsers
+
+`POST /report` on the DoH listener (public on `https://dns.payhole.org/report`, JSON body, cross-origin allowed, shares the
+encrypted DNS rate limit) takes reports from people who are not running a node.
+
+- A plain report, `{"name": "...", "category": "drainer", "reason": "..."}`, is a **hint**: counted per name with the reasons
+  and categories people gave, never blocking, kept in `DATA_DIR/hints.json` (the newest 5,000 names), served to operators at
+  `GET /api/hints?days=7&limit=100`, and shown on the radar so a name many people report reaches someone who can confirm it.
+  The answer says `hinted` with the count, or `already_blocked` or `allowlisted` when the network has decided.
+- A signed report, `{"message": <swarm message>}`, is a **flag** from a tier holder who delegated a key to their phone. The
+  message is a normal swarm message whose `delegate` names the phone's address; its proof is the holder's signature over the
+  membership text with the delegate's address in the peer slot, and the body is signed by the delegate. The node verifies it
+  like any flag, including the holder's BurnVault tier, records it, and relays it to the swarm; the answer says `flagged` or
+  `confirmed`. Delegated messages are self-certifying, so the relaying peer does not have to be the one in the proof.
+  `REPORT_DELEGATES=1` turns this on; leave it off until every node runs a version that verifies delegated signatures,
+  because older nodes drop them and penalise the relay.
+
+`GET /api/reports/ledger?days=30` lists, for every name the swarm confirmed in the window, the wallet whose flag came first.
+That is the record a bounty is paid from; the node keeps it, nobody's memory does.
+
+### The PayHole list
+
+`GET /lists/payhole.txt` and `GET /lists/payhole.hosts` on the DoH listener (public on `https://dns.payhole.org/lists/payhole.txt`)
+serve this node's curated names, the extension's, the operator's manual entries, and everything the swarm confirmed, in plain
+and hosts format with a five-minute cache. Any Pi-hole, AdGuard Home, or Sinkhole can subscribe to it; subscribed public lists
+are not repeated in it.
+
 ### Radar
 
 `GET /radar` on the DoH listener (public on `https://dns.payhole.org/radar`) and `GET /api/radar` on the admin API answer what

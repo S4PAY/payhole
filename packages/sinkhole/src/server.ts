@@ -6,7 +6,8 @@ import { ADMIN_ASSETS, ADMIN_CSP, ADMIN_PAGE } from "./adminPage.js";
 import { parseExtensionPush, type Blocklist } from "./blocklist.js";
 import { isQueryStatus, type QueryFilter, type QueryRecord, type StatsSnapshot } from "./queryLog.js";
 import { isExportFormat, renderExport } from "./render/export.js";
-import type { RadarSnapshot } from "./radar.js";
+import type { Hint } from "./hints.js";
+import type { LedgerEntry, RadarSnapshot } from "./radar.js";
 import type { RefreshResult, SubscriptionInfo } from "./subscriptions.js";
 import type { AnnouncementResult, DirectoryEntry } from "./swarm/directory.js";
 import type { EndpointAnnouncement } from "./swarm/probe.js";
@@ -37,6 +38,10 @@ export interface AdminDeps {
     | undefined;
   /** What the network learned lately, for `GET /api/radar`; absent when the node has no lists. */
   radar?: (() => RadarSnapshot) | undefined;
+  /** Names phones reported without a tier, for `GET /api/hints`. */
+  hints?: { recent(since: number, limit: number): Hint[] } | undefined;
+  /** Who reported first each name the swarm confirmed, for `GET /api/reports/ledger`. */
+  ledger?: ((since: number) => LedgerEntry[]) | undefined;
   /** The operator wallet's BurnVault tier and the unlock action; absent when the node has no vault. */
   membership?: Membership | undefined;
   maxBodyBytes?: number;
@@ -296,6 +301,21 @@ export function createAdminServer(deps: AdminDeps): Server {
       if (method !== "DELETE") throw new HttpError(405, "method_not_allowed", "use PATCH or DELETE");
       if (!(await subs.remove(id))) throw new HttpError(404, "not_found", "no such subscription");
       return json(res, 200, { id, removed: true });
+    }
+    if (path === "/api/hints") {
+      if (method !== "GET") throw new HttpError(405, "method_not_allowed", "use GET");
+      if (!deps.hints) throw new HttpError(404, "not_found", "hints are not enabled");
+      const days = Math.min(365, Math.max(1, Number(url.searchParams.get("days") ?? "7") || 7));
+      const limit = Math.min(1000, Math.max(1, Number(url.searchParams.get("limit") ?? "100") || 100));
+      const since = Date.now() - days * 24 * 60 * 60 * 1000;
+      return json(res, 200, { since, hints: deps.hints.recent(since, limit) });
+    }
+    if (path === "/api/reports/ledger") {
+      if (method !== "GET") throw new HttpError(405, "method_not_allowed", "use GET");
+      if (!deps.ledger) throw new HttpError(404, "not_found", "the ledger is not enabled");
+      const days = Math.min(365, Math.max(1, Number(url.searchParams.get("days") ?? "30") || 30));
+      const since = Date.now() - days * 24 * 60 * 60 * 1000;
+      return json(res, 200, { since, entries: deps.ledger(since) });
     }
     if (path === "/api/radar") {
       if (method !== "GET") throw new HttpError(405, "method_not_allowed", "use GET");

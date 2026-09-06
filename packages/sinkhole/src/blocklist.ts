@@ -68,6 +68,8 @@ export interface Confirmation {
   category: Category;
   reporters: number;
   at: number;
+  /** The wallet whose live flag came first, lowercase; who a bounty for the name belongs to. */
+  firstReporter: string | null;
 }
 
 export interface FlagSummary {
@@ -199,7 +201,7 @@ export class Blocklist {
       for (const entry of state.confirmations) {
         const domain = typeof entry.domain === "string" ? normalizeHostname(entry.domain) : null;
         if (domain && typeof entry.at === "number" && typeof entry.reporters === "number") {
-          this.confirmations.push({ domain, category: parseCategory(entry.category) ?? "phishing", reporters: entry.reporters, at: entry.at });
+          this.confirmations.push({ domain, category: parseCategory(entry.category) ?? "phishing", reporters: entry.reporters, at: entry.at, firstReporter: typeof entry.firstReporter === "string" ? entry.firstReporter : null });
         }
       }
       this.confirmations = this.confirmations.slice(-CONFIRMATIONS_KEPT);
@@ -386,7 +388,15 @@ export class Blocklist {
     if (changed) {
       let strongestCategory: Category | null = null;
       for (const flag of live) strongestCategory = strongest(strongestCategory, flag.category);
-      this.confirmations.push({ domain, category: strongestCategory ?? "phishing", reporters, at: seen });
+      let firstReporter: string | null = null;
+      let firstTs = Number.POSITIVE_INFINITY;
+      for (const [address, flag] of flags) {
+        if (flag.seen + this.ttlMs > seen && flag.ts < firstTs) {
+          firstTs = flag.ts;
+          firstReporter = address;
+        }
+      }
+      this.confirmations.push({ domain, category: strongestCategory ?? "phishing", reporters, at: seen, firstReporter });
       if (this.confirmations.length > CONFIRMATIONS_KEPT) this.confirmations.splice(0, this.confirmations.length - CONFIRMATIONS_KEPT);
     }
     this.checkChanged();

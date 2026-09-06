@@ -1,5 +1,6 @@
 import type { Blocklist, Confirmation } from "./blocklist.js";
 import { CATEGORIES, type Category } from "./category.js";
+import { Hints, type Hint } from "./hints.js";
 import type { RefreshEvent, SubscriptionInfo } from "./subscriptions.js";
 
 /**
@@ -27,6 +28,13 @@ export interface RadarBrand {
   sample: string[];
 }
 
+export interface RadarHint {
+  domain: string;
+  count: number;
+  category: Category | null;
+  lastAt: number;
+}
+
 export interface RadarSnapshot {
   generatedAt: number;
   windowHours: number;
@@ -35,12 +43,15 @@ export interface RadarSnapshot {
   /** New names inside the window by category: swarm confirmations plus list growth. */
   categories: Record<Category, number>;
   brands: RadarBrand[];
+  /** Names reported by phones and browsers without a tier inside the window; none of them block. */
+  hints: { names: number; reports: number; top: RadarHint[] };
   totals: { listNames: number; lists: number };
 }
 
 export interface RadarSource {
   blocklist: Pick<Blocklist, "recentConfirmations" | "flagSummaries">;
   lists: { list(): SubscriptionInfo[]; historyOf(id: string): RefreshEvent[]; domains(): Set<string> };
+  hints?: Pick<Hints, "recent"> | undefined;
   clock?: (() => number) | undefined;
 }
 
@@ -182,6 +193,8 @@ export function buildRadar(source: RadarSource, windowHours = 24): RadarSnapshot
     categories[item.category] += added;
     lists.push({ url: item.url, label: labelFor(item.url), category: item.category, entries: item.entries, lastSuccessAt: item.lastSuccessAt, refreshes: events.length, added, removed, sample });
   }
+  const hinted = source.hints?.recent(since, 20) ?? [];
+  const reports = hinted.reduce((sum, hint) => sum + hint.count, 0);
   return {
     generatedAt: now,
     windowHours,
@@ -189,6 +202,7 @@ export function buildRadar(source: RadarSource, windowHours = 24): RadarSnapshot
     lists,
     categories,
     brands: impersonatedBrands(names).slice(0, 15),
+    hints: { names: hinted.length, reports, top: hinted.slice(0, 10).map(radarHint) },
     totals: { listNames: source.lists.domains().size, lists: lists.length },
   };
 }
@@ -205,4 +219,30 @@ export function memoize<T>(build: () => T, ttlMs: number, clock: () => number = 
     }
     return value;
   };
+}
+
+function radarHint(hint: Hint): RadarHint {
+  return { domain: hint.domain, count: hint.count, category: Hints.categoryOf(hint), lastAt: hint.lastAt };
+}
+
+export interface LedgerEntry {
+  reporter: string;
+  confirmed: number;
+  domains: { domain: string; category: Category; at: number }[];
+}
+
+/**
+ * Who reported first each name the swarm confirmed since `since`: the record a bounty is paid from.
+ * Names whose first reporter is unknown, from state written before this existed, are left out.
+ */
+export function buildLedger(blocklist: Pick<Blocklist, "recentConfirmations">, since: number): LedgerEntry[] {
+  const byReporter = new Map<string, LedgerEntry>();
+  for (const entry of blocklist.recentConfirmations(since)) {
+    if (!entry.firstReporter) continue;
+    const ledger = byReporter.get(entry.firstReporter) ?? { reporter: entry.firstReporter, confirmed: 0, domains: [] };
+    ledger.confirmed += 1;
+    ledger.domains.push({ domain: entry.domain, category: entry.category, at: entry.at });
+    byReporter.set(entry.firstReporter, ledger);
+  }
+  return [...byReporter.values()].sort((a, b) => b.confirmed - a.confirmed || a.reporter.localeCompare(b.reporter));
 }

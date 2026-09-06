@@ -45,8 +45,14 @@ export interface SwarmMessage<B extends MessageBody = MessageBody> {
   body: B;
   reporter: Address;
   proof: MembershipProof;
-  /** EIP-191 signature by `reporter` over the canonical JSON of `body`. */
+  /** EIP-191 signature over the canonical JSON of `body`, by `reporter`, or by `delegate` when one is named. */
   signature: Hex;
+  /**
+   * A key the reporter delegated, such as a phone's reporter key. The proof then binds this address, in its
+   * peer slot, to `reporter`, and the body is signed by this key. Such messages are self-certifying, so the
+   * peer that relays them does not matter.
+   */
+  delegate?: Address;
 }
 
 /** A message narrowed by `kind`. */
@@ -62,11 +68,14 @@ export type DropReason =
   | "bad_proof"
   | "tier_too_low"
   | "tier_unavailable"
-  | "bad_signature";
+  | "bad_signature"
+  | "delegate_refused";
 
 export type VerifyResult = { ok: true; message: AnySwarmMessage } | { ok: false; reason: DropReason; detail: string };
 
 export interface VerifierOptions {
+  /** Refuse messages signed by delegated keys; on by default so relays of phone reports are accepted. */
+  allowDelegates?: boolean | undefined;
   tierOf: TierReader;
   /** Minimum BurnVault tier; zero skips the on-chain check entirely. */
   minTier: number;
@@ -156,6 +165,17 @@ export async function signSwarmMessage<B extends MessageBody>(account: PrivateKe
   return { kind: body.type, body, reporter, proof, signature };
 }
 
+/**
+ * Signs a body with a delegated key on behalf of the wallet in the proof. The proof must name the delegate's
+ * address in its peer slot, signed by that wallet: `signProof(wallet, delegateAddress)`.
+ */
+export async function signDelegatedMessage<B extends MessageBody>(delegate: PrivateKeyAccount, proof: MembershipProof, body: B): Promise<SwarmMessage<B>> {
+  const address = getAddress(delegate.address);
+  if (proof.peerId !== address) throw new Error("the membership proof does not name this delegate key");
+  const signature = await delegate.signMessage({ message: canonicalJson(body) });
+  return { kind: body.type, body, reporter: getAddress(proof.address), proof, signature, delegate: address };
+}
+
 export function encodeSwarmMessage(message: AnySwarmMessage): Uint8Array {
   return new TextEncoder().encode(JSON.stringify(message));
 }
@@ -224,21 +244,30 @@ export async function verifySwarmMessage(raw: Uint8Array | string, senderPeerId:
   if (!proof) return drop("malformed", "proof is malformed");
   const bodyRaw = parsed["body"];
   if (!isRecord(bodyRaw) || bodyRaw["type"] !== kind) return drop("invalid_body", "body.type must equal kind");
-  if (proof.peerId !== senderPeerId) return drop("peer_mismatch", `proof is for ${proof.peerId}, message from ${senderPeerId}`);
+  const delegateRaw = parsed["delegate"];
+  let delegate: Address | null = null;
+  if (delegateRaw !== undefined) {
+    if (typeof delegateRaw !== "string" || !isAddress(delegateRaw)) return drop("malformed", "delegate is not an address");
+    if (options.allowDelegates === false) return drop("delegate_refused", "delegated signatures are not accepted here");
+    delegate = getAddress(delegateRaw);
+    if (proof.peerId !== delegate) return drop("peer_mismatch", `proof is for ${proof.peerId}, delegate is ${delegate}`);
+  } else if (proof.peerId !== senderPeerId) {
+    return drop("peer_mismatch", `proof is for ${proof.peerId}, message from ${senderPeerId}`);
+  }
   if (getAddress(proof.address) !== reporter) return drop("reporter_mismatch", "proof address differs from reporter");
   const body = kind === "flag" ? parseFlagBody(bodyRaw) : parseEndpointBody(bodyRaw);
   if (!body) return drop("invalid_body", `${kind} body failed validation`);
   if (body.ts > now + maxSkew) return drop("stale", "timestamp in the future");
   if (body.ts < now - maxAge) return drop("stale", "timestamp too old");
-  const proofCheck = await verifyProof(proof, senderPeerId, now, maxSkew);
+  const proofCheck = await verifyProof(proof, delegate ?? senderPeerId, now, maxSkew);
   if (!proofCheck.ok) return drop(proofCheck.reason, proofCheck.detail);
   let valid: boolean;
   try {
-    valid = await verifyMessage({ address: reporter, message: canonicalJson(bodyRaw), signature });
+    valid = await verifyMessage({ address: delegate ?? reporter, message: canonicalJson(bodyRaw), signature });
   } catch {
     valid = false;
   }
-  if (!valid) return drop("bad_signature", "body signature does not match reporter");
+  if (!valid) return drop("bad_signature", delegate ? "body signature does not match delegate" : "body signature does not match reporter");
   if (options.minTier > 0) {
     let tier: number;
     try {
@@ -248,7 +277,8 @@ export async function verifySwarmMessage(raw: Uint8Array | string, senderPeerId:
     }
     if (tier < options.minTier) return drop("tier_too_low", `tier ${tier} is below ${options.minTier}`);
   }
+  const extra = delegate ? { delegate } : {};
   const message: AnySwarmMessage =
-    body.type === "flag" ? { kind: "flag", body, reporter, proof, signature } : { kind: "endpoint", body, reporter, proof, signature };
+    body.type === "flag" ? { kind: "flag", body, reporter, proof, signature, ...extra } : { kind: "endpoint", body, reporter, proof, signature, ...extra };
   return { ok: true, message };
 }

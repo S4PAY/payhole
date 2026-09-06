@@ -15,7 +15,9 @@ import { QueryStats, type QueryStatsState } from "./queryLog.js";
 import { RateLimiter } from "./rateLimit.js";
 import { createAdminServer } from "./server.js";
 import { debounce, readJson, writeJsonAtomic } from "./store.js";
-import { buildRadar, memoize } from "./radar.js";
+import { Hints } from "./hints.js";
+import { buildLedger, buildRadar, memoize } from "./radar.js";
+import { createReporter } from "./reports.js";
 import { Subscriptions } from "./subscriptions.js";
 import { parseAllowlistText } from "./allowlist.js";
 import { Directory, type DirectoryEntry } from "./swarm/directory.js";
@@ -161,8 +163,10 @@ async function run(config: SinkholeConfig): Promise<void> {
   blocklist.setListCategoryResolver((domain) => subscriptions.categoryOf(domain));
   blocklist.setLists(subscriptions.domains());
   subscriptions.onChange(() => blocklist.setLists(subscriptions.domains()));
+  const hints = await Hints.load({ path: join(config.dataDir, "hints.json"), log });
+  if (hints.size > 0) log(`${hints.size} hinted names loaded`);
   const radar = memoize(
-    () => buildRadar({ blocklist, lists: { list: () => subscriptions.list(), historyOf: (id) => subscriptions.historyOf(id), domains: () => subscriptions.domains() } }),
+    () => buildRadar({ blocklist, hints, lists: { list: () => subscriptions.list(), historyOf: (id) => subscriptions.historyOf(id), domains: () => subscriptions.domains() } }),
     MINUTE,
   );
   if (subscriptions.size > 0) log(`${subscriptions.size} list subscriptions, ${subscriptions.domains().size} domains cached from earlier fetches`);
@@ -242,6 +246,17 @@ async function run(config: SinkholeConfig): Promise<void> {
   await dnsmasq.start(blockSets());
   log(`dnsmasq listening on ${config.dns.listen}:${config.dns.port}, upstream ${config.dns.upstream.join(", ")}, ${blocklist.domains().size} domains blocked, query log ${config.queryLog.enabled ? "on" : "off"}`);
 
+  let swarm: Swarm | null = null;
+  /** The swarm's tier reader once it exists; reports are verified with it. */
+  let tierOfRef: TierReader = () => Promise.resolve(0);
+  const report = createReporter({
+    blocklist,
+    hints,
+    verify: (raw) => verifySwarmMessage(raw, "", { tierOf: tierOfRef, minTier: config.membership.minTier }),
+    publish: (message) => (swarm ? swarm.publish(message) : Promise.resolve(0)),
+    acceptDelegates: config.reports.delegates,
+    log,
+  });
   let doh: (Server & { counters: EncryptedDnsCounters }) | null = null;
   let dot: DotServer | null = null;
   if (config.doh.enabled || config.dot.enabled) {
@@ -253,6 +268,8 @@ async function run(config: SinkholeConfig): Promise<void> {
       onQuery: (transport: string) => statsRef?.countTransport(transport),
       verdict: (name: string) => blocklist.inspect(name),
       radar,
+      report,
+      curatedList: () => blocklist.curatedEntries(),
     };
     if (config.doh.enabled) {
       doh = createDohServer(shared);
@@ -266,7 +283,6 @@ async function run(config: SinkholeConfig): Promise<void> {
     }
   }
 
-  let swarm: Swarm | null = null;
   let identity: Identity | null = null;
   if (config.swarm.enabled) {
     const key = await loadOrCreatePeerKey(peerKeyPath(config));
@@ -278,6 +294,7 @@ async function run(config: SinkholeConfig): Promise<void> {
       if (!vault) throw new Error("BURN_VAULT_ADDRESS is required when MIN_TIER > 0 (MIN_TIER=0 runs an open swarm, SWARM_ENABLED=0 disables it)");
       tierOf = cachedTierReader(createTierReader({ rpcUrl: config.membership.rpcUrl, chainId: config.membership.chainId, vault }), { ttlMs: 60 * MINUTE });
     }
+    tierOfRef = tierOf;
     swarm = await Swarm.start({
       privateKey: key,
       listen: config.swarm.listen,
@@ -430,6 +447,8 @@ async function run(config: SinkholeConfig): Promise<void> {
     }),
     ...(stats ? { stats: { snapshot: () => stats.snapshot(), queries: (filter) => stats.queries(filter) } } : {}),
     radar,
+    hints,
+    ledger: (since: number) => buildLedger(blocklist, since),
     subscriptions: {
       list: () => subscriptions.list(),
       get: (id) => subscriptions.get(id),

@@ -8,7 +8,10 @@ import { basename, dirname } from "node:path";
 import { createSecureContext, createServer as createTlsServer, type Server as TlsServer, type TLSSocket } from "node:tls";
 import type { DnsForwarder } from "./dnsForwarder.js";
 import { isQuery, MAX_MESSAGE_BYTES, minTtl, servfail } from "./dnsWire.js";
+import type { MergedEntry } from "./blocklist.js";
 import type { RadarSnapshot } from "./radar.js";
+import { renderExport } from "./render/export.js";
+import type { ReportInput, ReportResult } from "./reports.js";
 import type { RateLimiter } from "./rateLimit.js";
 
 export type Transport = "doh" | "dot";
@@ -33,6 +36,10 @@ export interface EncryptedDnsShared {
   verdict?: ((name: string) => Inspection | null) | undefined;
   /** Answers `GET /radar` with what the network learned lately; absent means the route is not served. */
   radar?: (() => RadarSnapshot) | undefined;
+  /** Handles `POST /report` from phones and browsers; absent means the route is not served. */
+  report?: ((input: ReportInput) => Promise<ReportResult>) | undefined;
+  /** The node's own curated names for `GET /lists/payhole.txt` and `.hosts`; absent means the routes are not served. */
+  curatedList?: (() => MergedEntry[]) | undefined;
 }
 
 const DNS_MESSAGE = "application/dns-message";
@@ -119,6 +126,41 @@ export function createDohServer(shared: EncryptedDnsShared, counters: EncryptedD
         if (req.method !== "GET") return plain(res, 405, "use GET", { allow: "GET" });
         const body = JSON.stringify({ ok: true, transport: "doh", queries: counters.queries });
         res.writeHead(200, { "content-type": "application/json; charset=utf-8", "content-length": Buffer.byteLength(body), "cache-control": "no-store" });
+        return res.end(body);
+      }
+      if (url.pathname === "/report") {
+        if (!shared.report) return plain(res, 404, "not found");
+        if (req.method === "OPTIONS") {
+          res.writeHead(204, { "access-control-allow-origin": "*", "access-control-allow-methods": "POST", "access-control-allow-headers": "content-type", "access-control-max-age": "86400" });
+          return res.end();
+        }
+        if (req.method !== "POST") return plain(res, 405, "use POST", { allow: "POST, OPTIONS" });
+        const limit = shared.limiter.take(clientAddress(req));
+        if (!limit.allowed) return plain(res, 429, "too many requests", { "retry-after": String(limit.retryAfterSeconds) });
+        const raw = await readBody(req, MAX_MESSAGE_BYTES);
+        if (!raw) return plain(res, 413, `body exceeds ${MAX_MESSAGE_BYTES} bytes`);
+        let input: unknown;
+        try {
+          input = JSON.parse(raw.toString("utf8"));
+        } catch {
+          return plain(res, 400, "body is not JSON");
+        }
+        if (typeof input !== "object" || input === null || Array.isArray(input)) return plain(res, 400, "body must be a JSON object");
+        const result = await shared.report(input);
+        const body = JSON.stringify(result);
+        res.writeHead(result.status === "invalid" ? 400 : result.status === "rejected" ? 403 : 200, {
+          "content-type": "application/json; charset=utf-8",
+          "content-length": Buffer.byteLength(body),
+          "cache-control": "no-store",
+          "access-control-allow-origin": "*",
+        });
+        return res.end(body);
+      }
+      if (url.pathname === "/lists/payhole.txt" || url.pathname === "/lists/payhole.hosts") {
+        if (!shared.curatedList) return plain(res, 404, "not found");
+        if (req.method !== "GET") return plain(res, 405, "use GET", { allow: "GET" });
+        const { body, contentType } = renderExport(url.pathname.endsWith(".hosts") ? "hosts" : "plain", shared.curatedList(), new Date().toISOString());
+        res.writeHead(200, { "content-type": contentType, "content-length": Buffer.byteLength(body), "cache-control": "public, max-age=300", "access-control-allow-origin": "*" });
         return res.end(body);
       }
       if (url.pathname === "/radar") {

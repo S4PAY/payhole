@@ -49,7 +49,7 @@ describe("swarm confirmations", () => {
     expect(blocklist.recentConfirmations(0)).toEqual([]);
     now += HOUR;
     blocklist.recordFlag("kit.example", B, "seen it too", now, now, "infra");
-    expect(blocklist.recentConfirmations(0)).toEqual([{ domain: "kit.example", category: "infra", reporters: 2, at: now }]);
+    expect(blocklist.recentConfirmations(0)).toEqual([{ domain: "kit.example", category: "infra", reporters: 2, at: now, firstReporter: A }]);
     blocklist.recordFlag("kit.example", A, "again", now, now, "drainer");
     expect(blocklist.recentConfirmations(0)).toHaveLength(1);
     const state = JSON.parse(JSON.stringify(blocklist)) as BlocklistState;

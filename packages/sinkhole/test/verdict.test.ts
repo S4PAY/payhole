@@ -3,7 +3,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Blocklist } from "../src/blocklist.js";
 import { DnsForwarder } from "../src/dnsForwarder.js";
 import { createDohServer } from "../src/encryptedDns.js";
+import { Hints } from "../src/hints.js";
 import { buildRadar } from "../src/radar.js";
+import { createReporter } from "../src/reports.js";
 import { RateLimiter } from "../src/rateLimit.js";
 
 const blocklist = new Blocklist({ threshold: 2, ttlMs: 3_600_000 });
@@ -86,6 +88,49 @@ describe("public radar route", () => {
       expect(body.brands).toEqual([]);
       expect((await fetch(url, { method: "POST" })).status).toBe(405);
       expect((await fetch(`${base}/radar`)).status).toBe(404);
+    } finally {
+      await new Promise<void>((resolve, reject) => own.close((error) => (error ? reject(error) : resolve())));
+    }
+  });
+});
+
+describe("public report route and the PayHole list", () => {
+  it("counts hints, answers cross-origin, serves the curated names, and refuses bad input", async () => {
+    const hints = new Hints();
+    const own = createDohServer({
+      forwarder: new DnsForwarder({ host: "127.0.0.1", port: 9, timeoutMs: 100 }),
+      limiter: new RateLimiter(10, 60_000),
+      log: () => undefined,
+      report: createReporter({ blocklist, hints, acceptDelegates: false }),
+      curatedList: () => blocklist.curatedEntries(),
+    });
+    await new Promise<void>((resolve) => own.listen(0, "127.0.0.1", resolve));
+    const url = `http://127.0.0.1:${(own.address() as AddressInfo).port}`;
+    try {
+      const post = (body: string) => fetch(`${url}/report`, { method: "POST", headers: { "content-type": "application/json" }, body });
+      const first = await post(JSON.stringify({ name: "Scam.Example", category: "drainer", reason: "asked for my seed" }));
+      expect(first.status).toBe(200);
+      expect(first.headers.get("access-control-allow-origin")).toBe("*");
+      expect(await first.json()).toEqual({ status: "hinted", domain: "scam.example", hints: 1 });
+      expect(await (await post(JSON.stringify({ name: "kit.example" }))).json()).toEqual({ status: "already_blocked", domain: "kit.example" });
+      expect((await post(JSON.stringify({ name: "not a host" }))).status).toBe(400);
+      expect((await post("nope")).status).toBe(400);
+      expect((await post("[1]")).status).toBe(400);
+      expect((await post(JSON.stringify({ message: { kind: "flag" } }))).status).toBe(403);
+      const preflight = await fetch(`${url}/report`, { method: "OPTIONS" });
+      expect(preflight.status).toBe(204);
+      expect(preflight.headers.get("access-control-allow-methods")).toBe("POST");
+      expect((await fetch(`${url}/report`)).status).toBe(405);
+      expect(hints.get("scam.example")?.count).toBe(1);
+
+      const plainList = await fetch(`${url}/lists/payhole.txt`);
+      expect(plainList.status).toBe(200);
+      expect(plainList.headers.get("cache-control")).toBe("public, max-age=300");
+      expect(await plainList.text()).toBe("kit.example\n");
+      const hostsList = await (await fetch(`${url}/lists/payhole.hosts`)).text();
+      expect(hostsList).toContain("0.0.0.0 kit.example");
+      expect(hostsList.startsWith("# PayHole Sinkhole blocklist, 1 entries")).toBe(true);
+      expect((await fetch(`${base}/lists/payhole.txt`)).status).toBe(404);
     } finally {
       await new Promise<void>((resolve, reject) => own.close((error) => (error ? reject(error) : resolve())));
     }
