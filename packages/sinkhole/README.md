@@ -42,6 +42,18 @@ it. Confirmed names still expire with `FLAG_TTL_DAYS`, and the allowlist still w
 `sources`, `reasons`, the live `reporters`, and whether the swarm `confirmed` it. The public route shares the encrypted DNS rate
 limit and allows cross-origin reads, so the app and the website can call it directly.
 
+### Radar
+
+`GET /radar` on the DoH listener (public on `https://dns.payhole.org/radar`) and `GET /api/radar` on the admin API answer what
+the network learned lately, built only from swarm confirmations and list refreshes, never from queries: how many names the
+swarm confirmed in the last 24 hours and 7 days and the newest twenty with their category and reporter count, how many are
+flagged and still waiting for confirmation, each subscribed list with the names it gained and lost in the window and a sample
+of the new ones, new names by category, the brands the new names impersonate (`metamask-verify.pages.dev` counts for
+MetaMask, `metamask.io` does not), and the total number of list names. Nodes keep the last 500 confirmations in `state.json`
+and the last twelve changing refreshes per list, with up to 5,000 gained names each, in `lists/history.json`; a refresh with no
+earlier copy of the list to compare against records nothing. The snapshot is rebuilt at most once a minute, is cacheable for
+a minute, shares the encrypted DNS rate limit, and allows cross-origin reads.
+
 Hostnames are validated everywhere they enter: lowercase, punycode, no scheme, path, port or IP literal, at least two labels. Anything else is rejected and reported, never silently repaired.
 
 The curated sources (extension, manual, swarm) are rendered to `DATA_DIR/dnsmasq/blocklist.conf` as `address=/<domain>/0.0.0.0` lines, which sink the domain and every subdomain. dnsmasq only reads `address=` rules at startup, so a change to that set is applied with a quick graceful restart; a burst of changes is coalesced into one restart, and clients that query during the few milliseconds of restart retry on their own.

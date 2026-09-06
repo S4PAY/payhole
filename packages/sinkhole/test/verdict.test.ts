@@ -3,6 +3,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Blocklist } from "../src/blocklist.js";
 import { DnsForwarder } from "../src/dnsForwarder.js";
 import { createDohServer } from "../src/encryptedDns.js";
+import { buildRadar } from "../src/radar.js";
 import { RateLimiter } from "../src/rateLimit.js";
 
 const blocklist = new Blocklist({ threshold: 2, ttlMs: 3_600_000 });
@@ -60,5 +61,33 @@ describe("public verdict route", () => {
     const port = (bare.address() as AddressInfo).port;
     expect((await fetch(`http://127.0.0.1:${port}/verdict?name=x.example`)).status).toBe(404);
     await new Promise<void>((resolve, reject) => bare.close((error) => (error ? reject(error) : resolve())));
+  });
+});
+
+describe("public radar route", () => {
+  it("serves the network's recent learning as cacheable JSON, open to any origin", async () => {
+    const own = createDohServer({
+      forwarder: new DnsForwarder({ host: "127.0.0.1", port: 9, timeoutMs: 100 }),
+      limiter: new RateLimiter(3, 60_000),
+      log: () => undefined,
+      radar: () => buildRadar({ blocklist, lists: { list: () => [], historyOf: () => [], domains: () => new Set(["ads.example"]) } }),
+    });
+    await new Promise<void>((resolve) => own.listen(0, "127.0.0.1", resolve));
+    const url = `http://127.0.0.1:${(own.address() as AddressInfo).port}/radar`;
+    try {
+      const res = await fetch(url);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("access-control-allow-origin")).toBe("*");
+      expect(res.headers.get("cache-control")).toBe("public, max-age=60");
+      const body = (await res.json()) as { windowHours: number; swarm: unknown; totals: unknown; brands: unknown[] };
+      expect(body.windowHours).toBe(24);
+      expect(body.swarm).toEqual({ confirmed: 0, confirmedWeek: 0, pending: 0, recent: [] });
+      expect(body.totals).toEqual({ listNames: 1, lists: 0 });
+      expect(body.brands).toEqual([]);
+      expect((await fetch(url, { method: "POST" })).status).toBe(405);
+      expect((await fetch(`${base}/radar`)).status).toBe(404);
+    } finally {
+      await new Promise<void>((resolve, reject) => own.close((error) => (error ? reject(error) : resolve())));
+    }
   });
 });

@@ -6,6 +6,7 @@ import { ADMIN_ASSETS, ADMIN_CSP, ADMIN_PAGE } from "./adminPage.js";
 import { parseExtensionPush, type Blocklist } from "./blocklist.js";
 import { isQueryStatus, type QueryFilter, type QueryRecord, type StatsSnapshot } from "./queryLog.js";
 import { isExportFormat, renderExport } from "./render/export.js";
+import type { RadarSnapshot } from "./radar.js";
 import type { RefreshResult, SubscriptionInfo } from "./subscriptions.js";
 import type { AnnouncementResult, DirectoryEntry } from "./swarm/directory.js";
 import type { EndpointAnnouncement } from "./swarm/probe.js";
@@ -34,6 +35,8 @@ export interface AdminDeps {
         refresh: (id: string) => Promise<RefreshResult>;
       }
     | undefined;
+  /** What the network learned lately, for `GET /api/radar`; absent when the node has no lists. */
+  radar?: (() => RadarSnapshot) | undefined;
   /** The operator wallet's BurnVault tier and the unlock action; absent when the node has no vault. */
   membership?: Membership | undefined;
   maxBodyBytes?: number;
@@ -293,6 +296,11 @@ export function createAdminServer(deps: AdminDeps): Server {
       if (method !== "DELETE") throw new HttpError(405, "method_not_allowed", "use PATCH or DELETE");
       if (!(await subs.remove(id))) throw new HttpError(404, "not_found", "no such subscription");
       return json(res, 200, { id, removed: true });
+    }
+    if (path === "/api/radar") {
+      if (method !== "GET") throw new HttpError(405, "method_not_allowed", "use GET");
+      if (!deps.radar) throw new HttpError(404, "not_found", "radar is not enabled");
+      return json(res, 200, deps.radar());
     }
     if (path === "/api/verdict") {
       if (method !== "GET") throw new HttpError(405, "method_not_allowed", "use GET");

@@ -8,6 +8,7 @@ import { basename, dirname } from "node:path";
 import { createSecureContext, createServer as createTlsServer, type Server as TlsServer, type TLSSocket } from "node:tls";
 import type { DnsForwarder } from "./dnsForwarder.js";
 import { isQuery, MAX_MESSAGE_BYTES, minTtl, servfail } from "./dnsWire.js";
+import type { RadarSnapshot } from "./radar.js";
 import type { RateLimiter } from "./rateLimit.js";
 
 export type Transport = "doh" | "dot";
@@ -30,6 +31,8 @@ export interface EncryptedDnsShared {
   onQuery?: ((transport: Transport, client: string) => void) | undefined;
   /** Answers `GET /verdict?name=` from the blocklist; absent means the route is not served. */
   verdict?: ((name: string) => Inspection | null) | undefined;
+  /** Answers `GET /radar` with what the network learned lately; absent means the route is not served. */
+  radar?: (() => RadarSnapshot) | undefined;
 }
 
 const DNS_MESSAGE = "application/dns-message";
@@ -116,6 +119,20 @@ export function createDohServer(shared: EncryptedDnsShared, counters: EncryptedD
         if (req.method !== "GET") return plain(res, 405, "use GET", { allow: "GET" });
         const body = JSON.stringify({ ok: true, transport: "doh", queries: counters.queries });
         res.writeHead(200, { "content-type": "application/json; charset=utf-8", "content-length": Buffer.byteLength(body), "cache-control": "no-store" });
+        return res.end(body);
+      }
+      if (url.pathname === "/radar") {
+        if (!shared.radar) return plain(res, 404, "not found");
+        if (req.method !== "GET") return plain(res, 405, "use GET", { allow: "GET" });
+        const limit = shared.limiter.take(clientAddress(req));
+        if (!limit.allowed) return plain(res, 429, "too many requests", { "retry-after": String(limit.retryAfterSeconds) });
+        const body = JSON.stringify(shared.radar());
+        res.writeHead(200, {
+          "content-type": "application/json; charset=utf-8",
+          "content-length": Buffer.byteLength(body),
+          "cache-control": "public, max-age=60",
+          "access-control-allow-origin": "*",
+        });
         return res.end(body);
       }
       if (url.pathname === "/verdict") {

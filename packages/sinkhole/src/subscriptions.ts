@@ -48,6 +48,24 @@ export interface SubscriptionsOptions {
   label?: string;
 }
 
+/** One refresh that changed a list: how it grew and the names it gained, for the radar. */
+export interface RefreshEvent {
+  at: number;
+  entries: number;
+  added: number;
+  removed: number;
+  /** The names gained, at most HISTORY_NAMES of them. */
+  names: string[];
+}
+
+interface HistoryFile {
+  version: 1;
+  items: Record<string, RefreshEvent[]>;
+}
+
+const HISTORY_EVENTS = 12;
+const HISTORY_NAMES = 5000;
+
 interface StateFile {
   version: 1;
   items: Subscription[];
@@ -186,6 +204,8 @@ export class Subscriptions {
   private readonly inFlight = new Map<string, Promise<RefreshResult>>();
   private readonly parse: (text: string) => { domains: Set<string>; invalid: number };
   private readonly label: string;
+  /** Refreshes that changed each list, oldest first, capped; only kept once a baseline existed. */
+  private readonly history = new Map<string, RefreshEvent[]>();
 
   private constructor(options: SubscriptionsOptions) {
     this.dir = options.dir;
@@ -214,6 +234,12 @@ export class Subscriptions {
         } catch {
           subs.lists.set(item.id, new Set());
         }
+      }
+    }
+    const history = await readJson<HistoryFile>(join(options.dir, "history.json"));
+    if (history?.version === 1) {
+      for (const [id, events] of Object.entries(history.items)) {
+        if (subs.items.has(id) && Array.isArray(events)) subs.history.set(id, events.slice(-HISTORY_EVENTS));
       }
     }
     for (const raw of urls) {
@@ -276,6 +302,15 @@ export class Subscriptions {
 
   private async persist(): Promise<void> {
     await writeJsonAtomic(join(this.dir, "subscriptions.json"), { version: 1, items: this.list() } satisfies StateFile);
+  }
+
+  private async persistHistory(): Promise<void> {
+    await writeJsonAtomic(join(this.dir, "history.json"), { version: 1, items: Object.fromEntries(this.history) } satisfies HistoryFile);
+  }
+
+  /** Refreshes that changed the list, oldest first; empty for a list that never had a baseline. */
+  historyOf(id: string): RefreshEvent[] {
+    return [...(this.history.get(id) ?? [])];
   }
 
   private info(item: Subscription): SubscriptionInfo {
@@ -350,6 +385,7 @@ export class Subscriptions {
     this.lists.delete(id);
     await rm(this.listPath(id), { force: true });
     await this.persist();
+    if (this.history.delete(id)) await this.persistHistory();
     if (hadDomains) this.notify();
     else this.union = null;
     return true;
@@ -370,7 +406,8 @@ export class Subscriptions {
     const startedAt = this.clock();
     try {
       const outcome = await fetchList(this.fetchImpl, item, this.timeoutMs, this.maxBytes);
-      item.lastFetchedAt = this.clock();
+      const fetchedAt = this.clock();
+      item.lastFetchedAt = fetchedAt;
       if (outcome.status === 304) {
         item.lastSuccessAt = item.lastFetchedAt;
         item.lastError = null;
@@ -380,6 +417,19 @@ export class Subscriptions {
       const { domains, invalid } = this.parse(outcome.text);
       const previous = this.lists.get(item.id);
       const changed = previous?.size !== domains.size || [...domains].some((d) => !previous.has(d));
+      if (previous !== undefined && previous.size > 0 && changed) {
+        const names: string[] = [];
+        let added = 0;
+        for (const domain of domains) {
+          if (previous.has(domain)) continue;
+          added += 1;
+          if (names.length < HISTORY_NAMES) names.push(domain);
+        }
+        const events = this.history.get(item.id) ?? [];
+        events.push({ at: fetchedAt, entries: domains.size, added, removed: previous.size - (domains.size - added), names });
+        this.history.set(item.id, events.slice(-HISTORY_EVENTS));
+        await this.persistHistory();
+      }
       this.lists.set(item.id, domains);
       item.entries = domains.size;
       item.bytes = outcome.bytes;

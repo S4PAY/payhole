@@ -15,6 +15,7 @@ import { QueryStats, type QueryStatsState } from "./queryLog.js";
 import { RateLimiter } from "./rateLimit.js";
 import { createAdminServer } from "./server.js";
 import { debounce, readJson, writeJsonAtomic } from "./store.js";
+import { buildRadar, memoize } from "./radar.js";
 import { Subscriptions } from "./subscriptions.js";
 import { parseAllowlistText } from "./allowlist.js";
 import { Directory, type DirectoryEntry } from "./swarm/directory.js";
@@ -160,6 +161,10 @@ async function run(config: SinkholeConfig): Promise<void> {
   blocklist.setListCategoryResolver((domain) => subscriptions.categoryOf(domain));
   blocklist.setLists(subscriptions.domains());
   subscriptions.onChange(() => blocklist.setLists(subscriptions.domains()));
+  const radar = memoize(
+    () => buildRadar({ blocklist, lists: { list: () => subscriptions.list(), historyOf: (id) => subscriptions.historyOf(id), domains: () => subscriptions.domains() } }),
+    MINUTE,
+  );
   if (subscriptions.size > 0) log(`${subscriptions.size} list subscriptions, ${subscriptions.domains().size} domains cached from earlier fetches`);
 
   const allowlists = await Subscriptions.load(
@@ -247,6 +252,7 @@ async function run(config: SinkholeConfig): Promise<void> {
       log,
       onQuery: (transport: string) => statsRef?.countTransport(transport),
       verdict: (name: string) => blocklist.inspect(name),
+      radar,
     };
     if (config.doh.enabled) {
       doh = createDohServer(shared);
@@ -423,6 +429,7 @@ async function run(config: SinkholeConfig): Promise<void> {
       },
     }),
     ...(stats ? { stats: { snapshot: () => stats.snapshot(), queries: (filter) => stats.queries(filter) } } : {}),
+    radar,
     subscriptions: {
       list: () => subscriptions.list(),
       get: (id) => subscriptions.get(id),

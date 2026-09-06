@@ -62,6 +62,14 @@ export interface Inspection {
   lastSeen: number | null;
 }
 
+/** A name the swarm newly confirmed, kept so the radar can show what changed recently. */
+export interface Confirmation {
+  domain: string;
+  category: Category;
+  reporters: number;
+  at: number;
+}
+
 export interface FlagSummary {
   domain: string;
   category: Category;
@@ -77,6 +85,8 @@ export interface BlocklistState {
   local: { updatedAt: string | null; receivedAt: number | null; entries: LocalEntry[] };
   manual: ManualEntry[];
   swarm: Record<string, Record<string, SwarmFlag>>;
+  /** Newest last; absent in state written before the radar existed. */
+  confirmations?: Confirmation[];
 }
 
 export interface BlocklistOptions {
@@ -147,6 +157,8 @@ function sameSet(a: Set<string>, b: Set<string>): boolean {
  * Subscribed public lists are a fourth source, kept as one shared set because they can hold hundreds of
  * thousands of names. Listeners are told whenever the merged set changes so dnsmasq can be updated.
  */
+const CONFIRMATIONS_KEPT = 500;
+
 export class Blocklist {
   private readonly local = new Map<string, LocalEntry>();
   private localUpdatedAt: string | null = null;
@@ -165,6 +177,8 @@ export class Blocklist {
   readonly threshold: number;
   readonly ttlMs: number;
   private readonly clock: () => number;
+  /** What the swarm confirmed, oldest first, capped. */
+  private confirmations: Confirmation[] = [];
 
   constructor(options: BlocklistOptions, state?: BlocklistState | null) {
     if (!Number.isInteger(options.threshold) || options.threshold < 1) throw new Error("threshold must be a positive integer");
@@ -181,6 +195,15 @@ export class Blocklist {
   }
 
   private restore(state: BlocklistState): void {
+    if (Array.isArray(state.confirmations)) {
+      for (const entry of state.confirmations) {
+        const domain = typeof entry.domain === "string" ? normalizeHostname(entry.domain) : null;
+        if (domain && typeof entry.at === "number" && typeof entry.reporters === "number") {
+          this.confirmations.push({ domain, category: parseCategory(entry.category) ?? "phishing", reporters: entry.reporters, at: entry.at });
+        }
+      }
+      this.confirmations = this.confirmations.slice(-CONFIRMATIONS_KEPT);
+    }
     for (const entry of state.local.entries) {
       const domain = normalizeHostname(entry.domain);
       if (domain) this.local.set(domain, { domain, reason: cleanReason(entry.reason), flaggedAt: entry.flaggedAt, category: parseCategory(entry.category) ?? "drainer" });
@@ -360,8 +383,25 @@ export class Blocklist {
     const reporters = live.length;
     const confirmed = this.confirmedBy(domain, live);
     const changed = confirmed && !blockedBefore;
+    if (changed) {
+      let strongestCategory: Category | null = null;
+      for (const flag of live) strongestCategory = strongest(strongestCategory, flag.category);
+      this.confirmations.push({ domain, category: strongestCategory ?? "phishing", reporters, at: seen });
+      if (this.confirmations.length > CONFIRMATIONS_KEPT) this.confirmations.splice(0, this.confirmations.length - CONFIRMATIONS_KEPT);
+    }
     this.checkChanged();
     return { domain, reporters, confirmed, changed };
+  }
+
+  /** Names the swarm confirmed at or after `since` by our clock, newest first. */
+  recentConfirmations(since: number): Confirmation[] {
+    const out: Confirmation[] = [];
+    for (let index = this.confirmations.length - 1; index >= 0; index -= 1) {
+      const entry = this.confirmations[index];
+      if (!entry || entry.at < since) break;
+      out.push(entry);
+    }
+    return out;
   }
 
   /** Drops expired flags. Returns true when the merged set changed. */
@@ -578,6 +618,7 @@ export class Blocklist {
       local: { updatedAt: this.localUpdatedAt, receivedAt: this.localReceivedAt, entries: this.localEntries() },
       manual: this.manualEntries(),
       swarm,
+      confirmations: this.confirmations.slice(-CONFIRMATIONS_KEPT),
     };
   }
 }
