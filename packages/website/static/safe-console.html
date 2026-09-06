@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Safe console · PayHole</title>
+<link rel="icon" href="/favicon.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --bg: #000000; --surface: #0A0A0C; --border: #1C1C22; --border-strong: #2A2A33;
+    --text: #F3F3F6; --muted: #9A9AA6; --dim: #6B6B78;
+    --accent: #2BFF88; --accent-text: #6DF5AC; --accent-dim: rgba(43,255,136,.12); --danger: #FF4D4D;
+    --display: 'Space Grotesk', 'Helvetica Neue', Arial, sans-serif;
+    --body: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    --mono: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+    color-scheme: dark;
+  }
+  html { background: var(--bg); }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 400 16px/1.6 var(--body); -webkit-font-smoothing: antialiased; }
+  .page { max-width: 760px; margin: 0 auto; padding: 40px 20px 96px; display: flex; flex-direction: column; gap: 24px; }
+  h1 { margin: 0; font: 600 30px/1.1 var(--display); letter-spacing: -0.03em; }
+  h2 { margin: 0 0 12px; font: 600 19px/1.2 var(--display); letter-spacing: -0.02em; }
+  p { margin: 0; color: var(--muted); max-width: 66ch; }
+  .eyebrow { font: 500 12px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent-text); }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+  .kv { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 8px 12px; font-size: 14px; }
+  .kv b { color: var(--dim); font-weight: 500; font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; padding-top: 3px; }
+  .kv span { font-family: var(--mono); font-size: 13px; color: var(--text); overflow-wrap: anywhere; }
+  .kv span.muted { color: var(--muted); }
+  button { font: 600 15px var(--body); padding: 12px 18px; border-radius: 10px; border: 1px solid var(--border-strong); background: #141418; color: var(--text); cursor: pointer; }
+  button.primary { background: var(--accent); color: #041; border-color: var(--accent); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+  .steps { display: flex; flex-direction: column; gap: 10px; }
+  .step { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px; border: 1px solid var(--border); border-radius: 12px; }
+  .step .n { font: 500 13px var(--mono); color: var(--accent-text); }
+  .step .what { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .step .what b { font-weight: 600; }
+  .step .what small { font: 400 12px var(--mono); color: var(--dim); overflow-wrap: anywhere; }
+  .step.done { border-color: rgba(43,255,136,.45); background: var(--accent-dim); }
+  .status { font: 400 14px/1.5 var(--body); color: var(--muted); min-height: 22px; }
+  .status.ok { color: var(--accent-text); }
+  .status.bad { color: var(--danger); }
+  .pill { display: inline-flex; align-items: center; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border-strong); font: 500 12px var(--mono); color: var(--muted); overflow-wrap: anywhere; max-width: 100%; }
+  .pill.ok { border-color: rgba(43,255,136,.5); color: var(--accent-text); }
+  .pill.bad { border-color: rgba(255,77,77,.5); color: var(--danger); }
+  .log { font: 400 12px/1.6 var(--mono); color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow: auto; border-top: 1px solid var(--border); padding-top: 10px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div>
+    <div class="eyebrow">Robinhood Chain 4663</div>
+    <h1>PayHole Safe console</h1>
+    <p>Runs the four owner calls on the BurnVault through the PayHole Safe, from one of the Safe's two owner wallets. Nothing here holds a key: your wallet signs each transaction, this page only builds it.</p>
+  </div>
+
+  <div class="card">
+    <h2>1. Connect an owner wallet</h2>
+    <p>The Safe needs one signature from either of these two addresses. The page switches the wallet to Robinhood Chain, adding the network if it is missing.</p>
+    <div class="kv">
+      <b>Safe</b><span id="safe"></span>
+      <b>Owner A</b><span id="ownerA"></span>
+      <b>Owner B</b><span id="ownerB"></span>
+    </div>
+    <div class="row">
+      <button class="primary" id="connect">Connect wallet</button>
+      <span class="pill" id="account">not connected</span>
+      <span class="pill" id="network">network unknown</span>
+    </div>
+    <div class="status" id="connect-status"></div>
+  </div>
+
+  <div class="card">
+    <h2>2. Run the calls, in order</h2>
+    <p>Each button sends one Safe transaction. Confirm it in your wallet, wait for the row to turn green, then press the next one. The first call can only ever run once, so it is disabled as soon as the vault has a token.</p>
+    <div class="steps" id="steps"></div>
+    <div class="status" id="exec-status"></div>
+  </div>
+
+  <div class="card">
+    <h2>3. What the vault says now</h2>
+    <div class="kv">
+      <b>Vault</b><span id="vault"></span>
+      <b>Token</b><span id="token" class="muted">not read yet</span>
+      <b>Tier 1</b><span id="tier1" class="muted"></span>
+      <b>Tier 2</b><span id="tier2" class="muted"></span>
+      <b>Tier 3</b><span id="tier3" class="muted"></span>
+    </div>
+    <div class="row"><button id="refresh">Read again</button></div>
+    <div class="log" id="log"></div>
+  </div>
+</div>
+<script src="/js/safe-console.js"></script>
+</body>
+</html>
