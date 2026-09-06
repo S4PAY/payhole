@@ -1,0 +1,28 @@
+{
+  "takenAt": "2026-09-06T03:45:22Z",
+  "block": 55666426,
+  "safe": "0xfCeB8905E316D383Cd90Aa1Ab04ab1650611445b",
+  "contracts": {
+    "BudgetAccountFactory": {
+      "address": "0x68b5bb42fec83db9582758bbcb1fc43f748970d6",
+      "owner": "0xfCeB8905E316D383Cd90Aa1Ab04ab1650611445b",
+      "codeHash": "0x488485c28c2448318399622a029a6b40caacb9e1d33a9c72cac503455078d965",
+      "implementation": "0x1Cc03Bab3B6d9a5059cEC6a1BEFa86982D492C23"
+    },
+    "BurnVault": {
+      "address": "0x298712ca3a1367bbd8caabd5269b05985228eedf",
+      "owner": "0xfCeB8905E316D383Cd90Aa1Ab04ab1650611445b",
+      "codeHash": "0xc15dda3efc135a64ddd68bacf2ec1e124e3c38885322eefb4e30dbabbbff15b4",
+      "token": "0x0000000000000000000000000000000000000000",
+      "ethRouteUsesWeth": "false",
+      "routeKind": {"usdg": "null", "eth": "null"},
+      "tierCost": {"1": "null", "2": "null", "3": "null"}
+    },
+    "CreatorRegistry": {
+      "address": "0x5d483aec0735d550d09018a2e89c49c190962deb",
+      "owner": "0xfCeB8905E316D383Cd90Aa1Ab04ab1650611445b",
+      "codeHash": "0xa0db526ac62f3214aaed946d7904a6f5017b014e9556e21d4aa688805cb8c3e8",
+      "verifier": "0x7Cf3852A9da0064cb22ca69F5726aDb16dFA34cB"
+    }
+  }
+}
