@@ -3,6 +3,7 @@ package org.payhole.dns
 import android.content.Context
 import android.content.SharedPreferences
 import org.json.JSONArray
+import org.json.JSONObject
 import java.util.ArrayDeque
 
 /**
@@ -33,7 +34,9 @@ object TunnelState {
   private val bucketStart = LongArray(BUCKETS)
   private val bucketQueries = LongArray(BUCKETS)
   private val bucketBlocked = LongArray(BUCKETS)
-  private val recent = ArrayDeque<String>()
+  data class BlockedEntry(val name: String, val category: String?, val at: Long)
+
+  private val recent = ArrayDeque<BlockedEntry>()
   private var prefs: SharedPreferences? = null
   private var lastPersist = 0L
   private val listeners = mutableListOf<() -> Unit>()
@@ -66,19 +69,40 @@ object TunnelState {
   fun recordBlocked(name: String, now: Long = System.currentTimeMillis()) {
     synchronized(lock) {
       bucketBlocked[slotFor(now)] += 1
-      recent.remove(name)
-      recent.addFirst(name)
+      recent.removeAll { it.name == name }
+      recent.addFirst(BlockedEntry(name, Verdicts.cached(name), now))
       while (recent.size > RECENT_LIMIT) recent.removeLast()
       persistLocked(now)
     }
     notifyListeners()
+    Verdicts.lookup(name)
+  }
+
+  /** Records what the resolver said a blocked name is. */
+  fun setCategory(name: String, category: String?) {
+    var changed = false
+    synchronized(lock) {
+      val updated = recent.map { if (it.name == name && it.category != category) { changed = true; it.copy(category = category) } else it }
+      if (changed) {
+        recent.clear()
+        recent.addAll(updated)
+        persistLocked(System.currentTimeMillis())
+      }
+    }
+    if (changed) notifyListeners()
+  }
+
+  /** Asks the resolver about names still without a category, such as ones recorded before it could be asked. */
+  fun lookupMissing() {
+    val names = synchronized(lock) { recent.filter { it.category == null }.map { it.name } }
+    names.forEach { Verdicts.lookup(it) }
   }
 
   fun snapshot(now: Long = System.currentTimeMillis()): Map<String, Any?> {
     val history = ArrayList<Map<String, Any>>(BUCKETS)
     var queries = 0L
     var blocked = 0L
-    val names: List<String>
+    val names: List<Map<String, Any?>>
     synchronized(lock) {
       val current = now - now % BUCKET_MS
       for (age in BUCKETS - 1 downTo 0) {
@@ -91,7 +115,7 @@ object TunnelState {
         blocked += b
         history.add(mapOf("start" to start, "queries" to q, "blocked" to b))
       }
-      names = recent.toList()
+      names = recent.map { mapOf("name" to it.name, "category" to it.category, "at" to it.at) }
     }
     return mapOf(
       "status" to status.wire,
@@ -133,7 +157,7 @@ object TunnelState {
     }
     store.edit()
       .putString(KEY_HISTORY, history.toString())
-      .putString(KEY_RECENT, JSONArray(recent.toList()).toString())
+      .putString(KEY_RECENT, JSONArray().also { out -> recent.forEach { out.put(JSONArray().put(it.name).put(it.category ?: JSONObject.NULL).put(it.at)) } }.toString())
       .apply()
   }
 
@@ -150,7 +174,14 @@ object TunnelState {
       }
       val names = JSONArray(store.getString(KEY_RECENT, "[]"))
       recent.clear()
-      for (index in 0 until names.length()) recent.addLast(names.getString(index))
+      for (index in 0 until names.length()) {
+        val row = names.optJSONArray(index)
+        if (row != null) {
+          recent.addLast(BlockedEntry(row.getString(0), if (row.isNull(1)) null else row.getString(1), row.optLong(2, 0L)))
+        } else {
+          recent.addLast(BlockedEntry(names.getString(index), null, 0L))
+        }
+      }
     }
   }
 

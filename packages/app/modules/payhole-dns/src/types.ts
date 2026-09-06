@@ -1,6 +1,14 @@
 /** Shared shape of what the native side reports, identical on Android and iOS. */
 export type DnsStatus = "off" | "connecting" | "on" | "error";
 
+/** One blocked name as the tunnel saw it; the category arrives from the resolver's verdict a moment later. */
+export interface BlockedName {
+  name: string;
+  category: string | null;
+  /** When it was blocked, Unix milliseconds. */
+  at: number;
+}
+
 export interface HistoryBucket {
   /** Start of the slice as Unix milliseconds. */
   start: number;
@@ -19,7 +27,7 @@ export interface NativeState {
   /** Answers the resolver blocked in the last 24 hours. Always 0 on iOS. */
   blocked: number;
   /** Most recent blocked names, newest first, at most 20. Empty on iOS. */
-  recentBlocked: string[];
+  recentBlocked: BlockedName[];
   /** Forty-eight half-hour slices, oldest first, covering the last 24 hours. Empty on iOS. */
   history: HistoryBucket[];
   error: string | null;

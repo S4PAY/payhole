@@ -1,7 +1,8 @@
 # PayHole app
 
-The phone side of PayHole. Version 0.1 does one thing: it puts the device's DNS behind an
-encrypted connection to a resolver that drops drainers, phishing pages, and trackers. The pocket
+The phone side of PayHole. It puts the device's DNS behind an encrypted connection to a resolver
+that drops drainers, phishing pages, and trackers, and it answers from the share sheet: any link
+handed to the app comes back with the resolver's verdict and category. The pocket
 (a USDG budget that pays over x402) and the operator marketplace come later and build on the same
 app. The PayHole token never pays anyone, here or anywhere else in the project.
 
@@ -12,9 +13,10 @@ strict, a local Expo module for the native pieces, and Vitest for the pure logic
 
 | Tab | What is there |
 | --- | --- |
-| Home | One protection toggle with the vortex turning while the tunnel is up, 24-hour counters, a half-hour histogram of lookups and blocked answers, the last blocked names. |
+| Home | One protection toggle with the vortex turning while the tunnel is up, 24-hour counters, a half-hour histogram of lookups and blocked answers, the last blocked names with their category, each expandable to the resolver's verdict and a report-a-mistake link. |
+| Check | Paste or share a link, a domain, or a message; the resolver's public verdict endpoint answers with blocked or not, the category, and who confirmed it. Verdicts share back out as text. Android's share sheet opens this tab with the shared text already checked. |
 | Resolver | The public PayHole resolver (`https://dns.payhole.org/dns-query`, `dns.payhole.org:853`) or a custom DoH URL and/or DoT host, with a one-query reachability check. |
-| Lists | The two lists on the public resolver, license, and when each was last updated upstream (GitHub API, fails quietly offline). |
+| Lists | The three lists on the public resolver, license, and when each was last updated upstream (GitHub API, fails quietly offline). |
 | About | How it works, what it does not do, what comes next, project links. |
 
 ### Android
@@ -26,8 +28,12 @@ the resolver over HTTPS (RFC 8484 POST) with DNS-over-TLS on 853 as the fallback
 as a UDP reply. The service runs in the foreground with a notification and a "Turn off" action,
 counts queries and blocked answers (an A record of `0.0.0.0` or an AAAA of `::`) into half-hour
 slices covering the last 24 hours, and keeps those slices plus the last 20 blocked names in the
-app's private preferences so they survive restarts and reboots. Nothing leaves the phone. The app
-excludes itself from the tunnel so it can reach the resolver directly.
+app's private preferences so they survive restarts and reboots. Each new blocked name is looked up
+once on the resolver's verdict endpoint (`/verdict` next to `/dns-query`) for its category, off the
+DNS path; the dangerous categories raise a notification on the `payhole-danger` channel, at most
+once per name every ten minutes, and lookups the resolver could not answer are retried a few minutes
+later. Nothing else leaves the phone. The app excludes itself from the tunnel so it can reach the
+resolver directly.
 
 Not covered in 0.1: DNS over TCP/53, IPv6 transport for the queries themselves (the answers can
 still carry AAAA records), and Android's own Private DNS setting, which should be off or set to

@@ -124,6 +124,7 @@ export async function renderCards(root, items) {
 export const PAGE_CARDS = {
   sinkhole: { kind: "Tutorial", title: "Run Sinkhole on a Raspberry Pi or any ARM board.", text: "Step by step: Docker, one container, point your network at it. Blocks drainers, phishing, and trackers for every device, and learns from every other node.", art: BOARD_ART, footer: "payhole.org/sinkhole.html" },
   blog: { kind: "Blog", title: "The PayHole blog.", text: "Release notes and progress: the extension, the contracts, Sinkhole, the token. Dated, in order, with an RSS feed.", art: BLOG_ART, footer: "payhole.org/blog" },
+  check: { kind: "Check", title: "Is this link a drainer?", text: "Paste any link. PayHole's resolver says whether it blocks it and why: wallet drainer, phishing, or clean, confirmed by the swarm of nodes." },
   try: { kind: "Try it", title: "This article costs 0.01 USDG.", text: "A real page behind a real 402. With PayHole installed it pays for itself. Without it you see what every paying page starts with." },
   extension: { kind: "Tutorial", title: "How to install the PayHole extension.", text: "Two minutes from download to a funded pocket, with the real screens: load it in Chrome, create a seed, send a little USDG, pay for a page.", art: "extension", footer: "payhole.org/extension.html" },
   token: { kind: "Token", title: "Only ever bought and burned.", text: "PAYHOLE unlocks tiers: bigger pockets, more keys, the right to report into the swarm. No emissions, no rewards." },

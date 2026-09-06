@@ -30,6 +30,7 @@ class DnsVpnService : VpnService() {
     const val EXTRA_LABEL = "label"
 
     private const val CHANNEL_ID = "payhole-dns"
+    private const val DANGER_CHANNEL_ID = "payhole-danger"
     private const val NOTIFICATION_ID = 4663
     private const val TUNNEL_ADDRESS = "10.111.222.1"
     private const val DNS_ADDRESS = "10.111.222.2"
@@ -46,6 +47,7 @@ class DnsVpnService : VpnService() {
   override fun onCreate() {
     super.onCreate()
     TunnelState.attach(this)
+    Verdicts.onDangerous = { name, category -> notifyDanger(name, category) }
     workers = Executors.newFixedThreadPool(8)
   }
 
@@ -82,6 +84,8 @@ class DnsVpnService : VpnService() {
       return
     }
     TunnelState.update(TunnelState.Status.CONNECTING, label, null)
+    Verdicts.baseUrl = dohUrl?.replace(Regex("/dns-query/?$"), "/verdict")?.takeIf { it.endsWith("/verdict") }
+    TunnelState.lookupMissing()
     try {
       val builder = Builder()
         .setSession("PayHole")
@@ -156,6 +160,41 @@ class DnsVpnService : VpnService() {
     closeTunnel()
     TunnelState.update(status, null, error)
     stopForeground(STOP_FOREGROUND_REMOVE)
+  }
+
+  /** A heads-up notification for a block in one of the dangerous categories. */
+  private fun notifyDanger(name: String, category: String) {
+    val manager = getSystemService(NotificationManager::class.java)
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      val channel = NotificationChannel(DANGER_CHANNEL_ID, "Drainers and phishing stopped", NotificationManager.IMPORTANCE_HIGH)
+      channel.description = "One notification when a wallet drainer, phishing page, or counterfeit site was blocked"
+      manager.createNotificationChannel(channel)
+    }
+    val what = when (category) {
+      "infra" -> "drainer infrastructure"
+      "drainer" -> "a wallet drainer"
+      "phishing" -> "a phishing page"
+      "counterfeit" -> "a counterfeit token site"
+      else -> "a threat"
+    }
+    val open = packageManager.getLaunchIntentForPackage(packageName)?.let {
+      PendingIntent.getActivity(this, 2, it, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    }
+    @Suppress("DEPRECATION")
+    val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) Notification.Builder(this, DANGER_CHANNEL_ID) else Notification.Builder(this)
+    builder
+      .setSmallIcon(R.drawable.ic_payhole_dns)
+      .setContentTitle("PayHole stopped $what")
+      .setContentText("$name never loaded on this phone.")
+      .setStyle(Notification.BigTextStyle().bigText("$name never loaded on this phone. The resolver answered with nothing, so no app could reach it."))
+      .setAutoCancel(true)
+      .setCategory(Notification.CATEGORY_STATUS)
+    if (open != null) builder.setContentIntent(open)
+    try {
+      manager.notify(name.hashCode(), builder.build())
+    } catch (_: SecurityException) {
+      // Notifications were not granted; the block still happened.
+    }
   }
 
   private fun showNotification(label: String) {

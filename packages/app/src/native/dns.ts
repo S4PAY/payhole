@@ -16,6 +16,10 @@ export interface DnsController {
   subscribe(listener: (state: NativeState) => void): Unsubscribe;
   openSettings(): void;
   requestNotificationPermission(): Promise<boolean>;
+  /** Text shared into the app at launch, once. */
+  takeSharedText(): string | null;
+  /** Text shared into the app while it is running. */
+  onSharedText(listener: (text: string) => void): Unsubscribe;
 }
 
 export const OFF_STATE: NativeState = {
@@ -52,6 +56,11 @@ function fromNative(module: PayholeDnsNativeModule, platform: DnsPlatform): DnsC
       return () => subscription.remove();
     },
     openSettings: () => module.openSettings(),
+    takeSharedText: () => module.takeSharedText(),
+    onSharedText: (listener) => {
+      const subscription = module.addListener("sharedText", (payload) => listener(payload.text));
+      return () => subscription.remove();
+    },
     requestNotificationPermission: async () => {
       const result = await module.requestNotificationPermission();
       if (typeof result === "boolean") return result;
@@ -71,6 +80,8 @@ function unsupported(platform: DnsPlatform): DnsController {
     getState: () => Promise.resolve({ ...OFF_STATE }),
     subscribe: () => () => undefined,
     openSettings: () => undefined,
+    takeSharedText: () => null,
+    onSharedText: () => () => undefined,
     requestNotificationPermission: () => Promise.resolve(false),
   };
 }

@@ -2,9 +2,14 @@ import { requireOptionalNativeModule, type NativeModule } from "expo-modules-cor
 
 import type { NativeState, StartConfig } from "./src/types";
 
-export type { DnsStatus, HistoryBucket, NativeState, StartConfig } from "./src/types";
+export type { BlockedName, DnsStatus, HistoryBucket, NativeState, StartConfig } from "./src/types";
 
-type PayholeDnsEvents = Record<"stateChanged", (state: NativeState) => void>;
+// Expo's EventsMap wants an index signature, which an interface would not get implicitly.
+// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
+type PayholeDnsEvents = {
+  stateChanged: (state: NativeState) => void;
+  sharedText: (payload: { text: string }) => void;
+};
 
 /**
  * The native module as both platforms expose it. Android functions that finish immediately are
@@ -22,6 +27,8 @@ export declare class PayholeDnsNativeModule extends NativeModule<PayholeDnsEvent
   openSettings(): void;
   /** Android 13+ notification permission for the foreground service; other platforms resolve true. */
   requestNotificationPermission(): Promise<boolean | { status?: string; granted?: boolean }>;
+  /** Text the app was opened with through the share sheet, once; null when there is none. */
+  takeSharedText(): string | null;
 }
 
 export const PayholeDns = requireOptionalNativeModule<PayholeDnsNativeModule>("PayholeDns");

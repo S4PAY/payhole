@@ -32,12 +32,18 @@ class PayholeDnsModule : Module() {
     get() = appContext.reactContext ?: throw Exceptions.ReactContextLost()
 
   private var pendingConsent: Promise? = null
+
+  /** The text of a share-sheet intent, or null when the intent is not one. */
+  private fun sharedTextOf(intent: Intent?): String? {
+    if (intent?.action != Intent.ACTION_SEND || intent.type?.startsWith("text/") != true) return null
+    return intent.getStringExtra(Intent.EXTRA_TEXT)?.takeIf { it.isNotBlank() }
+  }
   private val stateListener: () -> Unit = { sendEvent("stateChanged", TunnelState.snapshot()) }
 
   override fun definition() = ModuleDefinition {
     Name("PayholeDns")
 
-    Events("stateChanged")
+    Events("stateChanged", "sharedText")
 
     OnCreate {
       appContext.reactContext?.let { TunnelState.attach(it) }
@@ -45,6 +51,21 @@ class PayholeDnsModule : Module() {
     }
 
     OnDestroy { TunnelState.removeListener(stateListener) }
+
+    OnNewIntent { intent ->
+      val text = sharedTextOf(intent)
+      if (text != null) {
+        sendEvent("sharedText", mapOf("text" to text))
+        intent.action = null
+      }
+    }
+
+    Function("takeSharedText") {
+      val activity = appContext.currentActivity ?: return@Function null
+      val text = sharedTextOf(activity.intent)
+      if (text != null) activity.intent = Intent()
+      text
+    }
 
     Function("isSupported") { true }
 

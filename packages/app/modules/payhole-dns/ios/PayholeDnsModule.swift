@@ -19,6 +19,10 @@ public class PayholeDnsModule: Module {
 
     Events("stateChanged")
 
+    Function("takeSharedText") { () -> String? in
+      nil
+    }
+
     Function("isSupported") { () -> Bool in
       return true
     }
@@ -98,7 +102,7 @@ public class PayholeDnsModule: Module {
       "resolver": nil,
       "queries": 0,
       "blocked": 0,
-      "recentBlocked": [String](),
+      "recentBlocked": [[String: Any]](),
       "error": nil,
     ]
   }
@@ -111,7 +115,7 @@ public class PayholeDnsModule: Module {
         "resolver": nil,
         "queries": 0,
         "blocked": 0,
-        "recentBlocked": [String](),
+        "recentBlocked": [[String: Any]](),
         "error": error.localizedDescription,
       ]
     }
@@ -129,7 +133,7 @@ public class PayholeDnsModule: Module {
       "resolver": label,
       "queries": 0,
       "blocked": 0,
-      "recentBlocked": [String](),
+      "recentBlocked": [[String: Any]](),
       "error": nil,
     ]
   }

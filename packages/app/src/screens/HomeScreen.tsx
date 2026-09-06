@@ -1,10 +1,15 @@
-import { Pressable, StyleSheet, View } from "react-native";
+import { useState } from "react";
+import { Linking, Pressable, StyleSheet, View } from "react-native";
 
+import type { BlockedName } from "../../modules/payhole-dns";
+import { describeVerdict, fetchVerdict, type Verdict } from "../dns/verdict";
 import type { Protection } from "../hooks/useProtection";
+import { LINKS } from "../links";
 import { describeHistory, summarizeHistory } from "../stats/bars";
 import { colors, fonts, formatCount } from "../theme";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
+import { CategoryTag } from "../ui/CategoryTag";
 import { Histogram } from "../ui/Histogram";
 import { Screen } from "../ui/Screen";
 import { Body, Display, Eyebrow, Mono, Muted, Subtitle } from "../ui/Typo";
@@ -128,14 +133,59 @@ export function HomeScreen({ protection }: HomeScreenProps) {
               : "iOS runs the DNS setting inside the system, so the app cannot see individual lookups. The blocking still happens at the resolver."}
           </Muted>
         ) : (
-          state.recentBlocked.map((name) => (
-            <Mono key={name} selectable style={styles.blockedRow}>
-              {name}
-            </Mono>
-          ))
+          state.recentBlocked.map((entry) => <BlockedRow key={entry.name} entry={entry} />)
         )}
       </Card>
     </Screen>
+  );
+}
+
+function ago(at: number): string {
+  if (!at) return "";
+  const minutes = Math.max(0, Math.round((Date.now() - at) / 60_000));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  return hours < 24 ? `${hours} h ago` : `${Math.round(hours / 24)} d ago`;
+}
+
+/** One blocked name: what it was and when; tap for what the resolver knows and a way to report a mistake. */
+function BlockedRow({ entry }: { entry: BlockedName }) {
+  const [open, setOpen] = useState(false);
+  const [verdict, setVerdict] = useState<Verdict | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    if (next && verdict === null) {
+      fetchVerdict(entry.name, LINKS.verdictUrl).then(setVerdict, (error: unknown) => setNote(error instanceof Error ? error.message : String(error)));
+    }
+  };
+
+  const report = () => {
+    const subject = encodeURIComponent(`PayHole blocked ${entry.name} by mistake`);
+    const body = encodeURIComponent(`${entry.name} was blocked as ${entry.category ?? "unknown"} on my phone. Why it should be allowed:\n\n`);
+    void Linking.openURL(`mailto:${LINKS.reportEmail}?subject=${subject}&body=${body}`);
+  };
+
+  return (
+    <Pressable onPress={toggle} style={styles.blockedRow} accessibilityRole="button" accessibilityState={{ expanded: open }}>
+      <View style={styles.blockedHead}>
+        <Mono selectable style={styles.blockedName}>
+          {entry.name}
+        </Mono>
+        <Muted style={styles.blockedWhen}>{ago(entry.at)}</Muted>
+      </View>
+      <CategoryTag category={entry.category} pending />
+      {open ? (
+        <View style={styles.blockedDetail}>
+          <Muted>{verdict ? describeVerdict(verdict) : (note ?? "Asking the resolver.")}</Muted>
+          {verdict?.reasons.length ? <Muted>{verdict.reasons.join("; ")}</Muted> : null}
+          <Button label="Report a mistake" variant="ghost" onPress={report} />
+        </View>
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -201,5 +251,10 @@ const styles = StyleSheet.create({
   swatch: { width: 10, height: 10, borderRadius: 2 },
   swatchTotal: { backgroundColor: "#2A2A33" },
   swatchBlocked: { backgroundColor: colors.accent, marginLeft: 6 },
-  blockedRow: { paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: colors.border },
+  blockedRow: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 6 },
+  blockedHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 12 },
+  blockedName: { flex: 1 },
+  // A fixed minimum width keeps the label on a whole pixel; measured to the glyph, Android wraps its last word out of view.
+  blockedWhen: { fontSize: 12, lineHeight: 16, minWidth: 96, textAlign: "right" },
+  blockedDetail: { gap: 8, paddingTop: 6 },
 });
