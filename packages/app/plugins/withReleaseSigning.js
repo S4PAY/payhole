@@ -18,7 +18,7 @@ module.exports = function withReleaseSigning(config) {
   return withAppBuildGradle(config, (mod) => {
     let gradle = mod.modResults.contents;
     if (!gradle.includes("PAYHOLE_UPLOAD_STORE_FILE")) {
-      const debugBlock = /    signingConfigs \{\n        debug \{[\s\S]*?\n        \}\n/;
+      const debugBlock = / {4}signingConfigs \{\n {8}debug \{[\s\S]*?\n {8}\}\n/;
       if (!debugBlock.test(gradle)) throw new Error("withReleaseSigning: signingConfigs.debug block not found in app/build.gradle");
       gradle = gradle.replace(debugBlock, (block) => block + RELEASE_CONFIG);
       // Only the release build type changes; the signingConfigs block above also has a "release {" line.
@@ -26,7 +26,7 @@ module.exports = function withReleaseSigning(config) {
       if (buildTypesAt < 0) throw new Error("withReleaseSigning: buildTypes block not found in app/build.gradle");
       const head = gradle.slice(0, buildTypesAt);
       let tail = gradle.slice(buildTypesAt);
-      const releaseSigning = /(        release \{\n(?:.*\n)*?)            signingConfig signingConfigs\.debug\n/;
+      const releaseSigning = /( {8}release \{\n(?:.*\n)*?) {12}signingConfig signingConfigs\.debug\n/;
       if (!releaseSigning.test(tail)) throw new Error("withReleaseSigning: release signingConfig line not found in app/build.gradle");
       tail = tail.replace(releaseSigning, '$1            signingConfig System.getenv("PAYHOLE_UPLOAD_STORE_FILE") ? signingConfigs.release : signingConfigs.debug\n');
       gradle = head + tail;

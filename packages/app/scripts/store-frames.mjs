@@ -1,3 +1,4 @@
+/* global document */
 // Composes the Play Store images from the emulator captures in store/raw: five 1080x1920 phone
 // screenshots with a caption, the 1024x500 feature graphic, and the 512x512 icon.
 // Run from packages/app: node scripts/store-frames.mjs

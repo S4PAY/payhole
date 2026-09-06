@@ -14,11 +14,16 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@noble/hashes": "^2.4.0",
+    "@noble/secp256k1": "^2.3.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~57.0.20",
+    "expo-clipboard": "^57.0.1",
     "expo-constants": "~57.0.17",
+    "expo-crypto": "^57.0.2",
     "expo-font": "~57.0.3",
     "expo-modules-core": "~57.0.16",
+    "expo-secure-store": "^57.0.3",
     "expo-splash-screen": "~57.0.8",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.3",

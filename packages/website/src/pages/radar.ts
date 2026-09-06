@@ -13,6 +13,7 @@ interface RadarList {
   label: string;
   category: string;
   entries: number;
+  lastSuccessAt: number | null;
   refreshes: number;
   added: number;
   removed: number;
@@ -64,7 +65,7 @@ function pill(category: string): HTMLElement {
 }
 
 function describeList(list: RadarList, hours: number): string {
-  if (list.refreshes === 0) return `No change in the last ${hours} hours.`;
+  if (list.refreshes === 0) return `No change in the last ${hours} hours${list.lastSuccessAt ? `, last checked ${ago(list.lastSuccessAt)}` : ""}.`;
   const parts: string[] = [];
   if (list.added > 0) parts.push(`${commas(list.added)} added`);
   if (list.removed > 0) parts.push(`${commas(list.removed)} removed`);
