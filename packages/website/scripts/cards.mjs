@@ -83,6 +83,19 @@ export function appArt(root) {
   </div>`;
 }
 
+/** A verdict card as the Check page and the app draw it, for an example name. */
+export function checkArt() {
+  return `<div class="art">
+    <div style="position:absolute;right:0;top:4px;width:392px;border-radius:16px;background:rgba(255,77,77,.06);border:1px solid rgba(255,77,77,.55);box-shadow:0 30px 60px rgba(0,0,0,.65),0 0 90px rgba(255,77,77,.14);padding:22px 24px;display:flex;flex-direction:column;gap:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center"><span style="font:500 12px 'JetBrains Mono',monospace;letter-spacing:.1em;color:#FF7A7A">BLOCKED</span><span style="padding:4px 10px;border-radius:999px;border:1px solid rgba(255,77,77,.55);background:rgba(255,77,77,.1);font:500 12px 'JetBrains Mono',monospace;letter-spacing:.08em;color:#FF7A7A">WALLET DRAINER</span></div>
+      <div style="font:500 21px 'JetBrains Mono',monospace;color:#fff">claim-airdrop.example</div>
+      <div style="font:400 15px/1.5 Inter,sans-serif;color:#D4D4D8">claim-airdrop.example is a wallet drainer, confirmed by 4 nodes in the swarm. PayHole users never load it.</div>
+      <div style="font:400 13px 'JetBrains Mono',monospace;color:#A1A1AA">confirmed by the swarm · on a subscribed list · 4 reporters</div>
+    </div>
+    <div class="chips" style="bottom:-6px"><span>Share sheet</span><span>Any app</span><span>Web, nothing installed</span><span>Category</span><span>Who confirmed it</span><span>dns.payhole.org/verdict</span></div>
+  </div>`;
+}
+
 export const BLOG_ART = `<div class="art"><div class="stack">
   <div class="postcard"><div class="d">Release · 2026-09-05</div><div class="t">Sinkhole gets a dashboard, statistics, lists, and encrypted DNS</div></div>
   <div class="postcard"><div class="d">Token · 2026-09-05</div><div class="t">PAYHOLE is on Pons, and how tiers are priced</div></div>
@@ -104,6 +117,9 @@ export async function renderCards(root, items) {
     }
     if (it.art === "extension") it.art = extensionArt(root);
     if (it.art === "app") it.art = appArt(root);
+    if (it.art === "check") it.art = checkArt();
+    // An art name nothing above resolved must never be printed on the card.
+    if (typeof it.art === "string" && !it.art.startsWith("<")) it.art = "";
     const wide = !it.art;
     const size = it.title.length > 64 ? 40 : it.title.length > 44 ? 46 : 54;
     await page.setContent(`<!doctype html><html><head><meta charset="utf-8">${FONTS}${CSS}</head><body><div class="f"><div class="glow"></div>
@@ -124,7 +140,7 @@ export async function renderCards(root, items) {
 export const PAGE_CARDS = {
   sinkhole: { kind: "Tutorial", title: "Run Sinkhole on a Raspberry Pi or any ARM board.", text: "Step by step: Docker, one container, point your network at it. Blocks drainers, phishing, and trackers for every device, and learns from every other node.", art: BOARD_ART, footer: "payhole.org/sinkhole.html" },
   blog: { kind: "Blog", title: "The PayHole blog.", text: "Release notes and progress: the extension, the contracts, Sinkhole, the token. Dated, in order, with an RSS feed.", art: BLOG_ART, footer: "payhole.org/blog" },
-  check: { kind: "Check", title: "Is this link a drainer?", text: "Paste any link. PayHole's resolver says whether it blocks it and why: wallet drainer, phishing, or clean, confirmed by the swarm of nodes." },
+  check: { kind: "Check", title: "Is this link a drainer?", text: "Paste any link. PayHole's resolver says whether it blocks it and why: wallet drainer, phishing, or clean, confirmed by the swarm of nodes.", art: "check", footer: "payhole.org/check.html" },
   try: { kind: "Try it", title: "This article costs 0.01 USDG.", text: "A real page behind a real 402. With PayHole installed it pays for itself. Without it you see what every paying page starts with." },
   extension: { kind: "Tutorial", title: "How to install the PayHole extension.", text: "Two minutes from download to a funded pocket, with the real screens: load it in Chrome, create a seed, send a little USDG, pay for a page.", art: "extension", footer: "payhole.org/extension.html" },
   token: { kind: "Token", title: "Only ever bought and burned.", text: "PAYHOLE unlocks tiers: bigger pockets, more keys, the right to report into the swarm. No emissions, no rewards." },
