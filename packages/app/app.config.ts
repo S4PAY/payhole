@@ -55,6 +55,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
   },
   plugins: [
+    "./plugins/withReleaseSigning.js",
     [
       "expo-splash-screen",
       {
