@@ -20,6 +20,7 @@ import { parseAllowlistText } from "./allowlist.js";
 import { Directory, type DirectoryEntry } from "./swarm/directory.js";
 import { cachedTierReader, createTierReader, type TierReader } from "./swarm/membership.js";
 import { createMembership, type Membership } from "./membership.js";
+import type { Category } from "./category.js";
 import {
   membershipText,
   parseProof,
@@ -145,10 +146,18 @@ async function run(config: SinkholeConfig): Promise<void> {
   const statePath = join(config.dataDir, "state.json");
   const persisted = (await readJson<PersistedState>(statePath)) ?? {};
 
-  const blocklist = new Blocklist({ threshold: config.flags.threshold, ttlMs: config.flags.ttlDays * 24 * 60 * MINUTE }, persisted.blocklist ?? null);
+  const blocklist = new Blocklist(
+    {
+      threshold: config.flags.threshold,
+      ttlMs: config.flags.ttlDays * 24 * 60 * MINUTE,
+      fastLane: { threshold: config.flags.fastLaneThreshold, categories: config.flags.fastLaneCategories },
+    },
+    persisted.blocklist ?? null,
+  );
   if (config.manualFile) await loadManualFile(blocklist, config.manualFile);
 
   const subscriptions = await Subscriptions.load({ dir: join(config.dataDir, "lists"), refreshMs: config.lists.refreshHours * HOUR, log }, config.lists.urls);
+  blocklist.setListCategoryResolver((domain) => subscriptions.categoryOf(domain));
   blocklist.setLists(subscriptions.domains());
   subscriptions.onChange(() => blocklist.setLists(subscriptions.domains()));
   if (subscriptions.size > 0) log(`${subscriptions.size} list subscriptions, ${subscriptions.domains().size} domains cached from earlier fetches`);
@@ -172,7 +181,7 @@ async function run(config: SinkholeConfig): Promise<void> {
     } catch (error) {
       log(`ignoring unreadable ${statsPath}: ${errorText(error)}`);
     }
-    stats = new QueryStats({}, saved);
+    stats = new QueryStats({ categoryOf: (domain) => blocklist.categoryOf(domain) }, saved);
   }
   const persistStats = async (): Promise<void> => {
     if (!stats?.changed) return;
@@ -237,6 +246,7 @@ async function run(config: SinkholeConfig): Promise<void> {
       limiter: new RateLimiter(config.dnsRateLimitPerMinute, MINUTE),
       log,
       onQuery: (transport: string) => statsRef?.countTransport(transport),
+      verdict: (name: string) => blocklist.inspect(name),
     };
     if (config.doh.enabled) {
       doh = createDohServer(shared);
@@ -269,7 +279,7 @@ async function run(config: SinkholeConfig): Promise<void> {
       mdns: config.swarm.mdns,
       verify: (raw, sender) => verifySwarmMessage(raw, sender, { tierOf, minTier }),
       onFlag: (message) => {
-        const result = blocklist.recordFlag(message.body.domain, message.reporter, message.body.reason, message.body.ts);
+        const result = blocklist.recordFlag(message.body.domain, message.reporter, message.body.reason, message.body.ts, Date.now(), message.body.category ?? "phishing");
         if (result?.changed) log(`swarm confirmed ${result.domain} (${result.reporters} reporters)`);
       },
       onEndpoint: async (message) => {
@@ -309,12 +319,18 @@ async function run(config: SinkholeConfig): Promise<void> {
     });
   }
 
-  const publishFlags = async (entries: { domain: string; reason: string }[]): Promise<void> => {
+  const publishFlags = async (entries: { domain: string; reason: string; category: Category }[]): Promise<void> => {
     if (!swarm || !identity?.account) return;
     let sent = 0;
     for (const entry of entries) {
       try {
-        const message = await signSwarmMessage(identity.account, identity.proof, { type: "flag", domain: entry.domain, reason: entry.reason, ts: Date.now() });
+        const message = await signSwarmMessage(identity.account, identity.proof, {
+          type: "flag",
+          domain: entry.domain,
+          reason: entry.reason,
+          ts: Date.now(),
+          category: entry.category,
+        });
         await swarm.publish(message);
         sent += 1;
       } catch (error) {
@@ -325,7 +341,7 @@ async function run(config: SinkholeConfig): Promise<void> {
   };
 
   const announceOwnFlags = (): Promise<void> =>
-    publishFlags([...blocklist.localEntries(), ...blocklist.manualEntries()].map((entry) => ({ domain: entry.domain, reason: entry.reason })));
+    publishFlags([...blocklist.localEntries(), ...blocklist.manualEntries()].map((entry) => ({ domain: entry.domain, reason: entry.reason, category: entry.category })));
 
   const republishDirectory = async (): Promise<void> => {
     if (!swarm || !identity?.account) return;
@@ -356,7 +372,7 @@ async function run(config: SinkholeConfig): Promise<void> {
       if (!parsed.ok) throw new Error(parsed.error);
       const { added, removed } = blocklist.setLocal(parsed.push);
       log(`pulled extension blocklist: ${parsed.push.entries.length} entries (${added.length} new, ${removed.length} gone, ${parsed.rejected.length} rejected)`);
-      await publishFlags(added.map((e) => ({ domain: e.domain, reason: e.reason })));
+      await publishFlags(added.map((e) => ({ domain: e.domain, reason: e.reason, category: e.category })));
     } catch (error) {
       log(`extension pull from ${url} failed: ${errorText(error)}`);
     }
@@ -410,7 +426,8 @@ async function run(config: SinkholeConfig): Promise<void> {
     subscriptions: {
       list: () => subscriptions.list(),
       get: (id) => subscriptions.get(id),
-      add: (url) => subscriptions.add(url),
+      add: (url, category) => subscriptions.add(url, category),
+      setCategory: (id, category) => subscriptions.setCategory(id, category),
       remove: (id) => subscriptions.remove(id),
       refresh: (id) => subscriptions.refresh(id),
     },

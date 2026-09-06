@@ -166,6 +166,9 @@ importers:
       '@libp2p/tcp':
         specifier: 11.0.28
         version: 11.0.28
+      '@multiformats/multiaddr':
+        specifier: 13.0.3
+        version: 13.0.3
       '@payhole/sdk':
         specifier: workspace:*
         version: link:../sdk

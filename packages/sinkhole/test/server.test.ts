@@ -20,7 +20,7 @@ let healthy = true;
 let base = "";
 
 function subscription(url: string): SubscriptionInfo {
-  return { id: "abcdefabcdef", url, addedAt: 1, lastFetchedAt: null, lastSuccessAt: null, lastError: null, entries: 0, bytes: 0, etag: null, lastModified: null, nextRefreshAt: 1 };
+  return { id: "abcdefabcdef", url, category: "other", addedAt: 1, lastFetchedAt: null, lastSuccessAt: null, lastError: null, entries: 0, bytes: 0, etag: null, lastModified: null, nextRefreshAt: 1 };
 }
 
 const server = createAdminServer({
@@ -56,13 +56,19 @@ const server = createAdminServer({
   subscriptions: {
     list: () => [...subscriptions.values()],
     get: (id) => subscriptions.get(id),
-    add: (url) => {
+    add: (url, category) => {
       if (!url.startsWith("http")) return Promise.reject(new Error("url must be an http(s) URL without credentials"));
       const existing = [...subscriptions.values()].find((s) => s.url === url);
       if (existing) return Promise.resolve({ item: existing, added: false });
       const item = subscription(url);
+      if (category) item.category = category;
       subscriptions.set(item.id, item);
       return Promise.resolve({ item, added: true });
+    },
+    setCategory: (id, category) => {
+      const item = subscriptions.get(id);
+      if (item) item.category = category;
+      return Promise.resolve(item ? { ...item } : undefined);
     },
     remove: (id) => Promise.resolve(subscriptions.delete(id)),
     refresh: (id) => {
@@ -147,8 +153,8 @@ describe("admin api", () => {
     expect(await res.json()).toEqual({ ok: true, accepted: 2, added: 2, removed: 0, rejected: ["http://nope.example/x"] });
     expect(published).toEqual([
       [
-        { domain: "tracker.example", reason: "tracker" },
-        { domain: "drainer.example", reason: "drainer" },
+        { domain: "tracker.example", reason: "tracker", category: "drainer" },
+        { domain: "drainer.example", reason: "drainer", category: "drainer" },
       ],
     ]);
 
@@ -166,7 +172,7 @@ describe("admin api", () => {
     ]);
     const searched = (await (await call("/api/blocklist?q=zzz")).json()) as { matched: number; entries: { domain: string; sources: string[] }[] };
     expect(searched.matched).toBe(1);
-    expect(searched.entries).toEqual([{ domain: "zzz.example", sources: ["list"], reason: "subscribed list" }]);
+    expect(searched.entries).toEqual([{ domain: "zzz.example", sources: ["list"], reason: "subscribed list", category: null }]);
     blocklist.setLists(new Set());
 
     const plain = await call("/api/blocklist/export?format=plain");
@@ -189,8 +195,8 @@ describe("admin api", () => {
   it("manages manual entries", async () => {
     const created = await call("/api/blocklist/manual", { method: "POST", body: JSON.stringify({ domain: "Manual.Example", reason: "operator" }) });
     expect(created.status).toBe(201);
-    expect(await created.json()).toEqual({ domain: "manual.example", added: true });
-    expect(published.at(-1)).toEqual([{ domain: "manual.example", reason: "operator" }]);
+    expect(await created.json()).toEqual({ domain: "manual.example", added: true, category: "other" });
+    expect(published.at(-1)).toEqual([{ domain: "manual.example", reason: "operator", category: "other" }]);
     const again = await call("/api/blocklist/manual", { method: "POST", body: JSON.stringify({ domain: "manual.example" }) });
     expect(again.status).toBe(200);
     expect((await call("/api/blocklist/manual", { method: "POST", body: JSON.stringify({ domain: "not a host" }) })).status).toBe(400);
@@ -331,5 +337,39 @@ describe("membership api", () => {
     const refused = await call("/api/membership/unlock", { method: "POST", body: JSON.stringify({ tier: 3 }) });
     expect(refused.status).toBe(400);
     expect(((await refused.json()) as { error: string }).error).toBe("no_usdg");
+  });
+});
+
+describe("categories over the api", () => {
+  it("accepts a category on manual entries and refuses unknown ones", async () => {
+    const created = await call("/api/blocklist/manual", { method: "POST", body: JSON.stringify({ domain: "kit.example", reason: "c2", category: "infra" }) });
+    expect(created.status).toBe(201);
+    expect(await created.json()).toEqual({ domain: "kit.example", added: true, category: "infra" });
+    expect(published.at(-1)).toEqual([{ domain: "kit.example", reason: "c2", category: "infra" }]);
+    const bad = await call("/api/blocklist/manual", { method: "POST", body: JSON.stringify({ domain: "x.example", category: "malware" }) });
+    expect(bad.status).toBe(400);
+    expect(((await bad.json()) as { error: string }).error).toBe("invalid_category");
+  });
+
+  it("subscribes a list with a category and changes it later", async () => {
+    const created = await call("/api/subscriptions", { method: "POST", body: JSON.stringify({ url: "https://lists.example/kits.txt", category: "infra" }) });
+    expect(created.status).toBe(201);
+    const entry = ((await created.json()) as { entry: { id: string; category?: string } }).entry;
+    expect(entry.category).toBe("infra");
+    const patched = await call(`/api/subscriptions/${entry.id}`, { method: "PATCH", body: JSON.stringify({ category: "ad" }) });
+    expect(patched.status).toBe(200);
+    expect(((await patched.json()) as { entry: { category: string } }).entry.category).toBe("ad");
+    expect((await call(`/api/subscriptions/${entry.id}`, { method: "PATCH", body: JSON.stringify({ category: "nope" }) })).status).toBe(400);
+    expect((await call("/api/subscriptions/000000000000", { method: "PATCH", body: JSON.stringify({ category: "ad" }) })).status).toBe(404);
+  });
+
+  it("answers verdicts for a name", async () => {
+    const verdict = await call("/api/verdict?name=kit.example");
+    expect(verdict.status).toBe(200);
+    expect(await verdict.json()).toMatchObject({ domain: "kit.example", blocked: true, category: "infra", sources: ["manual"], reasons: ["c2"] });
+    const clean = (await (await call("/api/verdict?name=clean.example")).json()) as { blocked: boolean; sources: string[] };
+    expect(clean).toMatchObject({ blocked: false, sources: [] });
+    expect((await call("/api/verdict?name=not%20a%20host")).status).toBe(400);
+    expect((await call("/api/verdict")).status).toBe(400);
   });
 });

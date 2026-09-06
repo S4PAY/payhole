@@ -2,6 +2,7 @@ import { isIP } from "node:net";
 import { isAddress, type Address, type Hex } from "viem";
 import { chainConfig, deployments } from "@payhole/sdk";
 import { isUpstream } from "./render/dnsmasq.js";
+import { CATEGORIES, parseCategory, type Category } from "./category.js";
 
 /** The curated allowlist every node fetches unless ALLOWLIST_URLS says otherwise. */
 export const DEFAULT_ALLOWLIST_URL = "https://raw.githubusercontent.com/S4PAY/payhole/main/packages/sinkhole/lists/allow.txt";
@@ -12,7 +13,7 @@ export interface SinkholeConfig {
   dataDir: string;
   extension: { url: string | undefined; pullMinutes: number };
   manualFile: string | undefined;
-  flags: { threshold: number; ttlDays: number; reannounceMinutes: number };
+  flags: { threshold: number; ttlDays: number; reannounceMinutes: number; fastLaneThreshold: number; fastLaneCategories: Category[] };
   swarm: { enabled: boolean; listen: string[]; bootstrap: string[]; mdns: boolean };
   membership: {
     minTier: number;
@@ -46,6 +47,18 @@ function integer(value: string | undefined, fallback: number, name: string, min 
 function flag(value: string | undefined, fallback = false): boolean {
   if (value === undefined || value === "") return fallback;
   return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
+}
+
+function categories(value: string): Category[] {
+  const out: Category[] = [];
+  for (const raw of value.split(",")) {
+    const item = raw.trim();
+    if (item.length === 0) continue;
+    const category = parseCategory(item);
+    if (!category) throw new Error(`FAST_LANE_CATEGORIES has ${JSON.stringify(item)}; valid: ${CATEGORIES.join(", ")}`);
+    out.push(category);
+  }
+  return out;
 }
 
 function list(value: string | undefined): string[] {
@@ -120,6 +133,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): SinkholeConfig
       threshold: integer(env["FLAG_THRESHOLD"], 5, "FLAG_THRESHOLD"),
       ttlDays: integer(env["FLAG_TTL_DAYS"], 30, "FLAG_TTL_DAYS"),
       reannounceMinutes: integer(env["FLAG_REANNOUNCE_MINUTES"], 30, "FLAG_REANNOUNCE_MINUTES"),
+      fastLaneThreshold: integer(env["FAST_LANE_THRESHOLD"], 2, "FAST_LANE_THRESHOLD"),
+      fastLaneCategories: categories(env["FAST_LANE_CATEGORIES"] ?? "infra,drainer"),
     },
     swarm: {
       enabled: flag(env["SWARM_ENABLED"], true),

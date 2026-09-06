@@ -90,8 +90,8 @@ describe("renderHostsFile", () => {
 
 describe("renderExport", () => {
   const entries = [
-    { domain: "b.example", sources: ["local" as const], reason: "r" },
-    { domain: "a.example", sources: ["manual" as const, "swarm" as const], reason: "m" },
+    { domain: "b.example", sources: ["local" as const], reason: "r", category: "drainer" as const },
+    { domain: "a.example", sources: ["manual" as const, "swarm" as const], reason: "m", category: null },
   ];
 
   it("renders every format sorted by domain", () => {

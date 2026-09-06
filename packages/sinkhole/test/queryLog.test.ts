@@ -54,15 +54,16 @@ describe("QueryStats", () => {
     play(stats, 6, "10.0.0.4", "5.0.0.10.in-addr.arpa", "config 10.0.0.5 is NXDOMAIN");
     advance(1000);
     const snap = stats.snapshot();
-    expect(snap.summary).toEqual({ queries24h: 6, blocked24h: 2, blockedPercent: 33.3, cached24h: 1, forwarded24h: 2, clients24h: 3, queries7d: 6, blocked7d: 2 });
+    expect(snap.summary).toEqual({ queries24h: 6, blocked24h: 2, dangerous24h: 0, blockedPercent: 33.3, cached24h: 1, forwarded24h: 2, clients24h: 3, queries7d: 6, blocked7d: 2 });
+    expect(snap.blockedByCategory).toEqual([{ category: "other", count: 2 }]);
     expect(snap.clients).toEqual([
       { client: "10.0.0.3", total: 3, blocked: 2 },
       { client: "10.0.0.2", total: 2, blocked: 0 },
       { client: "10.0.0.4", total: 1, blocked: 0 },
     ]);
     expect(snap.topBlocked).toEqual([
-      { domain: "ads.example", count: 1 },
-      { domain: "drainer.example", count: 1 },
+      { domain: "ads.example", count: 1, category: null },
+      { domain: "drainer.example", count: 1, category: null },
     ]);
     expect(snap.topPermitted).toEqual([
       { domain: "example.com", count: 2 },
@@ -115,7 +116,7 @@ describe("QueryStats", () => {
     const snap = stats.snapshot();
     expect(snap.summary.queries24h).toBe(1);
     expect(snap.summary.queries7d).toBe(2);
-    expect(snap.topBlocked).toEqual([{ domain: "new.example", count: 1 }]);
+    expect(snap.topBlocked).toEqual([{ domain: "new.example", count: 1, category: null }]);
     advance(7 * 24 * 3_600_000);
     expect(stats.snapshot().summary.queries7d).toBe(0);
   });
@@ -150,5 +151,35 @@ describe("QueryStats", () => {
     play(restored, 99, "10.0.0.2", "later.example", "cached later.example is 1.1.1.1");
     expect(restored.snapshot().summary.queries24h).toBe(9);
     expect(restored.queries()[0]?.domain).toBe("later.example");
+  });
+});
+
+describe("QueryStats categories", () => {
+  it("tags blocked queries with the blocklist's category and counts blocks per category", () => {
+    let now = 1_700_000_000_000;
+    const stats = new QueryStats({ clock: () => now, categoryOf: (domain) => (domain.startsWith("kit.") ? "drainer" : domain.startsWith("ads.") ? "ad" : null) });
+    const feed = (id: number, domain: string) => {
+      stats.ingest(`${id} 10.0.0.9/5000 query[A] ${domain} from 10.0.0.9`, now);
+      stats.ingest(`${id} 10.0.0.9/5000 config ${domain} is 0.0.0.0`, now);
+      now += 10;
+    };
+    feed(1, "kit.example");
+    feed(2, "ads.example");
+    feed(3, "kit.example");
+    feed(4, "plain.example");
+    const snap = stats.snapshot(now);
+    expect(snap.summary.blocked24h).toBe(4);
+    expect(snap.summary.dangerous24h).toBe(2);
+    expect(snap.blockedByCategory).toEqual([
+      { category: "drainer", count: 2 },
+      { category: "ad", count: 1 },
+      { category: "other", count: 1 },
+    ]);
+    expect(snap.topBlocked.find((d) => d.domain === "kit.example")?.category).toBe("drainer");
+    const records = stats.queries({ status: "blocked" });
+    expect(records.find((r) => r.domain === "kit.example")?.category).toBe("drainer");
+    expect(records.find((r) => r.domain === "plain.example")?.category).toBeUndefined();
+    const restored = new QueryStats({ clock: () => now }, stats.toJSON());
+    expect(restored.snapshot(now).blockedByCategory).toEqual(snap.blockedByCategory);
   });
 });

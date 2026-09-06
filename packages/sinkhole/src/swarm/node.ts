@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { noise } from "@chainsafe/libp2p-noise";
 import { yamux } from "@chainsafe/libp2p-yamux";
 import { bootstrap } from "@libp2p/bootstrap";
+import { multiaddr, type Multiaddr } from "@multiformats/multiaddr";
 import { generateKeyPair, privateKeyFromProtobuf, privateKeyToProtobuf } from "@libp2p/crypto/keys";
 import { gossipsub, TopicValidatorResult, type GossipSub, type Message } from "@libp2p/gossipsub";
 import { identify, type Identify } from "@libp2p/identify";
@@ -44,6 +45,8 @@ export interface SwarmOptions {
   privateKey: PrivateKey;
   listen: string[];
   bootstrap: string[];
+  /** How often unconnected bootstrap peers are dialed again; default one minute. */
+  redialIntervalMs?: number;
   mdns: boolean;
   verify: (raw: Uint8Array, senderPeerId: string) => Promise<VerifyResult>;
   onFlag: (message: SwarmMessage<FlagBody>) => void | Promise<void>;
@@ -82,6 +85,9 @@ export class Swarm {
   accepted = 0;
   lastMessageAt: number | null = null;
 
+  private redialTimer: NodeJS.Timeout | null = null;
+  private readonly redialFailures = new Map<string, number>();
+
   private constructor(
     readonly node: Libp2p<Services>,
     private readonly options: SwarmOptions,
@@ -106,7 +112,43 @@ export class Swarm {
     pubsub.topicValidators.set(TOPIC_DIRECTORY, (peer, message) => swarm.validate(peer, message, "endpoint"));
     pubsub.subscribe(TOPIC_FLAGS);
     pubsub.subscribe(TOPIC_DIRECTORY);
+    if (options.bootstrap.length > 0) {
+      swarm.redialTimer = setInterval(() => void swarm.redialBootstrap(), options.redialIntervalMs ?? 60_000);
+      swarm.redialTimer.unref();
+    }
     return swarm;
+  }
+
+  /**
+   * Dials every bootstrap peer this node is not connected to. libp2p backs off for a long time once a
+   * dial fails, so a bootstrap node that restarts would otherwise stay unreachable for many minutes.
+   */
+  async redialBootstrap(): Promise<number> {
+    let dialed = 0;
+    const connected = new Set(this.node.getPeers().map((peer) => peer.toString()));
+    for (const raw of this.options.bootstrap) {
+      let addr: Multiaddr;
+      try {
+        addr = multiaddr(raw);
+      } catch {
+        continue;
+      }
+      const peer = /\/p2p\/([1-9A-HJ-NP-Za-km-z]+)\/?$/.exec(raw)?.[1] ?? null;
+      if (peer !== null && connected.has(peer)) continue;
+      try {
+        await this.node.dial(addr);
+        dialed += 1;
+        this.redialFailures.delete(raw);
+        this.log(`swarm reconnected to bootstrap ${peer ?? raw}`);
+      } catch (error) {
+        const failures = (this.redialFailures.get(raw) ?? 0) + 1;
+        this.redialFailures.set(raw, failures);
+        if (failures === 1 || failures % 30 === 0) {
+          this.log(`swarm could not reach bootstrap ${peer ?? raw} (${failures} tries): ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    }
+    return dialed;
   }
 
   get peerId(): string {
@@ -138,6 +180,8 @@ export class Swarm {
   }
 
   async stop(): Promise<void> {
+    if (this.redialTimer) clearInterval(this.redialTimer);
+    this.redialTimer = null;
     await this.node.stop();
   }
 

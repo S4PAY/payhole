@@ -93,6 +93,7 @@ export const ADMIN_PAGE = `<!doctype html>
       <div class="chart-axis" id="chart-week-axis"></div>
       <div class="bars-grid">
         <div class="bars"><h3>Top blocked</h3><div id="bars-blocked"></div></div>
+        <div class="bars"><h3>Blocked by category</h3><div id="bars-categories"></div></div>
         <div class="bars"><h3>Top permitted</h3><div id="bars-permitted"></div></div>
         <div class="bars"><h3>Clients</h3><div id="bars-clients"></div></div>
         <div class="bars"><h3>Query types</h3><div id="bars-types"></div><h3 class="spaced">Upstreams</h3><div id="bars-upstreams"></div></div>
@@ -108,7 +109,7 @@ export const ADMIN_PAGE = `<!doctype html>
         </div>
       </div>
       <div class="empty" id="log-empty" hidden></div>
-      <div class="table-wrap" id="log-wrap"><table id="log"><thead><tr><th>Time</th><th>Client</th><th>Domain</th><th>Type</th><th>Status</th><th>Answer</th></tr></thead><tbody></tbody></table></div>
+      <div class="table-wrap" id="log-wrap"><table id="log"><thead><tr><th>Time</th><th>Client</th><th>Domain</th><th>Type</th><th>Status</th><th>Category</th><th>Answer</th></tr></thead><tbody></tbody></table></div>
     </div>
   </section>
 
@@ -128,7 +129,7 @@ export const ADMIN_PAGE = `<!doctype html>
       <button type="button" class="small" data-format="json">json</button>
     </div>
     <div class="empty" id="bl-empty" hidden></div>
-    <div class="table-wrap" id="bl-wrap"><table id="blocklist"><thead><tr><th>Domain</th><th>Sources</th><th>Reason</th><th></th></tr></thead><tbody></tbody></table></div>
+    <div class="table-wrap" id="bl-wrap"><table id="blocklist"><thead><tr><th>Domain</th><th>Sources</th><th>Category</th><th>Reason</th><th></th></tr></thead><tbody></tbody></table></div>
   </section>
 
   <section class="card" id="tab-lists" data-panel="lists" hidden>
@@ -136,16 +137,26 @@ export const ADMIN_PAGE = `<!doctype html>
     <p class="hint">Public blocklists in hosts format or one name per line, fetched on a schedule and matched by exact name. Try a well known one, for example the StevenBlack unified hosts file.</p>
     <form id="list-form" class="row">
       <input id="list-url" type="url" placeholder="https://example.com/hosts.txt" required spellcheck="false">
+      <select id="list-category" class="small" aria-label="What names on this list are">
+        <option value="auto">category: automatic</option>
+        <option value="infra">drainer infrastructure</option>
+        <option value="drainer">wallet drainer</option>
+        <option value="phishing">phishing</option>
+        <option value="counterfeit">counterfeit token</option>
+        <option value="tracker">tracker</option>
+        <option value="ad">ad</option>
+        <option value="other">other</option>
+      </select>
       <button type="submit" class="primary">Subscribe</button>
     </form>
     <div class="empty" id="lists-empty" hidden></div>
-    <div class="table-wrap" id="lists-wrap"><table id="lists"><thead><tr><th>List</th><th>Entries</th><th>Fetched</th><th>Next refresh</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
+    <div class="table-wrap" id="lists-wrap"><table id="lists"><thead><tr><th>List</th><th>Category</th><th>Entries</th><th>Fetched</th><th>Next refresh</th><th>Status</th><th></th></tr></thead><tbody></tbody></table></div>
   </section>
 
   <section class="card" id="tab-flags" data-panel="flags" hidden>
     <div class="card-head"><h2>Swarm flags</h2><div class="meta" id="flags-meta"></div></div>
     <div class="empty" id="flags-empty" hidden></div>
-    <div class="table-wrap" id="flags-wrap"><table id="flags"><thead><tr><th>Domain</th><th>Reporters</th><th>Status</th><th>Last seen</th><th>Reasons</th></tr></thead><tbody></tbody></table></div>
+    <div class="table-wrap" id="flags-wrap"><table id="flags"><thead><tr><th>Domain</th><th>Category</th><th>Reporters</th><th>Status</th><th>Last seen</th><th>Reasons</th></tr></thead><tbody></tbody></table></div>
   </section>
 
   <section class="card" id="tab-directory" data-panel="directory" hidden>

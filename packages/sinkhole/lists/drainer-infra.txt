@@ -1,0 +1,15 @@
+# PayHole drainer infrastructure list.
+#
+# Command and API hosts that wallet drainer kits talk to: the backends that build the malicious
+# transaction, the servers a phishing page loads the drainer script from, and the endpoints that
+# report a drained wallet back to the operator. Phishing pages rotate their domains every day; the
+# infrastructure behind them changes far less often, and blocking it at DNS makes the page load and
+# the drain fail.
+#
+# Names on this list block by exact match on every node that subscribes to it (category "infra").
+# It is fed from the swarm: a name confirmed by two tiered reporters in the infra category, or by one
+# tiered reporter when it is already on a subscribed phishing list, is added here by a maintainer
+# after review. Nothing goes on this list on hearsay. To report infrastructure, open an issue at
+# https://github.com/S4PAY/payhole with the transaction or page that revealed it.
+#
+# One hostname per line. `#` starts a comment.

@@ -133,6 +133,7 @@ const server = createAdminServer({
     list: () => subscriptions.list(),
     get: (id) => subscriptions.get(id),
     add: (url) => subscriptions.add(url),
+    setCategory: () => Promise.resolve(undefined),
     remove: (id) => subscriptions.remove(id),
     refresh: (id) => subscriptions.refresh(id),
   },

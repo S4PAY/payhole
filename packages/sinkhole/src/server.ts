@@ -11,6 +11,7 @@ import type { AnnouncementResult, DirectoryEntry } from "./swarm/directory.js";
 import type { EndpointAnnouncement } from "./swarm/probe.js";
 import { TierError } from "@payhole/sdk";
 import { MembershipError, type Membership } from "./membership.js";
+import { CATEGORIES, parseCategory, type Category } from "./category.js";
 
 export interface AdminDeps {
   token: string;
@@ -19,7 +20,7 @@ export interface AdminDeps {
   health: () => { ok: boolean } & Record<string, unknown>;
   directory: { list: () => DirectoryEntry[]; add: (input: EndpointAnnouncement) => Promise<AnnouncementResult> };
   /** Receives newly added explicit flags so they can be announced to the swarm. */
-  publish?: (entries: { domain: string; reason: string }[]) => void;
+  publish?: (entries: { domain: string; reason: string; category: Category }[]) => void;
   /** Query statistics; absent when query logging is off, and the routes answer 404. */
   stats?: { snapshot: () => StatsSnapshot; queries: (filter: QueryFilter) => QueryRecord[] } | undefined;
   /** Subscribed public blocklists; absent in deployments without list support. */
@@ -27,7 +28,8 @@ export interface AdminDeps {
     | {
         list: () => SubscriptionInfo[];
         get: (id: string) => SubscriptionInfo | undefined;
-        add: (url: string) => Promise<{ item: SubscriptionInfo; added: boolean }>;
+        add: (url: string, category?: Category) => Promise<{ item: SubscriptionInfo; added: boolean }>;
+        setCategory: (id: string, category: Category) => Promise<SubscriptionInfo | undefined>;
         remove: (id: string) => Promise<boolean>;
         refresh: (id: string) => Promise<RefreshResult>;
       }
@@ -52,6 +54,14 @@ export class HttpError extends Error {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** A category from a request body: absent is null, anything else must be a known category. */
+function categoryParam(value: unknown): Category | null {
+  if (value === undefined || value === null) return null;
+  const category = parseCategory(value);
+  if (!category) throw new HttpError(400, "invalid_category", `category must be one of ${CATEGORIES.join(", ")}`);
+  return category;
 }
 
 function json(res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}): void {
@@ -129,7 +139,7 @@ export function createAdminServer(deps: AdminDeps): Server {
         const parsed = parseExtensionPush(await readJson(req, maxBody));
         if (!parsed.ok) throw new HttpError(400, "invalid_blocklist", parsed.error);
         const { added, removed } = deps.blocklist.setLocal(parsed.push);
-        if (added.length > 0) deps.publish?.(added.map((e) => ({ domain: e.domain, reason: e.reason })));
+        if (added.length > 0) deps.publish?.(added.map((e) => ({ domain: e.domain, reason: e.reason, category: e.category })));
         return json(res, 200, { ok: true, accepted: parsed.push.entries.length, added: added.length, removed: removed.length, rejected: parsed.rejected });
       }
       throw new HttpError(405, "method_not_allowed", "use GET or PUT");
@@ -149,10 +159,11 @@ export function createAdminServer(deps: AdminDeps): Server {
       const domain = isRecord(body) ? body["domain"] : undefined;
       if (typeof domain !== "string") throw new HttpError(400, "invalid_domain", "body must carry a domain string");
       const reason = isRecord(body) && typeof body["reason"] === "string" ? body["reason"] : "manual";
-      const result = deps.blocklist.addManual(domain, reason);
+      const category = categoryParam(isRecord(body) ? body["category"] : undefined) ?? "other";
+      const result = deps.blocklist.addManual(domain, reason, undefined, category);
       if (!result) throw new HttpError(400, "invalid_domain", `${domain.slice(0, 120)} is not a hostname`);
-      if (result.added) deps.publish?.([{ domain: result.domain, reason }]);
-      return json(res, result.added ? 201 : 200, { domain: result.domain, added: result.added });
+      if (result.added) deps.publish?.([{ domain: result.domain, reason, category }]);
+      return json(res, result.added ? 201 : 200, { domain: result.domain, added: result.added, category });
     }
     const manual = /^\/api\/blocklist\/manual\/([^/]+)$/.exec(path);
     if (manual?.[1] !== undefined) {
@@ -248,9 +259,10 @@ export function createAdminServer(deps: AdminDeps): Server {
         const body = await readJson(req, maxBody);
         const target = isRecord(body) ? body["url"] : undefined;
         if (typeof target !== "string") throw new HttpError(400, "invalid_url", "body must carry a url string");
+        const category = categoryParam(isRecord(body) ? body["category"] : undefined);
         let added: { item: SubscriptionInfo; added: boolean };
         try {
-          added = await subs.add(target);
+          added = await subs.add(target, category ?? undefined);
         } catch (error) {
           throw new HttpError(400, "invalid_url", error instanceof Error ? error.message : String(error));
         }
@@ -270,9 +282,25 @@ export function createAdminServer(deps: AdminDeps): Server {
         const result = await subs.refresh(id);
         return json(res, 200, { entry: subs.get(id), refresh: result });
       }
-      if (method !== "DELETE") throw new HttpError(405, "method_not_allowed", "use DELETE");
+      if (method === "PATCH") {
+        const body = await readJson(req, maxBody);
+        const category = categoryParam(isRecord(body) ? body["category"] : undefined);
+        if (!category) throw new HttpError(400, "invalid_category", `body must carry a category: ${CATEGORIES.join(", ")}`);
+        const entry = await subs.setCategory(id, category);
+        if (!entry) throw new HttpError(404, "not_found", "no such subscription");
+        return json(res, 200, { entry });
+      }
+      if (method !== "DELETE") throw new HttpError(405, "method_not_allowed", "use PATCH or DELETE");
       if (!(await subs.remove(id))) throw new HttpError(404, "not_found", "no such subscription");
       return json(res, 200, { id, removed: true });
+    }
+    if (path === "/api/verdict") {
+      if (method !== "GET") throw new HttpError(405, "method_not_allowed", "use GET");
+      const name = url.searchParams.get("name");
+      if (!name) throw new HttpError(400, "invalid_name", "name query parameter is required");
+      const verdict = deps.blocklist.inspect(name);
+      if (!verdict) throw new HttpError(400, "invalid_name", `${name.slice(0, 120)} is not a hostname`);
+      return json(res, 200, { ...verdict, checkedAt: Date.now() });
     }
     throw new HttpError(404, "not_found", "no such route");
   };

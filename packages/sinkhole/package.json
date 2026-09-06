@@ -33,6 +33,7 @@
     "@libp2p/mdns": "12.0.32",
     "@libp2p/peer-id": "6.0.15",
     "@libp2p/tcp": "11.0.28",
+    "@multiformats/multiaddr": "13.0.3",
     "@payhole/sdk": "workspace:*",
     "libp2p": "3.3.11",
     "viem": "^2.56.3"

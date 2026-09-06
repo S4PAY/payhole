@@ -61,17 +61,19 @@ interface Series {
 
 interface Stats {
   generatedAt: number;
-  summary: { queries24h: number; blocked24h: number; blockedPercent: number; cached24h: number; forwarded24h: number; clients24h: number; queries7d: number; blocked7d: number };
+  summary: { queries24h: number; blocked24h: number; dangerous24h?: number; blockedPercent: number; cached24h: number; forwarded24h: number; clients24h: number; queries7d: number; blocked7d: number };
   minutes: Series;
   hours: Series;
   clients: { client: string; total: number; blocked: number }[];
-  topBlocked: { domain: string; count: number }[];
+  topBlocked: { domain: string; count: number; category?: string | null }[];
+  blockedByCategory?: { category: string; count: number }[];
   topPermitted: { domain: string; count: number }[];
   types: { type: string; count: number }[];
   upstreams: { upstream: string; count: number }[];
 }
 
 interface QueryRecord {
+  category?: string | null;
   t: number;
   client: string;
   domain: string;
@@ -82,6 +84,7 @@ interface QueryRecord {
 }
 
 interface SubscriptionInfo {
+  category?: string;
   id: string;
   url: string;
   addedAt: number;
@@ -97,9 +100,11 @@ interface BlockEntry {
   domain: string;
   sources: string[];
   reason: string;
+  category?: string | null;
 }
 
 interface FlagEntry {
+  category?: string;
   domain: string;
   reporters: number;
   confirmed: boolean;
@@ -249,6 +254,39 @@ function tags(labels: string[]): HTMLElement {
   return wrap;
 }
 
+const CATEGORY_LABELS: Record<string, string> = {
+  infra: "drainer infrastructure",
+  drainer: "wallet drainer",
+  phishing: "phishing",
+  counterfeit: "counterfeit token",
+  tracker: "tracker",
+  ad: "ad",
+  other: "other",
+};
+const CATEGORY_ORDER = ["infra", "drainer", "phishing", "counterfeit", "tracker", "ad", "other"];
+
+function categoryLabel(category: string | null | undefined): string {
+  return category ? (CATEGORY_LABELS[category] ?? category) : "";
+}
+
+function categoryTag(category: string | null | undefined): HTMLElement | string {
+  return category ? tag(categoryLabel(category), `cat ${category}`) : "";
+}
+
+function categorySelect(current: string, onChange: (category: string) => void): HTMLSelectElement {
+  const select = document.createElement("select");
+  select.className = "small";
+  for (const category of CATEGORY_ORDER) {
+    const option = document.createElement("option");
+    option.value = category;
+    option.textContent = categoryLabel(category);
+    option.selected = category === current;
+    select.appendChild(option);
+  }
+  select.addEventListener("change", () => onChange(select.value));
+  return select;
+}
+
 function meter(value: number, threshold: number): HTMLElement {
   const wrap = document.createElement("div");
   wrap.className = "meter";
@@ -365,6 +403,7 @@ function renderBlocklist(): void {
     const tr = document.createElement("tr");
     cell(tr, entry.domain, "mono");
     cell(tr, tags(entry.sources));
+    cell(tr, categoryTag(entry.category));
     cell(tr, entry.reason);
     const actions = cell(tr, "");
     if (entry.sources.includes("manual")) {
@@ -546,6 +585,11 @@ function renderStats(stats: Stats | null): void {
   const week = binSeries(stats.hours, 1);
   drawChart("chart-week", "chart-week-note", "chart-week-axis", week, (bin) => `${dayLabel(bin.start)} ${clock(bin.start)}: ${bin.total} queries, ${bin.blocked} blocked`, (bin) => dayLabel(bin.start));
   barList("bars-blocked", stats.topBlocked.map((d) => ({ label: d.domain, count: d.count, blocked: true })), "nothing blocked in the last 24 hours");
+  barList(
+    "bars-categories",
+    (stats.blockedByCategory ?? []).map((c) => ({ label: categoryLabel(c.category), count: c.count, blocked: true })),
+    "nothing blocked in the last 24 hours",
+  );
   barList("bars-permitted", stats.topPermitted.map((d) => ({ label: d.domain, count: d.count })), "no permitted lookups yet");
   barList("bars-clients", stats.clients.map((c) => ({ label: c.client, count: c.total })), "no clients yet");
   barList("bars-types", stats.types.map((t) => ({ label: t.type, count: t.count })), "no queries yet");
@@ -563,6 +607,7 @@ function renderQueryLog(records: QueryRecord[]): void {
     cell(tr, record.domain, "mono");
     cell(tr, record.type, "mono");
     cell(tr, tag(record.status, record.status));
+    cell(tr, record.status === "blocked" ? categoryTag(record.category ?? "other") : "");
     cell(tr, record.answer ?? (record.upstream ? `to ${record.upstream}` : ""), "mono");
     body.appendChild(tr);
   }
@@ -600,6 +645,14 @@ function renderLists(items: SubscriptionInfo[] | null): void {
     link.rel = "noopener";
     link.textContent = item.url;
     cell(tr, link, "mono");
+    cell(
+      tr,
+      categorySelect(item.category ?? "other", (category) => {
+        api(`/api/subscriptions/${item.id}`, { method: "PATCH", body: { category } })
+          .then(() => toast(`${categoryLabel(category)}: the list's names now count as that`, "good"))
+          .catch((error: unknown) => toast(describe(error)));
+      }),
+    );
     cell(tr, item.entries ? compact(item.entries) : "0", "mono");
     cell(tr, item.lastSuccessAt ? ago(item.lastSuccessAt) : item.lastFetchedAt ? `failed ${ago(item.lastFetchedAt)}` : "never", "mono");
     cell(tr, item.nextRefreshAt ? (item.nextRefreshAt <= Date.now() ? "due" : `in ${ago(Date.now() * 2 - item.nextRefreshAt).replace(" ago", "")}`) : "", "mono");
@@ -663,6 +716,7 @@ function renderFlags(data: { threshold: number; entries: FlagEntry[] }): void {
   for (const entry of sorted.slice(0, ROW_LIMIT)) {
     const tr = document.createElement("tr");
     cell(tr, entry.domain, "mono");
+    cell(tr, categoryTag(entry.category ?? "phishing"));
     cell(tr, meter(entry.reporters, data.threshold));
     cell(tr, entry.confirmed ? tag("blocked", "yes") : tag("pending", ""));
     cell(tr, when(entry.lastSeen), "mono");
@@ -1049,10 +1103,12 @@ function boot(): void {
     const input = el<HTMLInputElement>("list-url");
     const url = input.value.trim();
     if (!url) return;
+    const chosen = el<HTMLSelectElement>("list-category").value;
+    const category = chosen === "auto" ? undefined : chosen;
     const button = el<HTMLFormElement>("list-form").querySelector("button");
     if (button) button.disabled = true;
     toast("Fetching the list...", "good");
-    api<{ added: boolean; entry: SubscriptionInfo; refresh?: { ok: boolean; entries: number; error: string | null } }>("/api/subscriptions", { method: "POST", body: { url } })
+    api<{ added: boolean; entry: SubscriptionInfo; refresh?: { ok: boolean; entries: number; error: string | null } }>("/api/subscriptions", { method: "POST", body: { url, ...(category ? { category } : {}) } })
       .then((result) => {
         input.value = "";
         if (!result.added) toast("That list is already subscribed", "good");

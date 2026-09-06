@@ -18,6 +18,30 @@ replace one: it subscribes to the same public hosts-format blocklists, and its a
 | Subscribed lists | `BLOCKLIST_URLS` plus `POST /api/subscriptions` on the admin page; hosts format or one name per line, refetched every `BLOCKLIST_REFRESH_HOURS` (default 24) with `ETag` and `If-Modified-Since` | Always, by exact name |
 | Allowlist | `ALLOWLIST_URLS` (default: the curated `lists/allow.txt` in this repository, fetched from GitHub) plus `MANUAL_ALLOWLIST_FILE`; `example.com` protects the exact name, `.example.com` the name and everything under it | Never: a protected name is removed from every source above, swarm verdicts included |
 
+### Categories
+
+Every block carries a category: `infra` (drainer infrastructure: the command and API hosts a drainer kit talks to), `drainer`
+(wallet drainer pages), `phishing`, `counterfeit` (counterfeit token sites), `tracker`, `ad`, or `other`. A subscribed list has
+one category for all its names, guessed from the URL for the lists we know and changeable on the Lists tab or with
+`PATCH /api/subscriptions/:id {"category": ...}`. Manual entries take a `category` in `POST /api/blocklist/manual` (default
+`other`), extension pushes count as `drainer`, and swarm flags carry the reporter's category (missing means `phishing`). When
+sources disagree the strongest claim wins, in the order above. The query log tags every blocked query, the statistics count
+blocks per category, and the verdict endpoint reports it.
+
+### The fast lane
+
+Flags in the fast-lane categories (`FAST_LANE_CATEGORIES`, default `infra,drainer`) confirm once `FAST_LANE_THRESHOLD`
+distinct tiered reporters agree (default 2) instead of `FLAG_THRESHOLD`, and a single tiered reporter confirms a name that is
+already on a subscribed list, which turns the list's exact-name block into a curated block of the name and everything under
+it. Confirmed names still expire with `FLAG_TTL_DAYS`, and the allowlist still wins.
+
+### Verdicts
+
+`GET /verdict?name=<host>` on the DoH listener (public on `https://dns.payhole.org/verdict?name=...`) and
+`GET /api/verdict?name=<host>` on the admin API answer what a node knows about a name: `blocked`, `allowlisted`, `category`,
+`sources`, `reasons`, the live `reporters`, and whether the swarm `confirmed` it. The public route shares the encrypted DNS rate
+limit and allows cross-origin reads, so the app and the website can call it directly.
+
 Hostnames are validated everywhere they enter: lowercase, punycode, no scheme, path, port or IP literal, at least two labels. Anything else is rejected and reported, never silently repaired.
 
 The curated sources (extension, manual, swarm) are rendered to `DATA_DIR/dnsmasq/blocklist.conf` as `address=/<domain>/0.0.0.0` lines, which sink the domain and every subdomain. dnsmasq only reads `address=` rules at startup, so a change to that set is applied with a quick graceful restart; a burst of changes is coalesced into one restart, and clients that query during the few milliseconds of restart retry on their own.

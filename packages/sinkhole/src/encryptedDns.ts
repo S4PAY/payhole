@@ -1,3 +1,4 @@
+import type { Inspection } from "./blocklist.js";
 import { X509Certificate } from "node:crypto";
 import { watch, type FSWatcher } from "node:fs";
 import { readFile } from "node:fs/promises";
@@ -27,6 +28,8 @@ export interface EncryptedDnsShared {
   log: (line: string) => void;
   /** Called for every accepted query, for the statistics. */
   onQuery?: ((transport: Transport, client: string) => void) | undefined;
+  /** Answers `GET /verdict?name=` from the blocklist; absent means the route is not served. */
+  verdict?: ((name: string) => Inspection | null) | undefined;
 }
 
 const DNS_MESSAGE = "application/dns-message";
@@ -113,6 +116,25 @@ export function createDohServer(shared: EncryptedDnsShared, counters: EncryptedD
         if (req.method !== "GET") return plain(res, 405, "use GET", { allow: "GET" });
         const body = JSON.stringify({ ok: true, transport: "doh", queries: counters.queries });
         res.writeHead(200, { "content-type": "application/json; charset=utf-8", "content-length": Buffer.byteLength(body), "cache-control": "no-store" });
+        return res.end(body);
+      }
+      if (url.pathname === "/verdict") {
+        if (!shared.verdict) return plain(res, 404, "not found");
+        if (req.method !== "GET") return plain(res, 405, "use GET", { allow: "GET" });
+        const name = url.searchParams.get("name");
+        if (name === null || name.length === 0) return plain(res, 400, "missing name parameter");
+        const client = clientAddress(req);
+        const limit = shared.limiter.take(client);
+        if (!limit.allowed) return plain(res, 429, "too many requests", { "retry-after": String(limit.retryAfterSeconds) });
+        const verdict = shared.verdict(name);
+        if (!verdict) return plain(res, 400, "name is not a hostname");
+        const body = JSON.stringify({ ...verdict, checkedAt: Date.now() });
+        res.writeHead(200, {
+          "content-type": "application/json; charset=utf-8",
+          "content-length": Buffer.byteLength(body),
+          "cache-control": "no-store",
+          "access-control-allow-origin": "*",
+        });
         return res.end(body);
       }
       if (url.pathname !== "/dns-query") return plain(res, 404, "not found");

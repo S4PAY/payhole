@@ -1,22 +1,33 @@
 import { cleanReason, normalizeHostname } from "./hostname.js";
 import { Allowlist } from "./allowlist.js";
+import { parseCategory, strongest, type Category } from "./category.js";
 
 export interface LocalEntry {
   domain: string;
   reason: string;
   flaggedAt: string;
+  category: Category;
+}
+
+/** One entry of an extension push; the category defaults to wallet drainer, which is what the extension flags. */
+export interface PushEntry {
+  domain: string;
+  reason: string;
+  flaggedAt: string;
+  category?: Category;
 }
 
 /** Payload the browser extension pushes to `PUT /api/blocklist`. */
 export interface ExtensionPush {
   version: 1;
   updatedAt: string;
-  entries: LocalEntry[];
+  entries: PushEntry[];
 }
 
 export interface ManualEntry {
   domain: string;
   reason: string;
+  category: Category;
   addedAt: number;
 }
 
@@ -25,6 +36,7 @@ export interface SwarmFlag {
   reason: string;
   ts: number;
   seen: number;
+  category: Category;
 }
 
 export type Source = "local" | "manual" | "swarm" | "list";
@@ -33,10 +45,26 @@ export interface MergedEntry {
   domain: string;
   sources: Source[];
   reason: string;
+  category: Category | null;
+}
+
+/** Everything a node knows about one name, for the verdict endpoint. */
+export interface Inspection {
+  domain: string;
+  blocked: boolean;
+  allowlisted: boolean;
+  category: Category | null;
+  sources: Source[];
+  reasons: string[];
+  reporters: number;
+  confirmed: boolean;
+  firstSeen: number | null;
+  lastSeen: number | null;
 }
 
 export interface FlagSummary {
   domain: string;
+  category: Category;
   reporters: number;
   confirmed: boolean;
   firstSeen: number;
@@ -56,6 +84,11 @@ export interface BlocklistOptions {
   threshold: number;
   /** Flags older than this (by our clock) no longer count. */
   ttlMs: number;
+  /**
+   * The fast lane: for flags in these categories, fewer reporters confirm a domain, and a single
+   * reporter is enough when the domain already sits on a subscribed list. Off when absent.
+   */
+  fastLane?: { threshold: number; categories: readonly Category[] } | undefined;
   clock?: () => number;
 }
 
@@ -81,7 +114,7 @@ export function parseExtensionPush(value: unknown): ParsedPush {
   if (!Array.isArray(entries)) return { ok: false, error: "entries must be an array" };
   if (entries.length > MAX_PUSH_ENTRIES) return { ok: false, error: `entries must hold at most ${MAX_PUSH_ENTRIES} items` };
   const items: unknown[] = entries;
-  const seen = new Map<string, LocalEntry>();
+  const seen = new Map<string, PushEntry>();
   const rejected: string[] = [];
   for (const raw of items) {
     const candidate = isRecord(raw) ? raw["domain"] : raw;
@@ -92,7 +125,8 @@ export function parseExtensionPush(value: unknown): ParsedPush {
     }
     const record: Record<string, unknown> = isRecord(raw) ? raw : {};
     const flaggedAt = isIsoDate(record["flaggedAt"]) ? record["flaggedAt"] : updatedAt;
-    seen.set(domain, { domain, reason: cleanReason(record["reason"], "flagged by extension"), flaggedAt });
+    const category = parseCategory(record["category"]);
+    seen.set(domain, { domain, reason: cleanReason(record["reason"], "flagged by extension"), flaggedAt, ...(category ? { category } : {}) });
   }
   return { ok: true, push: { version: 1, updatedAt, entries: [...seen.values()] }, rejected };
 }
@@ -123,6 +157,8 @@ export class Blocklist {
   /** The list-source domains before the allowlist is applied, kept so a new allowlist can re-filter them. */
   private rawLists: ReadonlySet<string> = new Set();
   private allow = new Allowlist([]);
+  private listCategory: (domain: string) => Category | null = () => null;
+  private readonly fastLane: { threshold: number; categories: Set<Category> } | null;
   private readonly listeners = new Set<() => void>();
   /** Merged set as of the last notification; expiry can change the set without any mutation. */
   private lastNotified: Set<string>;
@@ -135,6 +171,10 @@ export class Blocklist {
     if (!(options.ttlMs > 0)) throw new Error("ttlMs must be positive");
     this.threshold = options.threshold;
     this.ttlMs = options.ttlMs;
+    if (options.fastLane && (!Number.isInteger(options.fastLane.threshold) || options.fastLane.threshold < 1)) {
+      throw new Error("fast lane threshold must be a positive integer");
+    }
+    this.fastLane = options.fastLane ? { threshold: options.fastLane.threshold, categories: new Set(options.fastLane.categories) } : null;
     this.clock = options.clock ?? Date.now;
     if (state) this.restore(state);
     this.lastNotified = this.domains();
@@ -143,13 +183,13 @@ export class Blocklist {
   private restore(state: BlocklistState): void {
     for (const entry of state.local.entries) {
       const domain = normalizeHostname(entry.domain);
-      if (domain) this.local.set(domain, { domain, reason: cleanReason(entry.reason), flaggedAt: entry.flaggedAt });
+      if (domain) this.local.set(domain, { domain, reason: cleanReason(entry.reason), flaggedAt: entry.flaggedAt, category: parseCategory(entry.category) ?? "drainer" });
     }
     this.localUpdatedAt = state.local.updatedAt;
     this.localReceivedAt = state.local.receivedAt;
     for (const entry of state.manual) {
       const domain = normalizeHostname(entry.domain);
-      if (domain) this.manual.set(domain, { domain, reason: cleanReason(entry.reason, "manual"), addedAt: entry.addedAt });
+      if (domain) this.manual.set(domain, { domain, reason: cleanReason(entry.reason, "manual"), addedAt: entry.addedAt, category: parseCategory(entry.category) ?? "other" });
     }
     for (const [rawDomain, flags] of Object.entries(state.swarm)) {
       const domain = normalizeHostname(rawDomain);
@@ -157,7 +197,7 @@ export class Blocklist {
       const map = new Map<string, SwarmFlag>();
       for (const [reporter, flag] of Object.entries(flags)) {
         if (typeof flag.seen === "number" && typeof flag.ts === "number") {
-          map.set(reporter.toLowerCase(), { reason: cleanReason(flag.reason), ts: flag.ts, seen: flag.seen });
+          map.set(reporter.toLowerCase(), { reason: cleanReason(flag.reason), ts: flag.ts, seen: flag.seen, category: parseCategory(flag.category) ?? "phishing" });
         }
       }
       if (map.size > 0) this.swarm.set(domain, map);
@@ -200,6 +240,11 @@ export class Blocklist {
     return this.allow.size;
   }
 
+  /** How list-source domains get their category; the subscriptions know which list a name came from. */
+  setListCategoryResolver(resolve: (domain: string) => Category | null): void {
+    this.listCategory = resolve;
+  }
+
   /** The list-source domains as last set. */
   listDomains(): ReadonlySet<string> {
     return this.lists;
@@ -219,7 +264,7 @@ export class Blocklist {
       for (const entry of push.entries) {
         const domain = normalizeHostname(entry.domain);
         if (!domain) continue;
-        const clean = { domain, reason: cleanReason(entry.reason, "flagged by extension"), flaggedAt: entry.flaggedAt };
+        const clean: LocalEntry = { domain, reason: cleanReason(entry.reason, "flagged by extension"), flaggedAt: entry.flaggedAt, category: entry.category ?? "drainer" };
         next.set(domain, clean);
         if (!this.local.has(domain)) added.push(clean);
       }
@@ -241,12 +286,12 @@ export class Blocklist {
   }
 
   /** Adds a manual entry; returns the normalised domain, or null when the input is not a hostname. */
-  addManual(input: string, reason = "manual", addedAt = this.clock()): { domain: string; added: boolean } | null {
+  addManual(input: string, reason = "manual", addedAt = this.clock(), category: Category = "other"): { domain: string; added: boolean } | null {
     const domain = normalizeHostname(input);
     if (!domain) return null;
     return this.withChange(() => {
       if (this.manual.has(domain)) return { domain, added: false };
-      this.manual.set(domain, { domain, reason: cleanReason(reason, "manual"), addedAt });
+      this.manual.set(domain, { domain, reason: cleanReason(reason, "manual"), addedAt, category });
       return { domain, added: true };
     });
   }
@@ -267,10 +312,27 @@ export class Blocklist {
     return out;
   }
 
+  /**
+   * Reporters needed to confirm `domain` given its live flags: the node's threshold, lowered for
+   * fast-lane categories, and down to one when the domain already sits on a subscribed list.
+   */
+  private thresholdFor(domain: string, live: readonly SwarmFlag[]): number {
+    if (!this.fastLane) return this.threshold;
+    let category: Category | null = null;
+    for (const flag of live) category = strongest(category, flag.category);
+    if (category === null || !this.fastLane.categories.has(category)) return this.threshold;
+    if (this.listCategory(domain) !== null) return 1;
+    return Math.min(this.threshold, this.fastLane.threshold);
+  }
+
+  private confirmedBy(domain: string, live: readonly SwarmFlag[]): boolean {
+    return live.length > 0 && live.length >= this.thresholdFor(domain, live);
+  }
+
   /** True when enough distinct reporters have live flags for the domain. */
   isConfirmed(domain: string, now = this.clock()): boolean {
     const flags = this.swarm.get(domain);
-    return flags !== undefined && this.liveFlags(flags, now).length >= this.threshold;
+    return flags !== undefined && this.confirmedBy(domain, this.liveFlags(flags, now));
   }
 
   /**
@@ -283,6 +345,7 @@ export class Blocklist {
     reason: string,
     ts: number,
     seen = this.clock(),
+    category: Category = "phishing",
   ): { domain: string; reporters: number; confirmed: boolean; changed: boolean } | null {
     const domain = normalizeHostname(input);
     if (!domain) return null;
@@ -292,9 +355,10 @@ export class Blocklist {
       flags = new Map();
       this.swarm.set(domain, flags);
     }
-    flags.set(reporter.toLowerCase(), { reason: cleanReason(reason), ts, seen });
-    const reporters = this.liveFlags(flags, seen).length;
-    const confirmed = reporters >= this.threshold;
+    flags.set(reporter.toLowerCase(), { reason: cleanReason(reason), ts, seen, category });
+    const live = this.liveFlags(flags, seen);
+    const reporters = live.length;
+    const confirmed = this.confirmedBy(domain, live);
     const changed = confirmed && !blockedBefore;
     this.checkChanged();
     return { domain, reporters, confirmed, changed };
@@ -319,7 +383,7 @@ export class Blocklist {
 
   swarmConfirmed(now = this.clock()): string[] {
     const out: string[] = [];
-    for (const [domain, flags] of this.swarm) if (this.liveFlags(flags, now).length >= this.threshold) out.push(domain);
+    for (const [domain, flags] of this.swarm) if (this.confirmedBy(domain, this.liveFlags(flags, now))) out.push(domain);
     return out.sort();
   }
 
@@ -328,10 +392,13 @@ export class Blocklist {
     for (const [domain, flags] of this.swarm) {
       const live = this.liveFlags(flags, now);
       if (live.length === 0) continue;
+      let category: Category | null = null;
+      for (const flag of live) category = strongest(category, flag.category);
       out.push({
         domain,
+        category: category ?? "phishing",
         reporters: live.length,
-        confirmed: live.length >= this.threshold,
+        confirmed: this.confirmedBy(domain, live),
         firstSeen: Math.min(...live.map((f) => f.seen)),
         lastSeen: Math.max(...live.map((f) => f.seen)),
         reasons: [...new Set(live.map((f) => f.reason))].slice(0, 10),
@@ -343,17 +410,22 @@ export class Blocklist {
   /** The curated entries (extension, manual, swarm) with their sources; list entries are not included. */
   curatedEntries(now = this.clock()): MergedEntry[] {
     const out = new Map<string, MergedEntry>();
-    const add = (domain: string, source: Source, reason: string): void => {
+    const add = (domain: string, source: Source, reason: string, category: Category): void => {
       if (this.allow.allows(domain)) return;
       const existing = out.get(domain);
-      if (existing) existing.sources.push(source);
-      else out.set(domain, { domain, sources: [source], reason });
+      if (existing) {
+        existing.sources.push(source);
+        existing.category = strongest(existing.category, category);
+      } else out.set(domain, { domain, sources: [source], reason, category });
     };
-    for (const entry of this.local.values()) add(entry.domain, "local", entry.reason);
-    for (const entry of this.manual.values()) add(entry.domain, "manual", entry.reason);
+    for (const entry of this.local.values()) add(entry.domain, "local", entry.reason, entry.category);
+    for (const entry of this.manual.values()) add(entry.domain, "manual", entry.reason, entry.category);
     for (const [domain, flags] of this.swarm) {
       const live = this.liveFlags(flags, now);
-      if (live.length >= this.threshold) add(domain, "swarm", `flagged by ${live.length} reporters`);
+      if (!this.confirmedBy(domain, live)) continue;
+      let category: Category | null = null;
+      for (const flag of live) category = strongest(category, flag.category);
+      add(domain, "swarm", `flagged by ${live.length} reporters`, category ?? "phishing");
     }
     return [...out.values()].sort(byDomain);
   }
@@ -364,8 +436,10 @@ export class Blocklist {
     const seen = new Map(entries.map((e) => [e.domain, e]));
     for (const domain of this.lists) {
       const existing = seen.get(domain);
-      if (existing) existing.sources.push("list");
-      else entries.push({ domain, sources: ["list"], reason: "subscribed list" });
+      if (existing) {
+        existing.sources.push("list");
+        existing.category = strongest(existing.category, this.listCategory(domain));
+      } else entries.push({ domain, sources: ["list"], reason: "subscribed list", category: this.listCategory(domain) });
     }
     return entries.sort(byDomain);
   }
@@ -383,7 +457,9 @@ export class Blocklist {
     for (const entry of curated) {
       if (q && !entry.domain.includes(q) && !entry.reason.toLowerCase().includes(q)) continue;
       matched += 1;
-      if (out.length < limit) out.push(this.lists.has(entry.domain) ? { ...entry, sources: [...entry.sources, "list"] } : entry);
+      if (out.length < limit) {
+        out.push(this.lists.has(entry.domain) ? { ...entry, sources: [...entry.sources, "list"], category: strongest(entry.category, this.listCategory(entry.domain)) } : entry);
+      }
     }
     let listMatched = 0;
     const listHits: string[] = [];
@@ -396,7 +472,7 @@ export class Blocklist {
     matched += listMatched;
     for (const domain of listHits.sort()) {
       if (out.length >= limit) break;
-      out.push({ domain, sources: ["list"], reason: "subscribed list" });
+      out.push({ domain, sources: ["list"], reason: "subscribed list", category: this.listCategory(domain) });
     }
     return { count: this.domains(now).size, matched, entries: out };
   }
@@ -407,9 +483,74 @@ export class Blocklist {
     for (const domain of this.local.keys()) if (!this.allow.allows(domain)) out.add(domain);
     for (const domain of this.manual.keys()) if (!this.allow.allows(domain)) out.add(domain);
     for (const [domain, flags] of this.swarm) {
-      if (this.liveFlags(flags, now).length >= this.threshold && !this.allow.allows(domain)) out.add(domain);
+      if (this.confirmedBy(domain, this.liveFlags(flags, now)) && !this.allow.allows(domain)) out.add(domain);
     }
     return out;
+  }
+
+  /** The strongest category a blocked domain has across every source, or null when it is not blocked. */
+  categoryOf(domain: string, now = this.clock()): Category | null {
+    if (this.allow.allows(domain)) return null;
+    let category: Category | null = null;
+    const local = this.local.get(domain);
+    if (local) category = strongest(category, local.category);
+    const manual = this.manual.get(domain);
+    if (manual) category = strongest(category, manual.category);
+    const flags = this.swarm.get(domain);
+    if (flags) {
+      const live = this.liveFlags(flags, now);
+      if (this.confirmedBy(domain, live)) for (const flag of live) category = strongest(category, flag.category);
+    }
+    if (this.lists.has(domain)) category = strongest(category, this.listCategory(domain) ?? "other");
+    return category;
+  }
+
+  /** Everything known about one name, for verdicts. Null when the input is not a hostname. */
+  inspect(input: string, now = this.clock()): Inspection | null {
+    const domain = normalizeHostname(input);
+    if (!domain) return null;
+    const allowlisted = this.allow.allows(domain);
+    const sources: Source[] = [];
+    const reasons: string[] = [];
+    let category: Category | null = null;
+    const local = this.local.get(domain);
+    if (local) {
+      sources.push("local");
+      reasons.push(local.reason);
+      category = strongest(category, local.category);
+    }
+    const manual = this.manual.get(domain);
+    if (manual) {
+      sources.push("manual");
+      reasons.push(manual.reason);
+      category = strongest(category, manual.category);
+    }
+    const flags = this.swarm.get(domain);
+    const live = flags ? this.liveFlags(flags, now) : [];
+    const confirmed = this.confirmedBy(domain, live);
+    if (confirmed) {
+      sources.push("swarm");
+      for (const flag of live) {
+        category = strongest(category, flag.category);
+        if (!reasons.includes(flag.reason)) reasons.push(flag.reason);
+      }
+    }
+    if (this.rawLists.has(domain)) {
+      sources.push("list");
+      category = strongest(category, this.listCategory(domain) ?? "other");
+    }
+    return {
+      domain,
+      blocked: !allowlisted && sources.length > 0,
+      allowlisted,
+      category,
+      sources,
+      reasons: reasons.slice(0, 10),
+      reporters: live.length,
+      confirmed,
+      firstSeen: live.length > 0 ? Math.min(...live.map((f) => f.seen)) : null,
+      lastSeen: live.length > 0 ? Math.max(...live.map((f) => f.seen)) : null,
+    };
   }
 
   domains(now = this.clock()): Set<string> {

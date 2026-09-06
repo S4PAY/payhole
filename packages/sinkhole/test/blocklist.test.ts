@@ -35,7 +35,7 @@ describe("Blocklist swarm threshold", () => {
     const third = blocklist.recordFlag("drainer.example", C, "r", 1);
     expect(third).toMatchObject({ reporters: 3, confirmed: true, changed: true });
     expect(blocklist.swarmConfirmed()).toEqual(["drainer.example"]);
-    expect(blocklist.merged()).toEqual([{ domain: "drainer.example", sources: ["swarm"], reason: "flagged by 3 reporters" }]);
+    expect(blocklist.merged()).toEqual([{ domain: "drainer.example", sources: ["swarm"], reason: "flagged by 3 reporters", category: "phishing" }]);
     expect(changes).toHaveLength(1);
     expect(blocklist.recordFlag("drainer.example", A, "r", 2)?.changed).toBe(false);
     expect(changes).toHaveLength(1);
@@ -86,9 +86,9 @@ describe("Blocklist local and manual sources", () => {
     expect(blocklist.addManual("manual.example")).toEqual({ domain: "manual.example", added: false });
     blocklist.recordFlag("shared.example", A, "r", 1);
     expect(blocklist.merged()).toEqual([
-      { domain: "manual.example", sources: ["manual"], reason: "manual" },
-      { domain: "shared.example", sources: ["local", "manual"], reason: "phish" },
-      { domain: "tracker.example", sources: ["local"], reason: "tracker" },
+      { domain: "manual.example", sources: ["manual"], reason: "manual", category: "other" },
+      { domain: "shared.example", sources: ["local", "manual"], reason: "phish", category: "drainer" },
+      { domain: "tracker.example", sources: ["local"], reason: "tracker", category: "drainer" },
     ]);
     expect(blocklist.counts()).toEqual({ local: 2, manual: 2, swarmConfirmed: 0, swarmFlagged: 1, list: 0, merged: 3 });
 
@@ -164,5 +164,65 @@ describe("Blocklist allowlist", () => {
     blocklist.setAllowlist(new Set());
     expect(blocklist.domains()).toEqual(new Set(["sites.google.com", "evil.example", "cdn2.nflxvideo.net", "drainer.example"]));
     expect(blocklist.allowlistSize()).toBe(0);
+  });
+});
+
+describe("Blocklist categories and the fast lane", () => {
+  it("carries a category on every source and reports the strongest one", () => {
+    const { blocklist } = make(3);
+    blocklist.setLocal({ version: 1, updatedAt: "2026-09-06T00:00:00Z", entries: [{ domain: "kit.example", reason: "drainer", flaggedAt: "2026-09-06T00:00:00Z" }] });
+    blocklist.addManual("ads.example", "ads", undefined, "ad");
+    blocklist.addManual("kit.example", "also manual");
+    expect(blocklist.categoryOf("kit.example")).toBe("drainer");
+    expect(blocklist.categoryOf("ads.example")).toBe("ad");
+    expect(blocklist.categoryOf("unknown.example")).toBeNull();
+    const merged = blocklist.merged();
+    expect(merged.find((e) => e.domain === "kit.example")?.category).toBe("drainer");
+    expect(merged.find((e) => e.domain === "ads.example")?.category).toBe("ad");
+    blocklist.setListCategoryResolver((domain) => (domain === "listed.example" ? "phishing" : null));
+    blocklist.setLists(new Set(["listed.example"]));
+    expect(blocklist.categoryOf("listed.example")).toBe("phishing");
+    expect(blocklist.search("listed", 10).entries[0]?.category).toBe("phishing");
+  });
+
+  it("confirms fast-lane categories with fewer reporters, and with one when the name is on a list", () => {
+    let now = 1_700_000_000_000;
+    const blocklist = new Blocklist({ threshold: 5, ttlMs: DAY, fastLane: { threshold: 2, categories: ["infra", "drainer"] }, clock: () => now });
+    blocklist.setListCategoryResolver((domain) => (domain === "listed.example" ? "phishing" : null));
+    blocklist.setLists(new Set(["listed.example"]));
+
+    expect(blocklist.recordFlag("c2.example", A, "kit backend", 1, now, "infra")).toMatchObject({ reporters: 1, confirmed: false });
+    expect(blocklist.recordFlag("c2.example", B, "kit backend", 1, now, "infra")).toMatchObject({ reporters: 2, confirmed: true, changed: true });
+    expect(blocklist.isConfirmed("c2.example")).toBe(true);
+    expect(blocklist.categoryOf("c2.example")).toBe("infra");
+
+    expect(blocklist.recordFlag("listed.example", A, "seen draining", 1, now, "drainer")).toMatchObject({ reporters: 1, confirmed: true });
+    expect(blocklist.curated().has("listed.example")).toBe(true);
+
+    expect(blocklist.recordFlag("page.example", A, "phishing page", 1, now, "phishing")).toMatchObject({ reporters: 1, confirmed: false });
+    blocklist.recordFlag("page.example", B, "phishing page", 1, now, "phishing");
+    expect(blocklist.isConfirmed("page.example")).toBe(false);
+    expect(blocklist.flagSummaries().find((f) => f.domain === "page.example")).toMatchObject({ category: "phishing", reporters: 2, confirmed: false });
+
+    now += 2 * DAY;
+    expect(blocklist.isConfirmed("c2.example")).toBe(false);
+  });
+
+  it("inspects a name for the verdict endpoint", () => {
+    const { blocklist } = make(2);
+    blocklist.setListCategoryResolver((domain) => (domain === "listed.example" ? "ad" : null));
+    blocklist.setLists(new Set(["listed.example", "shielded.example"]));
+    blocklist.setAllowlist(new Set(["shielded.example"]));
+    blocklist.addManual("manual.example", "operator", undefined, "counterfeit");
+    blocklist.recordFlag("flagged.example", A, "phish", 1);
+
+    expect(blocklist.inspect("not a host")).toBeNull();
+    expect(blocklist.inspect("clean.example")).toMatchObject({ blocked: false, allowlisted: false, category: null, sources: [], reporters: 0 });
+    expect(blocklist.inspect("listed.example")).toMatchObject({ blocked: true, category: "ad", sources: ["list"] });
+    expect(blocklist.inspect("shielded.example")).toMatchObject({ blocked: false, allowlisted: true, sources: ["list"] });
+    expect(blocklist.inspect("manual.example")).toMatchObject({ blocked: true, category: "counterfeit", sources: ["manual"], reasons: ["operator"] });
+    expect(blocklist.inspect("flagged.example")).toMatchObject({ blocked: false, confirmed: false, reporters: 1, sources: [] });
+    blocklist.recordFlag("flagged.example", B, "phish", 1);
+    expect(blocklist.inspect("FLAGGED.example")).toMatchObject({ blocked: true, confirmed: true, reporters: 2, category: "phishing", sources: ["swarm"] });
   });
 });

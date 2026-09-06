@@ -2,6 +2,7 @@ import { getAddress, isAddress, verifyMessage, type Address, type Hex } from "vi
 import type { PrivateKeyAccount } from "viem/accounts";
 import { cleanReason, normalizeHostname } from "../hostname.js";
 import type { TierReader } from "./membership.js";
+import { parseCategory, type Category } from "../category.js";
 
 export const TOPIC_FLAGS = "payhole/flags/v1";
 export const TOPIC_DIRECTORY = "payhole/directory/v1";
@@ -23,6 +24,8 @@ export interface FlagBody {
   reason: string;
   /** Announcement time, milliseconds since the epoch. */
   ts: number;
+  /** What the reporter says the domain is; older reporters send none, which counts as phishing. */
+  category?: Category;
 }
 
 export interface EndpointBody {
@@ -165,7 +168,8 @@ function parseFlagBody(body: Record<string, unknown>): FlagBody | null {
   const domain = normalizeHostname(body["domain"]);
   const ts = parseTs(body["ts"]);
   if (domain === null || ts === null) return null;
-  return { type: "flag", domain, reason: cleanReason(body["reason"]), ts };
+  const category = parseCategory(body["category"]);
+  return { type: "flag", domain, reason: cleanReason(body["reason"]), ts, ...(category ? { category } : {}) };
 }
 
 const NETWORK = /^[a-z0-9][a-z0-9:_-]{0,63}$/i;

@@ -108,7 +108,7 @@ describe("swarm", () => {
     const flagFromC = await signSwarmMessage(c.operator, c.proof, { type: "flag", domain: "drainer.example", reason: "confirmed", ts: Date.now() });
     await c.swarm.publish(flagFromC);
     await waitFor(() => b.blocklist.isConfirmed("drainer.example"), "B to confirm after a second distinct reporter");
-    expect(b.blocklist.merged()).toEqual([{ domain: "drainer.example", sources: ["swarm"], reason: "flagged by 2 reporters" }]);
+    expect(b.blocklist.merged()).toEqual([{ domain: "drainer.example", sources: ["swarm"], reason: "flagged by 2 reporters", category: "phishing" }]);
     // A never records its own flag (it is already in A's local list), so C's flag is A's first reporter.
     await waitFor(() => reporters(a, "drainer.example") === 1, "A to receive C's flag through B");
     expect(a.blocklist.isConfirmed("drainer.example")).toBe(false);

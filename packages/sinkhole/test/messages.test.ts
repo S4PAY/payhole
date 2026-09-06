@@ -158,3 +158,17 @@ describe("cachedTierReader", () => {
     expect(calls).toBe(3);
   });
 });
+
+describe("flag categories", () => {
+  it("carries a known category through signing and verification and drops an unknown one", async () => {
+    const proof = await signProof(operator, peerId, new Date(NOW).toISOString());
+    const flagged = await signSwarmMessage(operator, proof, { type: "flag", domain: "c2.example", reason: "kit backend", ts: NOW, category: "infra" });
+    const verified = await verifySwarmMessage(JSON.stringify(flagged), peerId, options);
+    expect(verified.ok).toBe(true);
+    if (verified.ok && verified.message.kind === "flag") expect(verified.message.body.category).toBe("infra");
+    const plain = await signSwarmMessage(operator, proof, { type: "flag", domain: "page.example", reason: "phish", ts: NOW });
+    const verifiedPlain = await verifySwarmMessage(JSON.stringify(plain), peerId, options);
+    expect(verifiedPlain.ok).toBe(true);
+    if (verifiedPlain.ok && verifiedPlain.message.kind === "flag") expect(verifiedPlain.message.body.category).toBeUndefined();
+  });
+});

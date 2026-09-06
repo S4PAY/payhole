@@ -615,6 +615,30 @@ td .mono {
   border-color: rgba(43, 255, 136, 0.4);
 }
 
+.tag.cat.infra,
+.tag.cat.drainer {
+  color: #ff7a7a;
+  border-color: rgba(255, 77, 77, 0.5);
+  background: rgba(255, 77, 77, 0.08);
+}
+.tag.cat.phishing,
+.tag.cat.counterfeit {
+  color: var(--warn);
+  border-color: rgba(255, 158, 61, 0.45);
+}
+.tag.cat.tracker,
+.tag.cat.ad,
+.tag.cat.other {
+  color: var(--muted);
+}
+select.small {
+  font: 500 12px var(--font-ui);
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+}
 .tag.yes {
   color: var(--accent);
   border-color: rgba(43, 255, 136, 0.4);

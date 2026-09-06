@@ -1,3 +1,4 @@
+import { DANGEROUS, type Category } from "./category.js";
 /**
  * Query statistics built from dnsmasq's own log lines (`log-queries=extra`). The supervisor hands every line
  * dnsmasq prints to `ingest`; the lines that describe a query are aggregated into fixed-size rings and the
@@ -98,6 +99,8 @@ export interface QueryRecord {
   /** Final answer (an address, NXDOMAIN, ...) when one was logged. */
   answer: string | null;
   upstream: string | null;
+  /** What a blocked name was, when the block had a category. */
+  category?: Category | null;
 }
 
 export interface QueryFilter {
@@ -122,6 +125,8 @@ export interface StatsSnapshot {
   summary: {
     queries24h: number;
     blocked24h: number;
+    /** Blocks in the dangerous categories (drainer infrastructure, drainers, phishing, counterfeits). */
+    dangerous24h: number;
     blockedPercent: number;
     cached24h: number;
     forwarded24h: number;
@@ -132,7 +137,9 @@ export interface StatsSnapshot {
   minutes: Series;
   hours: Series;
   clients: { client: string; total: number; blocked: number }[];
-  topBlocked: { domain: string; count: number }[];
+  topBlocked: { domain: string; count: number; category: Category | null }[];
+  /** Blocks in the last 24 hours by category, most first. */
+  blockedByCategory: { category: string; count: number }[];
   topPermitted: { domain: string; count: number }[];
   types: { type: string; count: number }[];
   upstreams: { upstream: string; count: number }[];
@@ -147,6 +154,8 @@ export interface QueryStatsOptions {
   /** Distinct clients and distinct domains ranked per hourly slot; more than this in one hour are counted in totals only. */
   clientsPerSlot?: number;
   domainsPerSlot?: number;
+  /** Category of a blocked name, from the blocklist; blocks are counted per category. */
+  categoryOf?: ((domain: string) => Category | null) | undefined;
 }
 
 interface Pending {
@@ -177,6 +186,7 @@ interface Slot {
   permitted: Map<string, number>;
   types: Map<string, number>;
   upstreams: Map<string, number>;
+  categories: Map<string, number>;
 }
 
 export interface QueryStatsState {
@@ -190,6 +200,7 @@ export interface QueryStatsState {
     permitted: [string, number][];
     types: [string, number][];
     upstreams: [string, number][];
+    categories?: [string, number][];
   }[];
   log: QueryRecord[];
 }
@@ -198,6 +209,7 @@ const MINUTE = 60_000;
 const HOUR = 3_600_000;
 export const MINUTE_SLOTS = 24 * 60;
 export const HOUR_SLOTS = 7 * 24;
+const CATEGORY_LIMIT = 16;
 const CLIENT_SLOTS = 24;
 const STATUSES: readonly QueryStatus[] = ["blocked", "cached", "forwarded", "local", "unanswered", "unknown"];
 
@@ -228,6 +240,7 @@ export class QueryStats {
   private readonly logSize: number;
   private readonly clientsPerSlot: number;
   private readonly domainsPerSlot: number;
+  private readonly categoryOf: (domain: string) => Category | null;
   private readonly minutes: MinuteBucket[] = [];
   private readonly hours: HourBucket[] = [];
   private readonly slots: Slot[] = [];
@@ -245,9 +258,10 @@ export class QueryStats {
     this.logSize = options.logSize ?? 1000;
     this.clientsPerSlot = options.clientsPerSlot ?? 256;
     this.domainsPerSlot = options.domainsPerSlot ?? 1500;
+    this.categoryOf = options.categoryOf ?? (() => null);
     for (let i = 0; i < MINUTE_SLOTS; i += 1) this.minutes.push({ minute: -1, total: 0, blocked: 0, cached: 0, forwarded: 0 });
     for (let i = 0; i < HOUR_SLOTS; i += 1) this.hours.push({ hour: -1, total: 0, blocked: 0, cached: 0, forwarded: 0 });
-    for (let i = 0; i < CLIENT_SLOTS; i += 1) this.slots.push({ hour: -1, clients: new Map(), blocked: new Map(), permitted: new Map(), types: new Map(), upstreams: new Map() });
+    for (let i = 0; i < CLIENT_SLOTS; i += 1) this.slots.push({ hour: -1, clients: new Map(), blocked: new Map(), permitted: new Map(), types: new Map(), upstreams: new Map(), categories: new Map() });
     if (state) this.restore(state);
   }
 
@@ -307,6 +321,7 @@ export class QueryStats {
       slot.permitted.clear();
       slot.types.clear();
       slot.upstreams.clear();
+      slot.categories.clear();
     }
     return slot;
   }
@@ -412,16 +427,18 @@ export class QueryStats {
       if (hb) hb[status] += 1;
     }
     const slot = this.slot(pending.hour, false);
+    const category = status === "blocked" ? this.categoryOf(pending.domain) : null;
     if (slot) {
       if (status === "blocked") {
         const client = slot.clients.get(pending.client);
         if (client) client.blocked += 1;
         bump(slot.blocked, pending.domain, this.domainsPerSlot);
+        bump(slot.categories, category ?? "other", 16);
       } else if (status === "cached" || status === "forwarded") {
         bump(slot.permitted, pending.domain, this.domainsPerSlot);
       }
     }
-    this.pushLog({ t: pending.t, client: pending.client, domain: pending.domain, type: pending.type, status, answer: pending.answer, upstream: pending.forwarded });
+    this.pushLog({ t: pending.t, client: pending.client, domain: pending.domain, type: pending.type, status, answer: pending.answer, upstream: pending.forwarded, ...(category ? { category } : {}) });
   }
 
   private pushLog(record: QueryRecord): void {
@@ -487,11 +504,14 @@ export class QueryStats {
         } else clients.set(client, { ...counts });
       }
     }
+    const blockedByCategory = top(slots.map((s) => s.categories), CATEGORY_LIMIT).map((e) => ({ category: e.key, count: e.count }));
+    const dangerous24h = blockedByCategory.filter((e) => DANGEROUS.has(e.category as Category)).reduce((a, e) => a + e.count, 0);
     return {
       generatedAt: now,
       summary: {
         queries24h,
         blocked24h,
+        dangerous24h,
         blockedPercent: queries24h === 0 ? 0 : Math.round((blocked24h / queries24h) * 1000) / 10,
         cached24h: sum(minutes.cached),
         forwarded24h: sum(minutes.forwarded),
@@ -505,7 +525,8 @@ export class QueryStats {
         .map(([client, counts]) => ({ client, ...counts }))
         .sort((a, b) => b.total - a.total || (a.client < b.client ? -1 : 1))
         .slice(0, 100),
-      topBlocked: top(slots.map((s) => s.blocked), 100).map((e) => ({ domain: e.key, count: e.count })),
+      topBlocked: top(slots.map((s) => s.blocked), 100).map((e) => ({ domain: e.key, count: e.count, category: this.categoryOf(e.key) })),
+      blockedByCategory,
       topPermitted: top(slots.map((s) => s.permitted), 100).map((e) => ({ domain: e.key, count: e.count })),
       types: top(slots.map((s) => s.types), 20).map((e) => ({ type: e.key, count: e.count })),
       upstreams: top(slots.map((s) => s.upstreams), 20).map((e) => ({ upstream: e.key, count: e.count })),
@@ -551,6 +572,7 @@ export class QueryStats {
           permitted: [...s.permitted],
           types: [...s.types],
           upstreams: [...s.upstreams],
+          categories: [...s.categories],
         })),
       log: ordered,
     };
@@ -574,6 +596,7 @@ export class QueryStats {
       for (const [domain, count] of saved.permitted) slot.permitted.set(domain, count);
       for (const [type, count] of saved.types) slot.types.set(type, count);
       for (const [upstream, count] of saved.upstreams) slot.upstreams.set(upstream, count);
+      for (const [category, count] of saved.categories ?? []) slot.categories.set(category, count);
     }
     for (const record of state.log.slice(-this.logSize)) this.pushLog(record);
     this.dirty = false;

@@ -3,12 +3,15 @@ import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { isIP } from "node:net";
 import { normalizeHostname } from "./hostname.js";
+import { defaultCategoryFor, parseCategory, strongest, type Category } from "./category.js";
 import { readJson, writeFileAtomic, writeJsonAtomic } from "./store.js";
 
 /** One subscribed public blocklist: a hosts-format or one-per-line file fetched on a schedule. */
 export interface Subscription {
   id: string;
   url: string;
+  /** What names on this list are; blocks from the list carry it. */
+  category: Category;
   addedAt: number;
   lastFetchedAt: number | null;
   lastSuccessAt: number | null;
@@ -89,7 +92,8 @@ function parseJsonList(text: string): string[] | null {
   } catch {
     return null;
   }
-  const items = Array.isArray(value) ? value : typeof value === "object" && value !== null && Array.isArray((value as { domains?: unknown }).domains) ? (value as { domains: unknown[] }).domains : null;
+  const record = typeof value === "object" && value !== null ? (value as { domains?: unknown; blacklist?: unknown }) : null;
+  const items = Array.isArray(value) ? value : record && Array.isArray(record.domains) ? record.domains : record && Array.isArray(record.blacklist) ? record.blacklist : null;
   if (!items) return null;
   return items.filter((v): v is string => typeof v === "string");
 }
@@ -203,7 +207,7 @@ export class Subscriptions {
       for (const item of state.items) {
         const url = normalizeListUrl(item.url);
         if (!url) continue;
-        subs.items.set(item.id, { ...item, url });
+        subs.items.set(item.id, { ...item, url, category: parseCategory((item as Partial<Subscription>).category) ?? defaultCategoryFor(url) });
         try {
           const text = await readFile(subs.listPath(item.id), "utf8");
           subs.lists.set(item.id, new Set(text.split("\n").filter((line) => line.length > 0)));
@@ -222,8 +226,20 @@ export class Subscriptions {
     return subs;
   }
 
-  private fresh(url: string): Subscription {
-    return { id: subscriptionId(url), url, addedAt: this.clock(), lastFetchedAt: null, lastSuccessAt: null, lastError: null, entries: 0, bytes: 0, etag: null, lastModified: null };
+  private fresh(url: string, category?: Category): Subscription {
+    return {
+      id: subscriptionId(url),
+      url,
+      category: category ?? defaultCategoryFor(url),
+      addedAt: this.clock(),
+      lastFetchedAt: null,
+      lastSuccessAt: null,
+      lastError: null,
+      entries: 0,
+      bytes: 0,
+      etag: null,
+      lastModified: null,
+    };
   }
 
   private listPath(id: string): string {
@@ -290,13 +306,36 @@ export class Subscriptions {
     return this.union;
   }
 
+  /** The strongest category among the lists that carry `domain`, or null when no list does. */
+  categoryOf(domain: string): Category | null {
+    let best: Category | null = null;
+    for (const [id, list] of this.lists) {
+      if (!list.has(domain)) continue;
+      const item = this.items.get(id);
+      if (item) best = strongest(best, item.category);
+    }
+    return best;
+  }
+
+  /** Changes what a list's names count as. */
+  async setCategory(id: string, category: Category): Promise<SubscriptionInfo | undefined> {
+    const item = this.items.get(id);
+    if (!item) return undefined;
+    if (item.category !== category) {
+      item.category = category;
+      await this.persist();
+      this.notify();
+    }
+    return this.info(item);
+  }
+
   /** Registers a list. Returns the existing entry when the URL is already subscribed. */
-  async add(input: string): Promise<{ item: SubscriptionInfo; added: boolean }> {
+  async add(input: string, category?: Category): Promise<{ item: SubscriptionInfo; added: boolean }> {
     const url = normalizeListUrl(input);
     if (!url) throw new Error("url must be an http(s) URL without credentials");
     const existing = this.byUrl(url);
     if (existing) return { item: this.info(existing), added: false };
-    const item = this.fresh(url);
+    const item = this.fresh(url, category);
     this.items.set(item.id, item);
     this.lists.set(item.id, new Set());
     await this.persist();
