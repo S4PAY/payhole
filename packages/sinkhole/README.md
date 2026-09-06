@@ -49,7 +49,7 @@ encrypted DNS rate limit) takes reports from people who are not running a node.
 
 - A plain report, `{"name": "...", "category": "drainer", "reason": "..."}`, is a **hint**: counted per name with the reasons
   and categories people gave, never blocking, kept in `DATA_DIR/hints.json` (the newest 5,000 names), served to operators at
-  `GET /api/hints?days=7&limit=100`, and shown on the radar so a name many people report reaches someone who can confirm it.
+  `GET /api/hints?days=7&limit=100` (`DELETE /api/hints?name=` drops one), and shown on the radar so a name many people report reaches someone who can confirm it.
   The answer says `hinted` with the count, or `already_blocked` or `allowlisted` when the network has decided.
 - A signed report, `{"message": <swarm message>}`, is a **flag** from a tier holder who delegated a key to their phone. The
   message is a normal swarm message whose `delegate` names the phone's address; its proof is the holder's signature over the

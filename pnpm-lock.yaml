@@ -26,21 +26,36 @@ importers:
 
   packages/app:
     dependencies:
+      '@noble/hashes':
+        specifier: ^2.4.0
+        version: 2.4.0
+      '@noble/secp256k1':
+        specifier: ^2.3.0
+        version: 2.3.0
       '@react-native-async-storage/async-storage':
         specifier: 2.2.0
         version: 2.2.0(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))
       expo:
         specifier: ~57.0.20
         version: 57.0.20(@babel/core@7.29.7)(@expo/dom-webview@57.0.1)(react-dom@19.2.8(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
+      expo-clipboard:
+        specifier: ^57.0.1
+        version: 57.0.1(expo@57.0.20)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
       expo-constants:
         specifier: ~57.0.17
         version: 57.0.17(expo@57.0.20)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))
+      expo-crypto:
+        specifier: ^57.0.2
+        version: 57.0.2(expo@57.0.20)
       expo-font:
         specifier: ~57.0.3
         version: 57.0.3(expo@57.0.20)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
       expo-modules-core:
         specifier: ~57.0.16
         version: 57.0.16(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
+      expo-secure-store:
+        specifier: ^57.0.3
+        version: 57.0.3(expo@57.0.20)
       expo-splash-screen:
         specifier: ~57.0.8
         version: 57.0.8(expo@57.0.20)(typescript@6.0.3)
@@ -1103,6 +1118,9 @@ packages:
     resolution: {integrity: sha512-X5XaVWZIBCT7HHZGm5I7ZQXDwLG+bGXuSrMQAW+7Zvl87h1kmc1ZB1VSRJcpUfoUrGQp4Fkoxm5kZ+Ms+aW+eA==}
     engines: {node: '>= 20.19.0'}
 
+  '@noble/secp256k1@2.3.0':
+    resolution: {integrity: sha512-0TQed2gcBbIrh7Ccyw+y/uZQvbJwm7Ao4scBUxqpBCcsOlZG0O4KGfjtNAy/li4W8n1xt3dxrwJ0beZ2h2G6Kw==}
+
   '@oxc-project/types@0.148.0':
     resolution: {integrity: sha512-Nm4s/jB+4FpFsPhWGEC4h7rzksesmtnMXomo6rCMcg/b8zLQuOziRgkCS1fxDCXOlJB/6Q8oABOZ/OP6RIPj9A==}
 
@@ -2048,11 +2066,23 @@ packages:
       react: '*'
       react-native: '*'
 
+  expo-clipboard@57.0.1:
+    resolution: {integrity: sha512-HWICri4+1ao7S6QEfcorxVumXDiDnx1guGGewjZgGJWLGxFYs0RgH8ujBs+lkTzBkMmlwADaWSlaesR+nDJt5Q==}
+    peerDependencies:
+      expo: '*'
+      react: '*'
+      react-native: '*'
+
   expo-constants@57.0.17:
     resolution: {integrity: sha512-cPWYBKN1SEbg2lXg2f8VkePJqGZrJPLvVdQDCTfbFu9sQHO1M31Y1zILReUuGnmt/VKeUz40ze579vR00xGu/A==}
     peerDependencies:
       expo: '*'
       react-native: '*'
+
+  expo-crypto@57.0.2:
+    resolution: {integrity: sha512-OGLvHK7Hb7qsONMWGB9pJw3n+iY4OnZQmM/KwQEHRMrrOmNg0Lxj9+tp9bj46aAMMzXx0FTVA2jUKoplpXPnkA==}
+    peerDependencies:
+      expo: '*'
 
   expo-file-system@57.0.6:
     resolution: {integrity: sha512-pm8PMYEW6BnVOCBJ7df9FcDmQtE1tqImuYphlfYe1ipQRLYtdCayRczJcbKIsnB3mqEyp4gC2gWmMbsAsAOjVg==}
@@ -2091,6 +2121,11 @@ packages:
     resolution: {integrity: sha512-MFwvKP0FXLkEET27KsKvOh/L7Dpu2d00UgzAlmKozJgtI23WTKSyKPxu+EOSs9peSgkHzKI0vQOhWjOseGBMkQ==}
     peerDependencies:
       react-native: '*'
+
+  expo-secure-store@57.0.3:
+    resolution: {integrity: sha512-w7XkSQeUiYXPoKXo1jSrQqql7pyCSyIzOp2k0apsZZBE+RkoLTQIMjcbqc181y6KgupfNnYxkaKe+4MEg94+SA==}
+    peerDependencies:
+      expo: '*'
 
   expo-server@57.0.3:
     resolution: {integrity: sha512-aK+LdKzauHSGmsOStZtyxdzv0zWssCkxTw3m4QuOhfDSJsZaMRTd9O41d8ixU/QfELTbaJ0oRNcF7JFV/7O9YQ==}
@@ -4986,6 +5021,8 @@ snapshots:
 
   '@noble/hashes@2.4.0': {}
 
+  '@noble/secp256k1@2.3.0': {}
+
   '@oxc-project/types@0.148.0': {}
 
   '@react-native-async-storage/async-storage@2.2.0(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))':
@@ -5966,6 +6003,12 @@ snapshots:
       - supports-color
       - typescript
 
+  expo-clipboard@57.0.1(expo@57.0.20)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))(react@19.2.3):
+    dependencies:
+      expo: 57.0.20(@babel/core@7.29.7)(@expo/dom-webview@57.0.1)(react-dom@19.2.8(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
+      react: 19.2.3
+      react-native: 0.86.3(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3)
+
   expo-constants@57.0.17(expo@57.0.20)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3)):
     dependencies:
       '@expo/env': 2.4.3
@@ -5973,6 +6016,10 @@ snapshots:
       react-native: 0.86.3(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3)
     transitivePeerDependencies:
       - supports-color
+
+  expo-crypto@57.0.2(expo@57.0.20):
+    dependencies:
+      expo: 57.0.20(@babel/core@7.29.7)(@expo/dom-webview@57.0.1)(react-dom@19.2.8(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
 
   expo-file-system@57.0.6(expo@57.0.20)(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3)):
     dependencies:
@@ -6012,6 +6059,10 @@ snapshots:
   expo-modules-jsi@57.0.8(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3)):
     dependencies:
       react-native: 0.86.3(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3)
+
+  expo-secure-store@57.0.3(expo@57.0.20):
+    dependencies:
+      expo: 57.0.20(@babel/core@7.29.7)(@expo/dom-webview@57.0.1)(react-dom@19.2.8(react@19.2.3))(react-native@0.86.3(@babel/core@7.29.7)(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)
 
   expo-server@57.0.3: {}
 

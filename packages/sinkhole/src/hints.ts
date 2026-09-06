@@ -100,6 +100,14 @@ export class Hints {
     return hint;
   }
 
+  /** Drops a name, for a report an operator judged junk or one the network has since decided. */
+  remove(input: unknown): boolean {
+    const domain = normalizeHostname(input);
+    if (!domain || !this.hints.delete(domain)) return false;
+    this.schedule();
+    return true;
+  }
+
   /** Names reported at or after `since`, most reported first. */
   recent(since: number, limit = 50): Hint[] {
     const out: Hint[] = [];

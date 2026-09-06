@@ -67,6 +67,9 @@ describe("hints", () => {
     expect(hints.get("old.example")).toBeUndefined();
     expect(hints.recent(0).map((hint) => hint.domain)).toEqual(["scam.example", "new.example"]);
     expect(hints.recent(now + 1)).toEqual([]);
+    expect(hints.remove("New.Example")).toBe(true);
+    expect(hints.remove("new.example")).toBe(false);
+    expect(hints.size).toBe(1);
     await hints.flush();
     const reloaded = await Hints.load({ path, clock: () => now });
     expect(reloaded.get("scam.example")).toMatchObject({ count: 3, firstAt: NOW, lastAt: now });

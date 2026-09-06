@@ -39,7 +39,7 @@ export interface AdminDeps {
   /** What the network learned lately, for `GET /api/radar`; absent when the node has no lists. */
   radar?: (() => RadarSnapshot) | undefined;
   /** Names phones reported without a tier, for `GET /api/hints`. */
-  hints?: { recent(since: number, limit: number): Hint[] } | undefined;
+  hints?: { recent(since: number, limit: number): Hint[]; remove(input: unknown): boolean } | undefined;
   /** Who reported first each name the swarm confirmed, for `GET /api/reports/ledger`. */
   ledger?: ((since: number) => LedgerEntry[]) | undefined;
   /** The operator wallet's BurnVault tier and the unlock action; absent when the node has no vault. */
@@ -303,8 +303,13 @@ export function createAdminServer(deps: AdminDeps): Server {
       return json(res, 200, { id, removed: true });
     }
     if (path === "/api/hints") {
-      if (method !== "GET") throw new HttpError(405, "method_not_allowed", "use GET");
       if (!deps.hints) throw new HttpError(404, "not_found", "hints are not enabled");
+      if (method === "DELETE") {
+        const name = url.searchParams.get("name");
+        if (!name) throw new HttpError(400, "invalid_name", "name query parameter is required");
+        return json(res, 200, { domain: name, removed: deps.hints.remove(name) });
+      }
+      if (method !== "GET") throw new HttpError(405, "method_not_allowed", "use GET or DELETE");
       const days = Math.min(365, Math.max(1, Number(url.searchParams.get("days") ?? "7") || 7));
       const limit = Math.min(1000, Math.max(1, Number(url.searchParams.get("limit") ?? "100") || 100));
       const since = Date.now() - days * 24 * 60 * 60 * 1000;
