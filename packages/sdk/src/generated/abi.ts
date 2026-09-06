@@ -1379,7 +1379,7 @@ export const burnVaultAbi = [
   },
   {
     "type": "function",
-    "name": "setTierCost",
+    "name": "setTierPrice",
     "inputs": [
       {
         "name": "tier",
@@ -1387,7 +1387,7 @@ export const burnVaultAbi = [
         "internalType": "uint8"
       },
       {
-        "name": "cost",
+        "name": "price",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -1464,25 +1464,6 @@ export const burnVaultAbi = [
   },
   {
     "type": "function",
-    "name": "tierCost",
-    "inputs": [
-      {
-        "name": "tier",
-        "type": "uint8",
-        "internalType": "uint8"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "cost",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "tierOf",
     "inputs": [
       {
@@ -1496,6 +1477,25 @@ export const burnVaultAbi = [
         "name": "tier",
         "type": "uint8",
         "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "tierPrice",
+    "inputs": [
+      {
+        "name": "tier",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "price",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -1534,9 +1534,25 @@ export const burnVaultAbi = [
         "name": "tier",
         "type": "uint8",
         "internalType": "uint8"
+      },
+      {
+        "name": "minTokensBurned",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "deadline",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
-    "outputs": [],
+    "outputs": [
+      {
+        "name": "tokensBurned",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
     "stateMutability": "nonpayable"
   },
   {
@@ -1705,7 +1721,7 @@ export const burnVaultAbi = [
   },
   {
     "type": "event",
-    "name": "TierCostSet",
+    "name": "TierPriceSet",
     "inputs": [
       {
         "name": "tier",
@@ -1714,7 +1730,7 @@ export const burnVaultAbi = [
         "internalType": "uint8"
       },
       {
-        "name": "cost",
+        "name": "price",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -1750,6 +1766,18 @@ export const burnVaultAbi = [
         "type": "uint8",
         "indexed": false,
         "internalType": "uint8"
+      },
+      {
+        "name": "usdgPaid",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "tokensBurned",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
       }
     ],
     "anonymous": false

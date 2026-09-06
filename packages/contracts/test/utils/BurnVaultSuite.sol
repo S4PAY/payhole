@@ -243,18 +243,18 @@ abstract contract BurnVaultSuite is Test {
         vault.setRoute(address(usdg), _route(usdgPool));
     }
 
-    function test_setTierCost() public {
+    function test_setTierPrice() public {
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, user));
         vm.prank(user);
-        vault.setTierCost(1, 1e18);
+        vault.setTierPrice(1, 10e6);
         vm.startPrank(safe);
         vm.expectRevert(BurnVault.InvalidTier.selector);
-        vault.setTierCost(0, 1e18);
+        vault.setTierPrice(0, 10e6);
         vm.expectEmit(address(vault));
-        emit BurnVault.TierCostSet(1, 1e18);
-        vault.setTierCost(1, 1e18);
+        emit BurnVault.TierPriceSet(1, 10e6);
+        vault.setTierPrice(1, 10e6);
         vm.stopPrank();
-        assertEq(vault.tierCost(1), 1e18);
+        assertEq(vault.tierPrice(1), 10e6);
     }
 
     // ------------------------------------------------------------------- swaps
@@ -532,45 +532,83 @@ abstract contract BurnVaultSuite is Test {
 
     // ------------------------------------------------------------------- tiers
 
-    function test_unlock_burnsCostAndRecordsTier() public {
+    function test_unlock_buysAndBurnsWithRoute() public {
+        _configureNative();
         vm.startPrank(safe);
-        vault.setToken(address(payhole));
-        vault.setTierCost(1, 100e18);
-        vault.setTierCost(2, 500e18);
+        vault.setTierPrice(1, 10e6);
+        vault.setTierPrice(2, 50e6);
         vm.stopPrank();
-        payhole.mint(user, 1000e18);
+        uint256 deadBefore = payhole.balanceOf(DEAD);
         vm.startPrank(user);
-        payhole.approve(address(vault), type(uint256).max);
-        vm.expectEmit(address(vault));
-        emit BurnVault.Burned(user, address(payhole), 100e18, 100e18);
-        vm.expectEmit(address(vault));
-        emit BurnVault.Unlocked(user, 1);
-        vault.unlock(1);
+        vm.expectEmit(true, true, false, false, address(vault));
+        emit BurnVault.Burned(user, address(usdg), 10e6, 0);
+        vm.expectEmit(true, false, false, false, address(vault));
+        emit BurnVault.Unlocked(user, 1, 10e6, 0);
+        uint256 burned = vault.unlock(1, 9_000e18, _deadline());
+        // about 1000 PAYHOLE per USDG minus fee and impact
+        assertGt(burned, 9_900e18);
+        assertLt(burned, 10_000e18);
         assertEq(vault.tierOf(user), 1);
-        assertEq(payhole.balanceOf(DEAD), 100e18);
+        assertEq(payhole.balanceOf(DEAD) - deadBefore, burned);
         vm.expectRevert(abi.encodeWithSelector(BurnVault.TierNotHigher.selector, 1));
-        vault.unlock(1);
+        vault.unlock(1, 0, _deadline());
         vm.expectRevert(abi.encodeWithSelector(BurnVault.TierNotConfigured.selector, 3));
-        vault.unlock(3);
-        vault.unlock(2);
-        assertEq(vault.tierOf(user), 2);
-        assertEq(payhole.balanceOf(DEAD), 600e18);
-        assertEq(payhole.balanceOf(user), 400e18);
+        vault.unlock(3, 0, _deadline());
+        uint256 burnedMore = vault.unlock(2, 45_000e18, _deadline());
         vm.stopPrank();
+        assertGt(burnedMore, burned * 4);
+        assertEq(vault.tierOf(user), 2);
+        assertEq(payhole.balanceOf(DEAD) - deadBefore, burned + burnedMore);
+        assertEq(usdg.balanceOf(user), 1_000_000e6 - 60e6);
+        _assertVaultEmpty();
     }
 
-    function test_unlock_requiresTokenAndBalance() public {
-        vm.expectRevert(BurnVault.TokenNotSet.selector);
-        vault.unlock(1);
-        vm.startPrank(safe);
-        vault.setToken(address(payhole));
-        vault.setTierCost(1, 100e18);
-        vm.stopPrank();
+    function test_unlock_holdsUsdgUntilRouteExistsThenBurnHeld() public {
+        vm.prank(safe);
+        vault.setTierPrice(1, 10e6);
+        vm.expectEmit(address(vault));
+        emit BurnVault.Unlocked(user, 1, 10e6, 0);
         vm.prank(user);
-        payhole.approve(address(vault), type(uint256).max);
+        uint256 burned = vault.unlock(1, 0, _deadline());
+        assertEq(burned, 0);
+        assertEq(vault.tierOf(user), 1);
+        assertEq(usdg.balanceOf(address(vault)), 10e6);
+        assertEq(usdg.balanceOf(user), 1_000_000e6 - 10e6);
+        assertEq(payhole.balanceOf(DEAD), 0);
+
+        _configureNative();
+        vm.prank(safe);
+        uint256 burnedLater = vault.burnHeld(address(usdg), 9_000e18, _deadline());
+        assertGt(burnedLater, 9_900e18);
+        assertEq(payhole.balanceOf(DEAD), burnedLater);
+        _assertVaultEmpty();
+    }
+
+    function test_unlock_slippageAndDeadline() public {
+        _configureNative();
+        vm.prank(safe);
+        vault.setTierPrice(1, 10e6);
+        vm.startPrank(user);
+        vm.expectRevert(BurnVault.Expired.selector);
+        vault.unlock(1, 0, block.timestamp - 1);
         vm.expectRevert();
+        vault.unlock(1, 10_001e18, _deadline());
+        vm.stopPrank();
+        assertEq(vault.tierOf(user), 0);
+        assertEq(usdg.balanceOf(user), 1_000_000e6);
+    }
+
+    function test_unlock_requiresPriceAndApproval() public {
+        vm.expectRevert(abi.encodeWithSelector(BurnVault.TierNotConfigured.selector, 1));
         vm.prank(user);
-        vault.unlock(1);
+        vault.unlock(1, 0, _deadline());
+        vm.prank(safe);
+        vault.setTierPrice(1, 10e6);
+        // keeper holds no USDG and gave no approval
+        vm.expectRevert();
+        vm.prank(keeper);
+        vault.unlock(1, 0, _deadline());
+        assertEq(vault.tierOf(keeper), 0);
         assertEq(vault.tierOf(user), 0);
     }
 

@@ -8,7 +8,7 @@ Solidity contracts for PayHole on Robinhood Chain (chain id 4663). Foundry proje
 |---|---|---|
 | `BudgetAccountFactory` | Deploys `BudgetAccount` minimal proxies (EIP-1167) at deterministic addresses. | Safe (sweep only, no power over accounts) |
 | `BudgetAccount` | A user's spending pocket: USDG deposit and withdraw, session keys with per-key cap and expiry, a global cap across keys, one-call `revokeAll`, `pay` for keys, `fund` for per-site addresses with on-chain per-site caps. | The user, and only the user |
-| `BurnVault` | Swaps USDG or ETH into $PayHole through Uniswap V4 (PoolManager) or Uniswap V3 (SwapRouter02), owner-selectable per input, and sends the output to `0x...dEaD`. `burnWith` for anyone with their own funds, `burnHeld` (owner) for assets sent directly, `burnDirect`, and `unlock(tier)` which burns a configured amount and records the tier. | Safe |
+| `BurnVault` | Swaps USDG or ETH into $PayHole through Uniswap V4 (PoolManager) or Uniswap V3 (SwapRouter02), owner-selectable per input, and sends the output to `0x...dEaD`. `burnWith` for anyone with their own funds, `burnHeld` (owner) for assets sent directly, `burnDirect`, and `unlock(tier, minTokensBurned, deadline)` which takes the tier's USDG price from the caller, buys $PayHole with it and burns the tokens (or holds the USDG for `burnHeld` until a route exists), and records the tier. Tiers are priced in USDG with `setTierPrice`, so the price of a tier never depends on the token's price. | Safe |
 | `CreatorRegistry` | Maps `keccak256(hostname)` to a creator wallet after an EIP-712 attestation from the verifier key; `tip` moves USDG straight to that wallet. | Safe |
 | `OwnerSweep` | Base for the protocol contracts: owner-only `sweep` and `sweepETH`. | |
 

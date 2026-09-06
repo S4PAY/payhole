@@ -22,7 +22,9 @@ import {IWETH9} from "./interfaces/IWETH9.sol";
 /// @dev The token never pays anyone; this contract only buys and burns. Anyone can call {burnWith} with
 ///      their own funds. Assets transferred to the vault directly can be converted by the owner through
 ///      {burnHeld}. The owner (the protocol Safe) sets the token address once, configures one swap route
-///      per input after the launchpad creates the pool, prices unlock tiers, and can sweep stuck assets.
+///      per input after the launchpad creates the pool, prices unlock tiers in USDG, and can sweep stuck
+///      assets. A tier is bought with USDG: the vault buys $PayHole with it and burns the tokens, so the
+///      price of a tier never depends on the token's price.
 ///      A route is either Uniswap V4 (one or two pool keys, swapped inside the PoolManager's unlock
 ///      callback with output taken straight to the burn address) or Uniswap V3 (a packed path swapped
 ///      through SwapRouter02 with the burn address as recipient). ETH is paid into V4 as native currency
@@ -61,8 +63,8 @@ contract BurnVault is OwnerSweep, ReentrancyGuard, IUnlockCallback {
     mapping(address tokenIn => RouteKind kind) public routeKind;
     /// @notice True when the configured ETH route needs incoming ETH wrapped to WETH before swapping.
     bool public ethRouteUsesWeth;
-    /// @notice $PayHole burned by {unlock} for each tier. Zero means the tier is not offered.
-    mapping(uint8 tier => uint256 cost) public tierCost;
+    /// @notice USDG (base units) paid to {unlock} each tier. Zero means the tier is not offered.
+    mapping(uint8 tier => uint256 price) public tierPrice;
     /// @notice Highest tier each address has unlocked.
     mapping(address user => uint8 tier) public tierOf;
 
@@ -72,9 +74,9 @@ contract BurnVault is OwnerSweep, ReentrancyGuard, IUnlockCallback {
     event TokenSet(address indexed token);
     event RouteSet(address indexed tokenIn, uint256 hops, bool viaWeth);
     event RouteSetV3(address indexed tokenIn, bytes path);
-    event TierCostSet(uint8 indexed tier, uint256 cost);
+    event TierPriceSet(uint8 indexed tier, uint256 price);
     event Burned(address indexed from, address indexed tokenIn, uint256 amountIn, uint256 tokensBurned);
-    event Unlocked(address indexed user, uint8 tier);
+    event Unlocked(address indexed user, uint8 tier, uint256 usdgPaid, uint256 tokensBurned);
 
     error NotPoolManager();
     error Expired();
@@ -178,13 +180,13 @@ contract BurnVault is OwnerSweep, ReentrancyGuard, IUnlockCallback {
         emit RouteSetV3(tokenIn, path);
     }
 
-    /// @notice Price an unlock tier in $PayHole. Zero removes the tier.
+    /// @notice Price an unlock tier in USDG. Zero removes the tier.
     /// @param tier Tier number, 1 or higher.
-    /// @param cost Amount of $PayHole burned to unlock it.
-    function setTierCost(uint8 tier, uint256 cost) external onlyOwner {
+    /// @param price USDG base units paid to unlock it.
+    function setTierPrice(uint8 tier, uint256 price) external onlyOwner {
         if (tier == 0) revert InvalidTier();
-        tierCost[tier] = cost;
-        emit TierCostSet(tier, cost);
+        tierPrice[tier] = price;
+        emit TierPriceSet(tier, price);
     }
 
     // ------------------------------------------------------------- burn entry points
@@ -253,20 +255,31 @@ contract BurnVault is OwnerSweep, ReentrancyGuard, IUnlockCallback {
         emit Burned(msg.sender, token_, amount, amount);
     }
 
-    /// @notice Burn the configured amount of $PayHole to record `tier` for the caller.
-    /// @dev Only upgrades are accepted, and each tier costs its full price.
-    /// @param tier Tier to unlock; must be configured and higher than the caller's current tier.
-    function unlock(uint8 tier) external nonReentrant {
-        address token_ = token;
-        if (token_ == address(0)) revert TokenNotSet();
-        uint256 cost = tierCost[tier];
-        if (cost == 0) revert TierNotConfigured(tier);
+    /// @notice Pay the tier's USDG price to record `tier` for the caller; the USDG buys $PayHole and burns it.
+    /// @dev Only upgrades are accepted, and each tier costs its full price. The caller must have approved
+    ///      the vault for the price. With a USDG route configured the purchase and the burn happen in this
+    ///      call. Before the pool exists the USDG stays in the vault and the owner converts it with
+    ///      {burnHeld}; the tier is granted either way, so nobody has to know the token's price to buy one.
+    /// @param tier Tier to unlock; must be priced and higher than the caller's current tier.
+    /// @param minTokensBurned Minimum $PayHole to burn when a route is configured; ignored while held.
+    /// @param deadline Last unix second at which the transaction may execute.
+    /// @return tokensBurned $PayHole delivered to the burn address now; zero when the payment is held.
+    function unlock(uint8 tier, uint256 minTokensBurned, uint256 deadline)
+        external
+        nonReentrant
+        returns (uint256 tokensBurned)
+    {
+        if (block.timestamp > deadline) revert Expired();
+        uint256 price = tierPrice[tier];
+        if (price == 0) revert TierNotConfigured(tier);
         uint8 current = tierOf[msg.sender];
         if (tier <= current) revert TierNotHigher(current);
         tierOf[msg.sender] = tier;
-        IERC20(token_).safeTransferFrom(msg.sender, BURN_ADDRESS, cost);
-        emit Burned(msg.sender, token_, cost, cost);
-        emit Unlocked(msg.sender, tier);
+        usdg.safeTransferFrom(msg.sender, address(this), price);
+        if (routeKind[address(usdg)] != RouteKind.None) {
+            tokensBurned = _swapAndBurn(address(usdg), price, minTokensBurned);
+        }
+        emit Unlocked(msg.sender, tier, price, tokensBurned);
     }
 
     // ------------------------------------------------------------------------ views
