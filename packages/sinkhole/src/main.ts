@@ -176,6 +176,7 @@ async function run(config: SinkholeConfig): Promise<void> {
   const rewards = await Rewards.load(
     {
       confirmations: (since) => blocklist.recentConfirmations(since),
+      flags: (now) => blocklist.flagSummaries(now),
       hints: () => hints.all(),
       listArrival: (domain) => subscriptions.listArrival(domain),
       isBlocked: (domain) => blocklist.inspect(domain)?.blocked ?? false,

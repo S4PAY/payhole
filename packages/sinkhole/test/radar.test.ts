@@ -103,7 +103,7 @@ describe("list history and the radar", () => {
     blocklist.recordFlag("ledger-update.example", A, "phishing kit", now, now, "phishing");
     blocklist.recordFlag("pending.example", B, "seen once", now, now, "phishing");
     blocklist.setLists(reloaded.domains());
-    const radar = buildRadar({ blocklist: { recentConfirmations: (since) => blocklist.recentConfirmations(since).filter((c) => c.domain !== "pending.example"), flagSummaries: () => [{ domain: "x", category: "phishing", reporters: 1, confirmed: false, firstSeen: now, lastSeen: now, reasons: [] }] }, lists: reloaded, clock: () => now + HOUR });
+    const radar = buildRadar({ blocklist: { recentConfirmations: (since) => blocklist.recentConfirmations(since).filter((c) => c.domain !== "pending.example"), flagSummaries: () => [{ domain: "x", category: "phishing", reporters: 1, confirmed: false, firstSeen: now, lastSeen: now, reasons: [], firstReporter: null, reporterSet: [] }] }, lists: reloaded, clock: () => now + HOUR });
     expect(radar.swarm).toMatchObject({ confirmed: 1, confirmedWeek: 1, pending: 1 });
     expect(radar.swarm.recent[0]).toMatchObject({ domain: "ledger-update.example", category: "phishing" });
     expect(radar.lists).toEqual([expect.objectContaining({ url, label: "127.0.0.1", entries: 3, refreshes: 1, added: 2, removed: 1, sample: ["metamask-claim.example", "coinbase-login.example"] })]);

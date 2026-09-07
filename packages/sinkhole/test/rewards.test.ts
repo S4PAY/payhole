@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { privateKeyToAccount } from "viem/accounts";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { Blocklist, type Confirmation } from "../src/blocklist.js";
+import { Blocklist, type Confirmation, type FlagSummary } from "../src/blocklist.js";
 import { scoreEvidence } from "../src/evidence.js";
 import { Hints, type Hint } from "../src/hints.js";
 import { createReporter, hintText } from "../src/reports.js";
@@ -21,17 +21,22 @@ function confirmation(domain: string, at: number, reporters: string[], category:
   return { domain, category, reporters: reporters.length, at, firstReporter: reporters[0] ?? null, reporterSet: reporters };
 }
 
+function flag(domain: string, at: number, reporters: string[], confirmed = false, category: FlagSummary["category"] = "drainer"): FlagSummary {
+  return { domain, category, reporters: reporters.length, confirmed, firstSeen: at, lastSeen: at, reasons: [], firstReporter: reporters[0] ?? null, reporterSet: reporters };
+}
+
 function hint(domain: string, at: number, category: Hint["categories"], firstBy?: Hint["firstBy"]): Hint {
   return { domain, count: 1, firstAt: at, lastAt: at, categories: category, reasons: [], ...(firstBy ? { firstBy } : {}) };
 }
 
-function rewardsWith(confirmations: Confirmation[], hints: Hint[], arrivals: Record<string, ListArrival> = {}, allow: string[] = [], now = NOW): Rewards {
+function rewardsWith(confirmations: Confirmation[], hints: Hint[], arrivals: Record<string, ListArrival> = {}, allow: string[] = [], now = NOW, flags: FlagSummary[] = [], blocked: string[] = []): Rewards {
   return new Rewards(
     {
       confirmations: (since) => confirmations.filter((entry) => entry.at >= since),
+      flags: () => flags,
       hints: () => hints,
       listArrival: (domain) => arrivals[domain] ?? null,
-      isBlocked: () => true,
+      isBlocked: (domain) => blocked.includes(domain),
       isAllowlisted: (domain) => allow.includes(domain),
     },
     { clock: () => now },
@@ -49,6 +54,17 @@ describe("bounty ledger", () => {
     expect(entries.find((entry) => entry.domain === "thin.example")).toMatchObject({ status: "pending", amount: 0.3 });
     expect(entries.find((entry) => entry.domain === "old.example")).toMatchObject({ status: "void" });
     expect(rewards.balance(A)).toMatchObject({ owed: 0.5, paid: 0, pending: 1 });
+  });
+
+  it("keeps a lone tier holder's flag waiting until others confirm, skips names a list already blocks, and voids it after two weeks", () => {
+    const flags = [flag("fresh.example", NOW - HOUR, [A]), flag("listed.example", NOW - HOUR, [A]), flag("stale.example", NOW - 20 * DAY, [A]), flag("done.example", NOW - HOUR, [A, B, C], true)];
+    const rewards = rewardsWith([confirmation("done.example", NOW - HOUR, [A, B, C])], [], {}, [], NOW, flags, ["listed.example"]);
+    const entries = rewards.entries();
+    expect(entries.find((entry) => entry.domain === "fresh.example")).toMatchObject({ status: "pending", source: "flag", wallet: A, key: null, amount: 0.5, confirmedAt: null });
+    expect(entries.find((entry) => entry.domain === "listed.example")).toBeUndefined();
+    expect(entries.find((entry) => entry.domain === "stale.example")?.status).toBe("void");
+    expect(entries.filter((entry) => entry.domain === "done.example")).toEqual([expect.objectContaining({ status: "payable" })]);
+    expect(rewards.balance(A)).toMatchObject({ owed: 0.5, pending: 1 });
   });
 
   it("lets a public list corroborate a lone confirmation and a phone's hint, honours first-only, and voids allowlisted names", () => {

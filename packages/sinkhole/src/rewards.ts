@@ -1,6 +1,6 @@
 import { createPublicClient, erc20Abi, http, type Address } from "viem";
 import { burnVaultAbi, customChain, robinhoodChain } from "@payhole/sdk";
-import type { Confirmation } from "./blocklist.js";
+import type { Confirmation, FlagSummary } from "./blocklist.js";
 import type { Category } from "./category.js";
 import type { Hint } from "./hints.js";
 import { tokensFor, type PriceQuote } from "./price.js";
@@ -62,6 +62,8 @@ export interface ListArrival {
 
 export interface RewardsSource {
   confirmations: (since: number) => Confirmation[];
+  /** Live swarm flags, confirmed or not; a lone tier holder's flag waits here until others agree. */
+  flags: (now: number) => FlagSummary[];
   hints: () => Hint[];
   /** When a public list first brought a name in, if it did. */
   listArrival: (domain: string) => ListArrival | null;
@@ -126,6 +128,24 @@ export class Rewards {
         confirmedAt: confirmation.at,
         corroboration: others >= OTHER_CONFIRMERS ? `swarm:${others + 1}` : arrival ? `list:${arrival.label}` : null,
         status: corroborated ? "payable" : now - confirmation.at > CORROBORATION_DAYS * DAY ? "void" : "pending",
+        paidTx: null,
+      });
+    }
+    for (const flag of this.source.flags(now)) {
+      if (flag.confirmed || !flag.firstReporter || out.has(flag.domain) || BOUNTY_USDG[flag.category] === 0) continue;
+      // A flag on a name a list already blocks duplicates the list and never counts.
+      if (this.source.isBlocked(flag.domain)) continue;
+      out.set(flag.domain, {
+        domain: flag.domain,
+        category: flag.category,
+        amount: BOUNTY_USDG[flag.category],
+        wallet: flag.firstReporter,
+        key: null,
+        source: "flag",
+        reportedAt: flag.firstSeen,
+        confirmedAt: null,
+        corroboration: null,
+        status: now - flag.firstSeen > CORROBORATION_DAYS * DAY ? "void" : "pending",
         paidTx: null,
       });
     }

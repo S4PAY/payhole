@@ -82,6 +82,10 @@ export interface FlagSummary {
   firstSeen: number;
   lastSeen: number;
   reasons: string[];
+  /** The wallet whose live flag came first, lowercase; who a bounty for the name would belong to. */
+  firstReporter: string | null;
+  /** The distinct wallets with live flags, lowercase, at most ten. */
+  reporterSet: string[];
 }
 
 export interface BlocklistState {
@@ -346,6 +350,22 @@ export class Blocklist {
     return out;
   }
 
+  /** Who flagged first (by the reporters' own timestamps) and who else still has a live flag. */
+  private reporterSummary(flags: Map<string, SwarmFlag>, now: number): { firstReporter: string | null; reporterSet: string[] } {
+    let firstReporter: string | null = null;
+    let firstTs = Number.POSITIVE_INFINITY;
+    const reporterSet: string[] = [];
+    for (const [address, flag] of flags) {
+      if (flag.seen + this.ttlMs <= now) continue;
+      if (reporterSet.length < 10) reporterSet.push(address);
+      if (flag.ts < firstTs) {
+        firstTs = flag.ts;
+        firstReporter = address;
+      }
+    }
+    return { firstReporter, reporterSet };
+  }
+
   /**
    * Reporters needed to confirm `domain` given its live flags: the node's threshold, lowered for
    * fast-lane categories, and down to one when the domain already sits on a subscribed list.
@@ -397,18 +417,7 @@ export class Blocklist {
     if (changed) {
       let strongestCategory: Category | null = null;
       for (const flag of live) strongestCategory = strongest(strongestCategory, flag.category);
-      let firstReporter: string | null = null;
-      let firstTs = Number.POSITIVE_INFINITY;
-      const reporterSet: string[] = [];
-      for (const [address, flag] of flags) {
-        if (flag.seen + this.ttlMs <= seen) continue;
-        if (reporterSet.length < 10) reporterSet.push(address);
-        if (flag.ts < firstTs) {
-          firstTs = flag.ts;
-          firstReporter = address;
-        }
-      }
-      this.confirmations.push({ domain, category: strongestCategory ?? "phishing", reporters, at: seen, firstReporter, reporterSet });
+      this.confirmations.push({ domain, category: strongestCategory ?? "phishing", reporters, at: seen, ...this.reporterSummary(flags, seen) });
       if (this.confirmations.length > CONFIRMATIONS_KEPT) this.confirmations.splice(0, this.confirmations.length - CONFIRMATIONS_KEPT);
     }
     this.checkChanged();
@@ -464,6 +473,7 @@ export class Blocklist {
         firstSeen: Math.min(...live.map((f) => f.seen)),
         lastSeen: Math.max(...live.map((f) => f.seen)),
         reasons: [...new Set(live.map((f) => f.reason))].slice(0, 10),
+        ...this.reporterSummary(flags, now),
       });
     }
     return out.sort(byDomain);
