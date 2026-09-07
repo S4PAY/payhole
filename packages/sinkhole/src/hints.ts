@@ -18,6 +18,13 @@ export interface HintReporter {
   at: number;
 }
 
+/** One run of the evidence probes, kept so a name dead for a day can be told from one dead for a minute. */
+export interface Probe {
+  at: number;
+  resolves: boolean;
+  score: number;
+}
+
 export interface Hint {
   domain: string;
   count: number;
@@ -28,6 +35,8 @@ export interface Hint {
   /** The first signed report, if any report was signed. */
   firstBy?: HintReporter;
   evidence?: Evidence;
+  /** The last few probe runs, oldest first. */
+  probes?: Probe[];
 }
 
 export interface HintsFile {
@@ -44,6 +53,7 @@ export interface HintsOptions {
 }
 
 const DEFAULT_LIMIT = 5000;
+const PROBES_KEPT = 10;
 const REASONS_KEPT = 5;
 const WRITE_DELAY_MS = 5000;
 
@@ -78,6 +88,7 @@ export class Hints {
           reasons: Array.isArray(entry.reasons) ? entry.reasons.filter((reason): reason is string => typeof reason === "string").slice(0, REASONS_KEPT) : [],
           ...(entry.firstBy && typeof entry.firstBy.key === "string" && typeof entry.firstBy.at === "number" ? { firstBy: { key: entry.firstBy.key, payTo: typeof entry.firstBy.payTo === "string" ? entry.firstBy.payTo : null, at: entry.firstBy.at } } : {}),
           ...(entry.evidence && typeof entry.evidence.score === "number" ? { evidence: entry.evidence } : {}),
+          ...(Array.isArray(entry.probes) ? { probes: entry.probes.filter((probe): probe is Probe => typeof probe.at === "number" && typeof probe.resolves === "boolean" && typeof probe.score === "number").slice(-PROBES_KEPT) } : {}),
         });
       }
     }
@@ -124,6 +135,7 @@ export class Hints {
     const hint = this.hints.get(domain);
     if (!hint) return;
     hint.evidence = evidence;
+    hint.probes = [...(hint.probes ?? []), { at: evidence.checkedAt, resolves: evidence.resolves, score: evidence.score }].slice(-PROBES_KEPT);
     this.schedule();
   }
 

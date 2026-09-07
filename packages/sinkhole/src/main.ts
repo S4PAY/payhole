@@ -22,6 +22,7 @@ import { buildLedger, buildRadar, memoize } from "./radar.js";
 import { createReporter } from "./reports.js";
 import { PONS_V2_FACTORY, createPriceSource } from "./price.js";
 import { AddressList, normalizeAddress } from "./addresses.js";
+import { decide, probeDue } from "./autopilot.js";
 import { MIN_PAYOUT_USDG, Rewards, createHoldingCheck } from "./rewards.js";
 import { Subscriptions } from "./subscriptions.js";
 import { parseAllowlistText } from "./allowlist.js";
@@ -173,8 +174,16 @@ async function run(config: SinkholeConfig): Promise<void> {
   const hints = await Hints.load({ path: join(config.dataDir, "hints.json"), log });
   if (hints.size > 0) log(`${hints.size} hinted names loaded`);
   const evidence = config.reports.evidence
-    ? new EvidenceQueue({ log }, (domain) => hints.get(domain)?.evidence ?? null, (domain, found) => hints.setEvidence(domain, found))
+    ? new EvidenceQueue(
+        { log },
+        (domain) => hints.get(domain)?.evidence ?? null,
+        (domain, found) => {
+          hints.setEvidence(domain, found);
+          void autopilotRef(domain);
+        },
+      )
     : null;
+  let autopilotRef: (domain: string) => Promise<void> = () => Promise.resolve();
   if (evidence) for (const hint of hints.all()) evidence.enqueue(hint.domain);
   const rewards = await Rewards.load(
     {
@@ -188,6 +197,38 @@ async function run(config: SinkholeConfig): Promise<void> {
     },
     { path: join(config.dataDir, "rewards.json"), log },
   );
+  /** The node's own verdict on one pending report, from its evidence; a no-op for anything already decided. */
+  const autopilot = async (domain: string): Promise<void> => {
+    const hint = hints.get(domain);
+    if (!hint || normalizeAddress(domain)) return;
+    const entry = rewards.entries().find((candidate) => candidate.domain === domain);
+    if (entry?.status !== "pending" || entry.review) return;
+    const decision = decide(hint, config.autopilot);
+    if (decision.action === "wait") return;
+    if (decision.action === "confirm") {
+      await rewards.review(domain, "confirm", decision.note, undefined, "evidence");
+      const added = blocklist.addManual(domain, decision.note, undefined, entry.category);
+      if (added?.added) await publishFlags([{ domain, reason: decision.note, category: entry.category }]);
+      log(`autopilot confirmed ${domain} (${decision.note})`);
+      return;
+    }
+    await rewards.review(domain, "reject", decision.note, undefined, "evidence");
+    log(`autopilot closed ${domain} (${decision.note})`);
+  };
+  autopilotRef = autopilot;
+
+  /** Every hour: probe again what is still pending and due, and decide what the probes already settle. */
+  const autopilotTick = async (): Promise<void> => {
+    const now = Date.now();
+    for (const entry of rewards.entries(now)) {
+      if (entry.status !== "pending" || entry.review || normalizeAddress(entry.domain)) continue;
+      const hint = hints.get(entry.domain);
+      if (!hint) continue;
+      if (evidence && probeDue(hint.probes, now, config.autopilot)) evidence.enqueue(entry.domain, true);
+      await autopilot(entry.domain);
+    }
+  };
+
   const radar = memoize(
     () => buildRadar({ blocklist, hints, lists: { list: () => subscriptions.list(), historyOf: (id) => subscriptions.historyOf(id), domains: () => subscriptions.domains() } }),
     MINUTE,
@@ -585,7 +626,9 @@ async function run(config: SinkholeConfig): Promise<void> {
     setInterval(() => void subscriptions.refreshDue(), 5 * MINUTE),
     setInterval(() => void allowlists.refreshDue(), 5 * MINUTE),
     setInterval(() => void addresses.refreshDue(), 5 * MINUTE),
+    setInterval(() => void autopilotTick(), 60 * MINUTE),
   ];
+  timers.push(setTimeout(() => void autopilotTick(), 2 * MINUTE));
   void subscriptions.refreshDue();
   void allowlists.refreshDue();
   void addresses.refreshDue();

@@ -31,6 +31,8 @@ export interface SinkholeConfig {
   lists: { urls: string[]; refreshHours: number };
   /** The public list of bad addresses the extension's wallet guard checks against; null when off. */
   addresses: { url: string | null };
+  /** The node's own verdicts on reports: confirm from strong evidence, close what stays dead. */
+  autopilot: { confirmScore: number; deadHours: number };
   /** Names never blocked: fetched rule lists plus an optional local file. Refreshed with the blocklists. */
   allow: { urls: string[]; file: string | undefined };
   /** DNS over HTTPS on plain HTTP, meant to sit behind a TLS-terminating reverse proxy. */
@@ -168,6 +170,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): SinkholeConfig
     queryLog: { enabled: flag(env["QUERY_LOG_ENABLED"], true) },
     lists: { urls: list(env["BLOCKLIST_URLS"]), refreshHours: integer(env["BLOCKLIST_REFRESH_HOURS"], 24, "BLOCKLIST_REFRESH_HOURS") },
     addresses: { url: env["ADDRESS_LIST_URL"] === undefined ? DEFAULT_ADDRESS_LIST_URL : env["ADDRESS_LIST_URL"].trim().toLowerCase() === "off" ? null : env["ADDRESS_LIST_URL"].trim() },
+    autopilot: { confirmScore: integer(env["AUTO_CONFIRM_SCORE"], 60, "AUTO_CONFIRM_SCORE", 0), deadHours: integer(env["AUTO_CLOSE_DEAD_HOURS"], 20, "AUTO_CLOSE_DEAD_HOURS", 1) },
     allow: {
       urls: env["ALLOWLIST_URLS"] === undefined ? [DEFAULT_ALLOWLIST_URL] : list(env["ALLOWLIST_URLS"]),
       file: optional(env["MANUAL_ALLOWLIST_FILE"]),

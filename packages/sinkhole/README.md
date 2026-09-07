@@ -78,8 +78,11 @@ fetch scam pages.
 
 The node keeps the ledger a bounty is paid from; it never moves money. A report earns when the name was unknown to the network
 at the time (a name already blocked is answered `already_blocked` and never counted), the reporter was first, and the network
-later agreed: two tier holders other than the reporter confirmed it, a public list caught up within fourteen days, or the
-project reviewed the evidence and confirmed it, which also adds the name to the PayHole list. Amounts:
+later agreed: two tier holders other than the reporter confirmed it, a public list caught up within fourteen days, the
+node's own evidence made the case (`AUTO_CONFIRM_SCORE`, 60 by default: a seed-phrase form on a domain registered this
+week, say), or the project reviewed it by hand; a confirmed name joins the PayHole list either way. A name that fails to
+resolve on two probes at least `AUTO_CLOSE_DEAD_HOURS` apart (20 by default) closes on its own; pending names are probed
+again on that schedule. Amounts:
 0.50 USDG for a wallet drainer or drainer infrastructure, 0.30 for phishing or a counterfeit token site, at most ten paid reports
 per wallet per day; the rest are `capped`. A name later allowlisted is `void`. Rewards go to the wallet the phone named, or to
 the tier holder for a flag from a node; a phone that reported before naming a wallet can be assigned one later.

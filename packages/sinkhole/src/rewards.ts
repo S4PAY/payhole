@@ -49,6 +49,8 @@ export interface Review {
   verdict: "confirm" | "reject";
   at: number;
   note: string;
+  /** Who decided: the project by hand, or the node from its own evidence. Absent in old files means the project. */
+  by?: "owner" | "evidence";
 }
 
 export interface Claim {
@@ -205,7 +207,7 @@ export class Rewards {
       if (review?.verdict === "confirm" && entry.status !== "payable") {
         entry.status = "payable";
         entry.confirmedAt ??= review.at;
-        entry.corroboration ??= "owner";
+        entry.corroboration ??= review.by === "evidence" ? "evidence" : "owner";
       }
       if (this.source.isAllowlisted(entry.domain)) entry.status = "void";
       const payment = this.paid.get(entry.domain);
@@ -276,9 +278,9 @@ export class Rewards {
   }
 
   /** The project's verdict on a report; returns the entry as it stands afterwards, if the node has one. */
-  async review(domain: string, verdict: Review["verdict"], note = "", now = this.clock()): Promise<RewardEntry | null> {
+  async review(domain: string, verdict: Review["verdict"], note = "", now = this.clock(), by: Review["by"] = "owner"): Promise<RewardEntry | null> {
     const key = domain.trim().toLowerCase();
-    this.reviews.set(key, { verdict, at: now, note: note.slice(0, 200) });
+    this.reviews.set(key, { verdict, at: now, note: note.slice(0, 200), by });
     await this.persist();
     return this.entries(now).find((entry) => entry.domain === key) ?? null;
   }

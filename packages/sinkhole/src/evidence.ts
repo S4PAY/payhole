@@ -256,10 +256,10 @@ export class EvidenceQueue {
     private readonly store: (domain: string, evidence: Evidence) => void,
   ) {}
 
-  enqueue(domain: string): void {
+  enqueue(domain: string, force = false): void {
     const ttl = this.options.ttlMs ?? 24 * 60 * 60 * 1000;
     const existing = this.known(domain);
-    if (existing && (this.options.clock ?? Date.now)() - existing.checkedAt < ttl) return;
+    if (!force && existing && (this.options.clock ?? Date.now)() - existing.checkedAt < ttl) return;
     if (this.pending.includes(domain)) return;
     this.pending.push(domain);
     void this.drain();
