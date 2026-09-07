@@ -120,6 +120,10 @@ describe("reports", () => {
     expect(await report({ message: listed })).toEqual({ status: "confirmed", domain: "listed.example", reporters: 1 });
     expect(relayed).toHaveLength(2);
     expect(blocklist.curated().has("listed.example")).toBe(true);
+    const local = createReporter({ blocklist, hints, verify: (raw) => verifySwarmMessage(raw, "", { ...options, clock: () => now }), publish: (message) => { relayed.push(message); return Promise.resolve(1); }, acceptDelegates: true, relayDelegates: false, clock: () => now });
+    const kept = await signDelegatedMessage(phone, proof, { type: "flag", domain: "kept.example", reason: "local only", ts: now, category: "drainer" });
+    expect(await local({ message: kept })).toEqual({ status: "flagged", domain: "kept.example", reporters: 1 });
+    expect(relayed).toHaveLength(2);
     const strangers = await signDelegatedMessage(phone, await signProof(stranger, phone.address), { type: "flag", domain: "kit.example", reason: "x", ts: now });
     const refused = await report({ message: strangers });
     expect(refused.status).toBe("rejected");

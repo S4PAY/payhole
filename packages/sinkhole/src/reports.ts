@@ -39,6 +39,8 @@ export interface ReporterDeps {
   publish?: ((message: AnySwarmMessage) => Promise<unknown>) | undefined;
   /** Signed reports are refused until every node in the swarm understands delegated signatures. */
   acceptDelegates: boolean;
+  /** Relay accepted signed reports to the swarm; off keeps them on this node while older peers would drop them. */
+  relayDelegates?: boolean | undefined;
   log?: ((line: string) => void) | undefined;
   clock?: (() => number) | undefined;
 }
@@ -63,7 +65,7 @@ export function createReporter(deps: ReporterDeps): (input: ReportInput) => Prom
       const now = clock();
       const result = deps.blocklist.recordFlag(message.body.domain, message.reporter, message.body.reason, message.body.ts, now, message.body.category ?? "phishing");
       if (!result) return { status: "invalid", detail: "the flagged name is not a hostname" };
-      if (deps.publish) {
+      if (deps.publish && deps.relayDelegates !== false) {
         try {
           await deps.publish(message);
         } catch (error) {

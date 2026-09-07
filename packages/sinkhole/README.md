@@ -56,8 +56,9 @@ encrypted DNS rate limit) takes reports from people who are not running a node.
   membership text with the delegate's address in the peer slot, and the body is signed by the delegate. The node verifies it
   like any flag, including the holder's BurnVault tier, records it, and relays it to the swarm; the answer says `flagged` or
   `confirmed`. Delegated messages are self-certifying, so the relaying peer does not have to be the one in the proof.
-  `REPORT_DELEGATES=1` turns this on; leave it off until every node runs a version that verifies delegated signatures,
-  because older nodes drop them and penalise the relay.
+  `REPORT_DELEGATES=1` turns this on. Older nodes drop delegated messages and penalise the relay, so while the swarm is
+  mixed set `REPORT_RELAY=0`: signed reports are then verified and recorded on this node, and count on its resolver, without
+  being published to peers.
 
 A hint may be signed by the phone's reporter key: `key`, `payTo` (the wallet rewards go to, optional), `ts`, and `signature`,
 an EIP-191 signature over the canonical JSON `{"type":"hint","domain","category","reason","ts","payTo"}`. The first signed

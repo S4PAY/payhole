@@ -25,7 +25,7 @@ export interface SinkholeConfig {
     proofJson: string | undefined;
   };
   probe: { allowPrivate: boolean };
-  reports: { delegates: boolean; evidence: boolean; minHoldUsd: number; ponsFactory: string | undefined; priceUrl: string | undefined; priceJsonPath: string | undefined };
+  reports: { delegates: boolean; relay: boolean; evidence: boolean; minHoldUsd: number; ponsFactory: string | undefined; priceUrl: string | undefined; priceJsonPath: string | undefined };
   queryLog: { enabled: boolean };
   lists: { urls: string[]; refreshHours: number };
   /** Names never blocked: fetched rule lists plus an optional local file. Refreshed with the blocklists. */
@@ -155,6 +155,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): SinkholeConfig
     probe: { allowPrivate: flag(env["PROBE_ALLOW_PRIVATE"]) },
     reports: {
       delegates: flag(env["REPORT_DELEGATES"]),
+      relay: flag(env["REPORT_RELAY"], true),
       evidence: flag(env["EVIDENCE_ENABLED"]),
       minHoldUsd: integer(env["MIN_HOLD_USD"], 10, "MIN_HOLD_USD", 0),
       ponsFactory: optional(env["PONS_FACTORY"]),

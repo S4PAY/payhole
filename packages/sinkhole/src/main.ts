@@ -334,6 +334,7 @@ async function run(config: SinkholeConfig): Promise<void> {
     verify: (raw) => verifySwarmMessage(raw, "", { tierOf: tierOfRef, minTier: config.membership.minTier }),
     publish: (message) => (swarm ? swarm.publish(message) : Promise.resolve(0)),
     acceptDelegates: config.reports.delegates,
+    relayDelegates: config.reports.relay,
     log,
   });
   let doh: (Server & { counters: EncryptedDnsCounters }) | null = null;
