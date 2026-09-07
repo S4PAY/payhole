@@ -180,6 +180,7 @@ export class Blocklist {
   private listCategory: (domain: string) => Category | null = () => null;
   private readonly fastLane: { threshold: number; categories: Set<Category> } | null;
   private readonly listeners = new Set<() => void>();
+  private readonly dirtyListeners = new Set<() => void>();
   /** Merged set as of the last notification; expiry can change the set without any mutation. */
   private lastNotified: Set<string>;
   readonly threshold: number;
@@ -252,6 +253,19 @@ export class Blocklist {
     for (const listener of this.listeners) listener();
   }
 
+  /**
+   * Registers a listener for any change to the persisted state, whether or not the merged set moved: a
+   * lone flag, a refreshed one, a pruned one. The store saves on this; the resolver reloads on `onChange`.
+   */
+  onDirty(listener: () => void): () => void {
+    this.dirtyListeners.add(listener);
+    return () => this.dirtyListeners.delete(listener);
+  }
+
+  private markDirty(): void {
+    for (const listener of this.dirtyListeners) listener();
+  }
+
   /** Notifies listeners when the merged set differs from what they last saw, expiry included. */
   private checkChanged(): void {
     const current = this.domains();
@@ -291,6 +305,7 @@ export class Blocklist {
   private withChange<T>(fn: () => T): T {
     const result = fn();
     this.checkChanged();
+    this.markDirty();
     return result;
   }
 
@@ -421,6 +436,7 @@ export class Blocklist {
       if (this.confirmations.length > CONFIRMATIONS_KEPT) this.confirmations.splice(0, this.confirmations.length - CONFIRMATIONS_KEPT);
     }
     this.checkChanged();
+    this.markDirty();
     return { domain, reporters, confirmed, changed };
   }
 

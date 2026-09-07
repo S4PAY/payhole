@@ -102,6 +102,17 @@ describe("Blocklist local and manual sources", () => {
     expect(blocklist.localMeta().updatedAt).toBe("2026-09-05T00:00:00.000Z");
   });
 
+  it("tells the store about a lone flag so a restart keeps it", () => {
+    const { blocklist, changes } = make(3);
+    let dirty = 0;
+    blocklist.onDirty(() => (dirty += 1));
+    blocklist.recordFlag("lone.example", A, "r", 1);
+    expect(dirty).toBe(1);
+    expect(changes).toHaveLength(0);
+    const restored = new Blocklist({ threshold: 3, ttlMs: 30 * DAY, clock: () => 1_700_000_000_000 }, JSON.parse(JSON.stringify(blocklist.toJSON())) as BlocklistState);
+    expect(restored.flagSummaries()).toEqual([expect.objectContaining({ domain: "lone.example", reporters: 1, confirmed: false, firstReporter: A.toLowerCase(), reporterSet: [A.toLowerCase()] })]);
+  });
+
   it("round-trips through the persisted state", () => {
     const { blocklist } = make(2);
     blocklist.setLocal({ version: 1, updatedAt: "2026-09-04T00:00:00.000Z", entries: [{ domain: "local.example", reason: "r", flaggedAt: "2026-09-04T00:00:00.000Z" }] });

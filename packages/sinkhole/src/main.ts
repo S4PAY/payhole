@@ -261,6 +261,7 @@ async function run(config: SinkholeConfig): Promise<void> {
     applyDns.trigger();
     persist.trigger();
   });
+  blocklist.onDirty(() => persist.trigger());
   directory.onChange(() => persist.trigger());
   await dnsmasq.start(blockSets());
   log(`dnsmasq listening on ${config.dns.listen}:${config.dns.port}, upstream ${config.dns.upstream.join(", ")}, ${blocklist.domains().size} domains blocked, query log ${config.queryLog.enabled ? "on" : "off"}`);
