@@ -111,6 +111,10 @@ describe("Blocklist local and manual sources", () => {
     expect(changes).toHaveLength(0);
     const restored = new Blocklist({ threshold: 3, ttlMs: 30 * DAY, clock: () => 1_700_000_000_000 }, JSON.parse(JSON.stringify(blocklist.toJSON())) as BlocklistState);
     expect(restored.flagSummaries()).toEqual([expect.objectContaining({ domain: "lone.example", reporters: 1, confirmed: false, firstReporter: A.toLowerCase(), reporterSet: [A.toLowerCase()] })]);
+    expect(blocklist.removeFlags("LONE.example")).toBe(true);
+    expect(blocklist.removeFlags("lone.example")).toBe(false);
+    expect(blocklist.flagSummaries()).toEqual([]);
+    expect(dirty).toBe(2);
   });
 
   it("round-trips through the persisted state", () => {

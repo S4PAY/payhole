@@ -78,7 +78,8 @@ fetch scam pages.
 
 The node keeps the ledger a bounty is paid from; it never moves money. A report earns when the name was unknown to the network
 at the time (a name already blocked is answered `already_blocked` and never counted), the reporter was first, and the network
-later agreed: two tier holders other than the reporter confirmed it, or a public list caught up within fourteen days. Amounts:
+later agreed: two tier holders other than the reporter confirmed it, a public list caught up within fourteen days, or the
+project reviewed the evidence and confirmed it, which also adds the name to the PayHole list. Amounts:
 0.50 USDG for a wallet drainer or drainer infrastructure, 0.30 for phishing or a counterfeit token site, at most ten paid reports
 per wallet per day; the rest are `capped`. A name later allowlisted is `void`. Rewards go to the wallet the phone named, or to
 the tier holder for a flag from a node; a phone that reported before naming a wallet can be assigned one later.
@@ -89,6 +90,9 @@ the tier holder for a flag from a node; a phone that reported before naming a wa
   `PRICE_URL`), and any open payout request. When the price cannot be read, nobody without a tier is paid until it can.
 - `POST /rewards/claim` with `{"wallet": "0x..."}` requests a payout once the wallet is owed at least 10 USDG and is eligible.
   Anyone may request a payout for a wallet; the money can only go to that wallet.
+- `POST /api/rewards/review` (admin) with `{"domain": "...", "verdict": "confirm" | "reject", "note": "..."}` records the project's
+  verdict: `confirm` makes the entry payable and, unless the body says `"block": false`, adds the name as a manual block; `reject`
+  voids it. `GET /api/rewards` lists every entry with its evidence and review. `DELETE /api/flags/<domain>` drops a stray flag.
 - `GET /api/rewards` lists every entry and claim for the operator; `GET /api/rewards?wallet=` one wallet's balance.
 - `POST /api/rewards/paid` with `{"wallet", "tx"}` records that the owner paid: every payable entry the wallet holds is marked
   with the transaction and its claim closes.

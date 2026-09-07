@@ -7,7 +7,8 @@ import { Blocklist, type Confirmation, type FlagSummary } from "../src/blocklist
 import { scoreEvidence } from "../src/evidence.js";
 import { Hints, type Hint } from "../src/hints.js";
 import { createReporter, hintText } from "../src/reports.js";
-import { BOUNTY_USDG, DAILY_CAP, MIN_PAYOUT_USDG, Rewards, type ListArrival } from "../src/rewards.js";
+import { BOUNTY_USDG, DAILY_CAP, MIN_PAYOUT_USDG, Rewards, type ListArrival, type RewardsFile } from "../src/rewards.js";
+import type { Evidence } from "../src/evidence.js";
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -29,7 +30,17 @@ function hint(domain: string, at: number, category: Hint["categories"], firstBy?
   return { domain, count: 1, firstAt: at, lastAt: at, categories: category, reasons: [], ...(firstBy ? { firstBy } : {}) };
 }
 
-function rewardsWith(confirmations: Confirmation[], hints: Hint[], arrivals: Record<string, ListArrival> = {}, allow: string[] = [], now = NOW, flags: FlagSummary[] = [], blocked: string[] = []): Rewards {
+function rewardsWith(
+  confirmations: Confirmation[],
+  hints: Hint[],
+  arrivals: Record<string, ListArrival> = {},
+  allow: string[] = [],
+  now = NOW,
+  flags: FlagSummary[] = [],
+  blocked: string[] = [],
+  evidence: Record<string, Evidence> = {},
+  state: RewardsFile | null = null,
+): Rewards {
   return new Rewards(
     {
       confirmations: (since) => confirmations.filter((entry) => entry.at >= since),
@@ -38,8 +49,10 @@ function rewardsWith(confirmations: Confirmation[], hints: Hint[], arrivals: Rec
       listArrival: (domain) => arrivals[domain] ?? null,
       isBlocked: (domain) => blocked.includes(domain),
       isAllowlisted: (domain) => allow.includes(domain),
+      evidenceOf: (domain) => evidence[domain] ?? null,
     },
     { clock: () => now },
+    state,
   );
 }
 
@@ -65,6 +78,22 @@ describe("bounty ledger", () => {
     expect(entries.find((entry) => entry.domain === "stale.example")?.status).toBe("void");
     expect(entries.filter((entry) => entry.domain === "done.example")).toEqual([expect.objectContaining({ status: "payable" })]);
     expect(rewards.balance(A)).toMatchObject({ owed: 0.5, pending: 1 });
+  });
+
+  it("lets the project review a report: confirm pays and survives the block that follows, reject voids, both persist", async () => {
+    const flags = [flag("fresh.example", NOW - HOUR, [A]), flag("parked.example", NOW - HOUR, [A], false, "phishing")];
+    const found: Evidence = { checkedAt: NOW - HOUR, score: 70, marks: ["seed phrase form", "registered 2 days ago"], resolves: true, brands: [], freeHosting: null, ageDays: 2, certDays: 1, page: { status: 200, title: null } };
+    const rewards = rewardsWith([], [], {}, [], NOW, flags, [], { "fresh.example": found });
+    expect(rewards.entries().find((entry) => entry.domain === "fresh.example")).toMatchObject({ status: "pending", evidence: { score: 70, marks: found.marks }, review: null });
+    expect(rewards.balance(A)).toMatchObject({ owed: 0, pending: 2 });
+    const confirmed = await rewards.review("fresh.example", "confirm", "seed phrase form on a two day old name");
+    expect(confirmed).toMatchObject({ status: "payable", corroboration: "owner", confirmedAt: NOW, review: { verdict: "confirm", at: NOW } });
+    expect((await rewards.review("parked.example", "reject", "parked, no page"))?.status).toBe("void");
+    expect(rewards.balance(A)).toMatchObject({ owed: 0.5, pending: 0 });
+    const reloaded = rewardsWith([], [], {}, [], NOW, flags, ["fresh.example"], {}, JSON.parse(JSON.stringify(rewards.toJSON())) as RewardsFile);
+    expect(reloaded.entries().find((entry) => entry.domain === "fresh.example")).toMatchObject({ status: "payable", evidence: null, review: { verdict: "confirm", note: "seed phrase form on a two day old name" } });
+    expect(reloaded.entries().find((entry) => entry.domain === "parked.example")?.status).toBe("void");
+    expect(reloaded.reviewOf("PARKED.example")?.verdict).toBe("reject");
   });
 
   it("lets a public list corroborate a lone confirmation and a phone's hint, honours first-only, and voids allowlisted names", () => {
@@ -128,7 +157,7 @@ describe("signed hints", () => {
     const blocklist = new Blocklist({ threshold: 2, ttlMs: 30 * DAY, clock: () => now });
     const hints = new Hints({ clock: () => now });
     const seen: string[] = [];
-    const report = createReporter({ blocklist, hints, acceptDelegates: false, clock: () => now, onHint: (domain) => seen.push(domain) });
+    const report = createReporter({ blocklist, hints, acceptDelegates: false, clock: () => now, onReport: (domain) => seen.push(domain) });
     const sign = async (account: typeof phone, domain: string, ts: number, payTo: string | null) => account.signMessage({ message: hintText(domain, "drainer", "seed form", ts, payTo) });
 
     const forged = await report({ name: "scam.example", category: "drainer", reason: "seed form", key: phone.address, payTo: WALLET, ts: now, signature: await sign(other, "scam.example", now, WALLET) });

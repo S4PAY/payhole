@@ -355,6 +355,15 @@ export class Blocklist {
     return this.withChange(() => this.manual.delete(domain));
   }
 
+  /** Drops every flag on a name, confirmed or not: a test flag, or one the node should forget. */
+  removeFlags(input: string): boolean {
+    const domain = normalizeHostname(input);
+    if (!domain || !this.swarm.delete(domain)) return false;
+    this.checkChanged();
+    this.markDirty();
+    return true;
+  }
+
   manualEntries(): ManualEntry[] {
     return [...this.manual.values()].sort(byDomain);
   }

@@ -181,6 +181,7 @@ async function run(config: SinkholeConfig): Promise<void> {
       listArrival: (domain) => subscriptions.listArrival(domain),
       isBlocked: (domain) => blocklist.inspect(domain)?.blocked ?? false,
       isAllowlisted: (domain) => blocklist.inspect(domain)?.allowlisted ?? false,
+      evidenceOf: (domain) => hints.get(domain)?.evidence ?? null,
     },
     { path: join(config.dataDir, "rewards.json"), log },
   );
@@ -332,7 +333,7 @@ async function run(config: SinkholeConfig): Promise<void> {
   const report = createReporter({
     blocklist,
     hints,
-    onHint: evidence ? (domain) => evidence.enqueue(domain) : undefined,
+    onReport: evidence ? (domain) => evidence.enqueue(domain) : undefined,
     verify: (raw) => verifySwarmMessage(raw, "", { tierOf: tierOfRef, minTier: config.membership.minTier }),
     publish: (message) => (swarm ? swarm.publish(message) : Promise.resolve(0)),
     acceptDelegates: config.reports.delegates,

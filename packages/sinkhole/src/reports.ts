@@ -30,9 +30,9 @@ export type ReportResult =
 
 export interface ReporterDeps {
   blocklist: Pick<Blocklist, "inspect" | "recordFlag">;
-  hints: Pick<Hints, "record">;
-  /** Called with every new hinted name so evidence can be gathered; absent when evidence is off. */
-  onHint?: ((domain: string) => void) | undefined;
+  hints: Pick<Hints, "record" | "get">;
+  /** Called with every newly reported name, hint or flag, so evidence can be gathered; absent when evidence is off. */
+  onReport?: ((domain: string) => void) | undefined;
   /** Verifies a signed report against the swarm rules and the reporter's tier; absent when this node cannot. */
   verify?: ((raw: string) => Promise<VerifyResult>) | undefined;
   /** Relays an accepted signed report to the swarm; absent on a node without one. */
@@ -65,6 +65,10 @@ export function createReporter(deps: ReporterDeps): (input: ReportInput) => Prom
       const now = clock();
       const result = deps.blocklist.recordFlag(message.body.domain, message.reporter, message.body.reason, message.body.ts, now, message.body.category ?? "phishing");
       if (!result) return { status: "invalid", detail: "the flagged name is not a hostname" };
+      // The flag lives in the blocklist; a note beside the hints keeps the reason and the evidence where a reviewer looks.
+      const noted = !deps.hints.get(result.domain);
+      deps.hints.record(result.domain, message.body.category ?? "phishing", message.body.reason, now);
+      if (noted) deps.onReport?.(result.domain);
       if (deps.publish && deps.relayDelegates !== false) {
         try {
           await deps.publish(message);
@@ -82,10 +86,10 @@ export function createReporter(deps: ReporterDeps): (input: ReportInput) => Prom
     const now = clock();
     const by = await signedBy(input, inspection.domain, now);
     if (typeof by === "string") return { status: "invalid", detail: by };
-    const first = !(deps.hints as Hints).get?.(inspection.domain);
+    const first = !deps.hints.get(inspection.domain);
     const hint = deps.hints.record(inspection.domain, input.category, input.reason, now, by ?? undefined);
     if (!hint) return { status: "invalid", detail: "name is not a hostname" };
-    if (first) deps.onHint?.(hint.domain);
+    if (first) deps.onReport?.(hint.domain);
     return { status: "hinted", domain: hint.domain, hints: hint.count };
   };
 }

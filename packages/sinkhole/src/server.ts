@@ -44,7 +44,7 @@ export interface AdminDeps {
   /** Who reported first each name the swarm confirmed, for `GET /api/reports/ledger`. */
   ledger?: ((since: number) => LedgerEntry[]) | undefined;
   /** The bounty ledger: entries, claims, and the owner's paid marks. */
-  rewards?: Pick<Rewards, "entries" | "allClaims" | "markPaid" | "balance"> | undefined;
+  rewards?: Pick<Rewards, "entries" | "allClaims" | "markPaid" | "balance" | "review"> | undefined;
   /** The operator wallet's BurnVault tier and the unlock action; absent when the node has no vault. */
   membership?: Membership | undefined;
   maxBodyBytes?: number;
@@ -214,6 +214,18 @@ export function createAdminServer(deps: AdminDeps): Server {
       if (method !== "GET") throw new HttpError(405, "method_not_allowed", "use GET");
       return json(res, 200, { threshold: deps.blocklist.threshold, ttlMs: deps.blocklist.ttlMs, entries: deps.blocklist.flagSummaries() });
     }
+    const flagged = /^\/api\/flags\/([^/]+)$/.exec(path);
+    if (flagged?.[1] !== undefined) {
+      if (method !== "DELETE") throw new HttpError(405, "method_not_allowed", "use DELETE");
+      let domain: string;
+      try {
+        domain = decodeURIComponent(flagged[1]);
+      } catch {
+        throw new HttpError(400, "invalid_domain", "bad encoding");
+      }
+      if (!deps.blocklist.removeFlags(domain)) throw new HttpError(404, "not_found", `${domain.slice(0, 120)} has no flags`);
+      return json(res, 200, { domain, removed: true });
+    }
     if (path === "/api/stats") {
       if (method !== "GET") throw new HttpError(405, "method_not_allowed", "use GET");
       if (!deps.stats) throw new HttpError(404, "stats_disabled", "query logging is off on this node (QUERY_LOG_ENABLED=0)");
@@ -336,6 +348,28 @@ export function createAdminServer(deps: AdminDeps): Server {
       if (typeof tx !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(tx)) throw new HttpError(400, "invalid_tx", "tx must be a transaction hash");
       const paid = await deps.rewards.markPaid(wallet, tx);
       return json(res, 200, { wallet, tx, paid: paid.length, amount: Math.round(paid.reduce((sum, entry) => sum + entry.amount, 0) * 100) / 100 });
+    }
+    if (path === "/api/rewards/review") {
+      if (method !== "POST") throw new HttpError(405, "method_not_allowed", "use POST");
+      if (!deps.rewards) throw new HttpError(404, "not_found", "rewards are not enabled");
+      const body = await readJson(req, maxBody);
+      if (!isRecord(body)) throw new HttpError(400, "invalid_body", "body must be a JSON object");
+      const inspection = typeof body["domain"] === "string" ? deps.blocklist.inspect(body["domain"]) : null;
+      if (!inspection) throw new HttpError(400, "invalid_domain", "domain must be a hostname");
+      const verdict = body["verdict"];
+      if (verdict !== "confirm" && verdict !== "reject") throw new HttpError(400, "invalid_verdict", "verdict must be confirm or reject");
+      const note = typeof body["note"] === "string" ? body["note"].slice(0, 200) : "";
+      const entry = await deps.rewards.review(inspection.domain, verdict, note);
+      // A confirmed report is a name the project vouches for: it joins the manual list and the PayHole list with it.
+      let blocked = false;
+      if (verdict === "confirm" && body["block"] !== false) {
+        const category = entry?.category ?? categoryParam(body["category"]) ?? "phishing";
+        const reason = note || "confirmed report";
+        const result = deps.blocklist.addManual(inspection.domain, reason, undefined, category);
+        blocked = result?.added ?? false;
+        if (result?.added) deps.publish?.([{ domain: result.domain, reason, category }]);
+      }
+      return json(res, 200, { domain: inspection.domain, verdict, blocked, entry });
     }
     if (path === "/api/reports/ledger") {
       if (method !== "GET") throw new HttpError(405, "method_not_allowed", "use GET");

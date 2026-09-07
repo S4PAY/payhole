@@ -101,9 +101,11 @@ describe("reports", () => {
     blocklist.setLists(new Set(["listed.example"]));
     const hints = new Hints({ clock: () => now });
     const relayed: unknown[] = [];
+    const seen: string[] = [];
     const report = createReporter({
       blocklist,
       hints,
+      onReport: (domain) => seen.push(domain),
       verify: (raw) => verifySwarmMessage(raw, "", { ...options, clock: () => now }),
       publish: (message) => {
         relayed.push(message);
@@ -115,6 +117,8 @@ describe("reports", () => {
     const proof = await signProof(holder, phone.address);
     const fresh = await signDelegatedMessage(phone, proof, { type: "flag", domain: "kit.example", reason: "drainer kit", ts: now, category: "drainer" });
     expect(await report({ message: fresh })).toEqual({ status: "flagged", domain: "kit.example", reporters: 1 });
+    expect(seen).toEqual(["kit.example"]);
+    expect(hints.get("kit.example")).toMatchObject({ count: 1, categories: { drainer: 1 }, reasons: ["drainer kit"] });
     now += HOUR;
     const listed = await signDelegatedMessage(phone, proof, { type: "flag", domain: "listed.example", reason: "same kit", ts: now, category: "drainer" });
     expect(await report({ message: listed })).toEqual({ status: "confirmed", domain: "listed.example", reporters: 1 });
@@ -135,6 +139,7 @@ describe("reports", () => {
     hints.record("many.example", "phishing", "seen in a dm", now);
     hints.record("many.example", "phishing", "", now);
     const radar = buildRadar({ blocklist, hints, lists: { list: () => [], historyOf: () => [], domains: () => new Set() }, clock: () => now });
-    expect(radar.hints).toEqual({ names: 1, reports: 2, top: [{ domain: "many.example", count: 2, category: "phishing", lastAt: now }] });
+    expect(radar.hints).toMatchObject({ names: 4, reports: 5 });
+    expect(radar.hints.top[0]).toEqual({ domain: "many.example", count: 2, category: "phishing", lastAt: now });
   });
 });

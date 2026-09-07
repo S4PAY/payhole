@@ -2,6 +2,7 @@ import { createPublicClient, erc20Abi, http, type Address } from "viem";
 import { burnVaultAbi, customChain, robinhoodChain } from "@payhole/sdk";
 import type { Confirmation, FlagSummary } from "./blocklist.js";
 import type { Category } from "./category.js";
+import type { Evidence } from "./evidence.js";
 import type { Hint } from "./hints.js";
 import { tokensFor, type PriceQuote } from "./price.js";
 import { readJson, writeJsonAtomic } from "./store.js";
@@ -37,6 +38,17 @@ export interface RewardEntry {
   corroboration: string | null;
   status: RewardStatus;
   paidTx: string | null;
+  /** What the node's probes found, once they ran. */
+  evidence: Pick<Evidence, "checkedAt" | "score" | "marks"> | null;
+  /** The project's own verdict on the report, when it gave one. */
+  review: Review | null;
+}
+
+/** The project looked at a report and decided: confirm pays it, reject voids it. */
+export interface Review {
+  verdict: "confirm" | "reject";
+  at: number;
+  note: string;
 }
 
 export interface Claim {
@@ -47,12 +59,14 @@ export interface Claim {
   tx: string | null;
 }
 
-interface RewardsFile {
+export interface RewardsFile {
   version: 1;
   paid: { domain: string; wallet: string; tx: string; at: number }[];
   claims: Claim[];
   /** Hints reassigned to a wallet after the fact, keyed by reporter key. */
   walletsByKey: Record<string, string>;
+  /** The project's verdicts, keyed by domain; absent in files written before reviews existed. */
+  reviews?: Record<string, Review>;
 }
 
 export interface ListArrival {
@@ -69,6 +83,7 @@ export interface RewardsSource {
   listArrival: (domain: string) => ListArrival | null;
   isBlocked: (domain: string) => boolean;
   isAllowlisted: (domain: string) => boolean;
+  evidenceOf: (domain: string) => Evidence | null;
 }
 
 export interface RewardsOptions {
@@ -87,6 +102,7 @@ export class Rewards {
   private paid = new Map<string, { wallet: string; tx: string; at: number }>();
   private claims: Claim[] = [];
   private walletsByKey = new Map<string, string>();
+  private reviews = new Map<string, Review>();
   private readonly clock: () => number;
   private readonly path: string | undefined;
 
@@ -101,6 +117,7 @@ export class Rewards {
       for (const entry of state.paid ?? []) this.paid.set(entry.domain, { wallet: entry.wallet, tx: entry.tx, at: entry.at });
       this.claims = (state.claims ?? []).map((claim) => ({ ...claim }));
       for (const [key, wallet] of Object.entries(state.walletsByKey ?? {})) this.walletsByKey.set(key.toLowerCase(), wallet);
+      for (const [domain, review] of Object.entries(state.reviews ?? {})) this.reviews.set(domain, { ...review });
     }
   }
 
@@ -129,12 +146,14 @@ export class Rewards {
         corroboration: others >= OTHER_CONFIRMERS ? `swarm:${others + 1}` : arrival ? `list:${arrival.label}` : null,
         status: corroborated ? "payable" : now - confirmation.at > CORROBORATION_DAYS * DAY ? "void" : "pending",
         paidTx: null,
+        evidence: null,
+        review: null,
       });
     }
     for (const flag of this.source.flags(now)) {
-      if (flag.confirmed || !flag.firstReporter || out.has(flag.domain) || BOUNTY_USDG[flag.category] === 0) continue;
-      // A flag on a name a list already blocks duplicates the list and never counts.
-      if (this.source.isBlocked(flag.domain)) continue;
+      if (out.has(flag.domain) || !flag.firstReporter || BOUNTY_USDG[flag.category] === 0) continue;
+      // A flag on a name a list already blocked duplicates the list and never counts, unless the project reviewed it.
+      if ((flag.confirmed || this.source.isBlocked(flag.domain)) && !this.reviews.has(flag.domain)) continue;
       out.set(flag.domain, {
         domain: flag.domain,
         category: flag.category,
@@ -147,6 +166,8 @@ export class Rewards {
         corroboration: null,
         status: now - flag.firstSeen > CORROBORATION_DAYS * DAY ? "void" : "pending",
         paidTx: null,
+        evidence: null,
+        review: null,
       });
     }
     for (const hint of this.source.hints()) {
@@ -170,10 +191,22 @@ export class Rewards {
         corroboration: confirmation ? `swarm:${confirmation.reporters}` : arrival && arrival.at > hint.firstBy.at ? `list:${arrival.label}` : null,
         status: confirmedAt !== null && window ? "payable" : now - hint.firstBy.at > CORROBORATION_DAYS * DAY ? "void" : "pending",
         paidTx: null,
+        evidence: null,
+        review: null,
       });
     }
     const entries = [...out.values()];
     for (const entry of entries) {
+      const found = this.source.evidenceOf(entry.domain);
+      entry.evidence = found ? { checkedAt: found.checkedAt, score: found.score, marks: found.marks } : null;
+      const review = this.reviews.get(entry.domain) ?? null;
+      entry.review = review;
+      if (review?.verdict === "reject") entry.status = "void";
+      if (review?.verdict === "confirm" && entry.status !== "payable") {
+        entry.status = "payable";
+        entry.confirmedAt ??= review.at;
+        entry.corroboration ??= "owner";
+      }
       if (this.source.isAllowlisted(entry.domain)) entry.status = "void";
       const payment = this.paid.get(entry.domain);
       if (payment) {
@@ -242,12 +275,25 @@ export class Rewards {
     await this.persist();
   }
 
+  /** The project's verdict on a report; returns the entry as it stands afterwards, if the node has one. */
+  async review(domain: string, verdict: Review["verdict"], note = "", now = this.clock()): Promise<RewardEntry | null> {
+    const key = domain.trim().toLowerCase();
+    this.reviews.set(key, { verdict, at: now, note: note.slice(0, 200) });
+    await this.persist();
+    return this.entries(now).find((entry) => entry.domain === key) ?? null;
+  }
+
+  reviewOf(domain: string): Review | null {
+    return this.reviews.get(domain.trim().toLowerCase()) ?? null;
+  }
+
   toJSON(): RewardsFile {
     return {
       version: 1,
       paid: [...this.paid.entries()].map(([domain, entry]) => ({ domain, ...entry })),
       claims: this.claims,
       walletsByKey: Object.fromEntries(this.walletsByKey),
+      reviews: Object.fromEntries(this.reviews),
     };
   }
 
