@@ -4,7 +4,8 @@ import { createRequire } from "node:module";
 import { isIP } from "node:net";
 import { hostname } from "node:os";
 import { join } from "node:path";
-import { getAddress, type Address } from "viem";
+import { createPublicClient, getAddress, http, type Address } from "viem";
+import { burnVaultAbi, customChain, robinhoodChain } from "@payhole/sdk";
 import { privateKeyToAccount, type PrivateKeyAccount } from "viem/accounts";
 import { Blocklist, parseExtensionPush, type BlocklistState } from "./blocklist.js";
 import { loadConfig, type SinkholeConfig } from "./config.js";
@@ -19,6 +20,7 @@ import { EvidenceQueue } from "./evidence.js";
 import { Hints } from "./hints.js";
 import { buildLedger, buildRadar, memoize } from "./radar.js";
 import { createReporter } from "./reports.js";
+import { PONS_V2_FACTORY, createPriceSource } from "./price.js";
 import { MIN_PAYOUT_USDG, Rewards, createHoldingCheck } from "./rewards.js";
 import { Subscriptions } from "./subscriptions.js";
 import { parseAllowlistText } from "./allowlist.js";
@@ -265,9 +267,39 @@ async function run(config: SinkholeConfig): Promise<void> {
   let swarm: Swarm | null = null;
   /** The swarm's tier reader once it exists; reports are verified with it. */
   let tierOfRef: TierReader = () => Promise.resolve(0);
-  const holdingCheck = config.membership.vault
-    ? createHoldingCheck({ rpcUrl: config.membership.rpcUrl, chainId: config.membership.chainId, vault: config.membership.vault, minHoldTokens: config.reports.minHoldTokens, tierOf: (address) => tierOfRef(address) })
-    : null;
+  let holdingCheck: ReturnType<typeof createHoldingCheck> | null = null;
+  if (config.membership.vault) {
+    const vault = config.membership.vault;
+    const chainClient = createPublicClient({
+      chain: config.membership.chainId === robinhoodChain.id ? robinhoodChain : customChain(config.membership.chainId, config.membership.rpcUrl),
+      transport: http(config.membership.rpcUrl),
+    });
+    const readContract = (args: { address: `0x${string}`; abi: readonly unknown[]; functionName: string; args?: readonly unknown[] }) =>
+      chainClient.readContract(args);
+    let priceSource: (() => ReturnType<ReturnType<typeof createPriceSource>>) | null = null;
+    holdingCheck = createHoldingCheck({
+      rpcUrl: config.membership.rpcUrl,
+      chainId: config.membership.chainId,
+      vault,
+      minHoldUsd: config.reports.minHoldUsd,
+      price: async () => {
+        // The token is learned from the vault once; the price source is built the first time it is needed.
+        if (!priceSource) {
+          const token = (await chainClient.readContract({ address: vault, abi: burnVaultAbi, functionName: "token" }));
+          priceSource = createPriceSource({
+            readContract,
+            ponsFactory: (config.reports.ponsFactory ?? PONS_V2_FACTORY) as `0x${string}`,
+            token,
+            priceUrl: config.reports.priceUrl,
+            priceJsonPath: config.reports.priceJsonPath,
+            log,
+          });
+        }
+        return priceSource();
+      },
+      tierOf: (address) => tierOfRef(address),
+    });
+  }
   const rewardRoutes = {
     summary: async (wallet: string) => {
       const balance = rewards.balance(wallet);
@@ -285,7 +317,10 @@ async function run(config: SinkholeConfig): Promise<void> {
     },
     claim: async (wallet: string) => {
       const eligible = holdingCheck ? await holdingCheck(wallet as `0x${string}`).catch(() => null) : null;
-      if (eligible && !eligible.ok) return { status: 403, body: { status: "not_eligible", detail: `hold at least ${eligible.required} PAYHOLE or a tier to be paid`, ...eligible } };
+      if (eligible && !eligible.ok) {
+        const detail = eligible.priceUsd === null ? `cannot price the token right now: ${eligible.detail}` : `hold ${eligible.requiredUsd} USD of PAYHOLE, ${eligible.required.toLocaleString("en-US")} tokens today, or a tier`;
+        return { status: 403, body: { ...eligible, status: "not_eligible", detail } };
+      }
       const result = await rewards.claim(wallet);
       if (!result.ok) return { status: 409, body: { status: result.reason, owed: result.owed, minPayout: MIN_PAYOUT_USDG } };
       log(`payout requested by ${wallet}: ${result.claim.amount} USDG`);

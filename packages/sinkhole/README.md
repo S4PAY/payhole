@@ -83,7 +83,9 @@ per wallet per day; the rest are `capped`. A name later allowlisted is `void`. R
 the tier holder for a flag from a node; a phone that reported before naming a wallet can be assigned one later.
 
 - `GET /rewards?wallet=0x...` (public, cross-origin) answers what a wallet is owed and has been paid, its entries, whether it is
-  eligible to be paid (it holds a tier, or at least `MIN_HOLD_TOKENS` PAYHOLE), and any open payout request.
+  eligible to be paid (it holds a tier, or at least `MIN_HOLD_USD` dollars of PAYHOLE at today's price: before graduation the Pons
+  bonding curve's spot price, quote reserve over token reserve, with ETH in dollars from a public spot feed; after graduation
+  `PRICE_URL`), and any open payout request. When the price cannot be read, nobody without a tier is paid until it can.
 - `POST /rewards/claim` with `{"wallet": "0x..."}` requests a payout once the wallet is owed at least 10 USDG and is eligible.
   Anyone may request a payout for a wallet; the money can only go to that wallet.
 - `GET /api/rewards` lists every entry and claim for the operator; `GET /api/rewards?wallet=` one wallet's balance.

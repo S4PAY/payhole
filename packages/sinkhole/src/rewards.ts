@@ -3,6 +3,7 @@ import { burnVaultAbi, customChain, robinhoodChain } from "@payhole/sdk";
 import type { Confirmation } from "./blocklist.js";
 import type { Category } from "./category.js";
 import type { Hint } from "./hints.js";
+import { tokensFor, type PriceQuote } from "./price.js";
 import { readJson, writeJsonAtomic } from "./store.js";
 import type { TierReader } from "./swarm/membership.js";
 
@@ -251,26 +252,57 @@ export interface HoldingCheckOptions {
   rpcUrl: string;
   chainId: number;
   vault: Address;
-  /** Whole tokens a wallet must hold to be paid; 0 turns the rule off. */
-  minHoldTokens: number;
+  /** Dollars of the token a wallet must hold to be paid, priced at check time. */
+  minHoldUsd: number;
+  price: () => Promise<PriceQuote>;
   tierOf: TierReader;
 }
 
-/** Whether a wallet may be paid: it holds a tier, or at least the configured amount of the token. */
-export function createHoldingCheck(options: HoldingCheckOptions): (wallet: Address) => Promise<{ ok: boolean; tier: number; tokens: number; required: number }> {
+export interface Eligibility {
+  ok: boolean;
+  tier: number;
+  tokens: number;
+  required: number;
+  requiredUsd: number;
+  priceUsd: number | null;
+  priceSource: string | null;
+  detail: string;
+}
+
+/**
+ * Whether a wallet may be paid: it holds a tier, or at least `minHoldUsd` dollars of the token at the
+ * current price. When the price cannot be read and no tier is held, nobody is paid until it can.
+ */
+export function createHoldingCheck(options: HoldingCheckOptions): (wallet: Address) => Promise<Eligibility> {
   const chain = options.chainId === robinhoodChain.id ? robinhoodChain : customChain(options.chainId, options.rpcUrl);
   const client = createPublicClient({ chain, transport: http(options.rpcUrl) });
   let token: Promise<Address> | null = null;
   return async (wallet) => {
     const tier = await options.tierOf(wallet);
-    if (tier > 0) return { ok: true, tier, tokens: 0, required: options.minHoldTokens };
-    if (options.minHoldTokens <= 0) return { ok: true, tier, tokens: 0, required: 0 };
+    if (tier > 0) return { ok: true, tier, tokens: 0, required: 0, requiredUsd: options.minHoldUsd, priceUsd: null, priceSource: null, detail: `holds tier ${tier}` };
+    if (options.minHoldUsd <= 0) return { ok: true, tier, tokens: 0, required: 0, requiredUsd: 0, priceUsd: null, priceSource: null, detail: "no holding required" };
+    let quote: PriceQuote;
+    try {
+      quote = await options.price();
+    } catch (error) {
+      return { ok: false, tier, tokens: 0, required: 0, requiredUsd: options.minHoldUsd, priceUsd: null, priceSource: null, detail: error instanceof Error ? error.message : String(error) };
+    }
     token ??= client.readContract({ address: options.vault, abi: burnVaultAbi, functionName: "token" });
     const [balance, decimals] = await Promise.all([
       client.readContract({ address: await token, abi: erc20Abi, functionName: "balanceOf", args: [wallet] }),
       client.readContract({ address: await token, abi: erc20Abi, functionName: "decimals" }),
     ]);
     const tokens = Number(balance / 10n ** BigInt(decimals));
-    return { ok: tokens >= options.minHoldTokens, tier, tokens, required: options.minHoldTokens };
+    const required = tokensFor(options.minHoldUsd, quote);
+    return {
+      ok: tokens >= required,
+      tier,
+      tokens,
+      required,
+      requiredUsd: options.minHoldUsd,
+      priceUsd: quote.usd,
+      priceSource: quote.source,
+      detail: `${options.minHoldUsd} USD of PAYHOLE is ${required.toLocaleString("en-US")} tokens at ${quote.detail}`,
+    };
   };
 }
