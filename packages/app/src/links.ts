@@ -10,6 +10,8 @@ export const LINKS = {
   verdictUrl: "https://dns.payhole.org/verdict",
   radarUrl: "https://dns.payhole.org/radar",
   reportUrl: "https://dns.payhole.org/report",
+  rewardsUrl: "https://dns.payhole.org/rewards",
+  claimUrl: "https://dns.payhole.org/rewards/claim",
   link: "https://payhole.org/link.html",
   radar: "https://payhole.org/radar.html",
   check: "https://payhole.org/check.html",

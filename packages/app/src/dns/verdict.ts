@@ -99,19 +99,19 @@ export async function fetchVerdict(name: string, baseUrl: string = LINKS.verdict
 
 /** One line a person can read or share. */
 export function describeVerdict(v: Verdict): string {
-  if (v.allowlisted) return `${v.domain} is on PayHole's allowlist: a shared platform that stays reachable even when a list names it.`;
-  if (!v.blocked) return `${v.domain} is not on any PayHole list and the swarm has not confirmed it. That is not a guarantee, only what the network knows.`;
-  const what = v.category ? CATEGORY_PHRASES[v.category] : "blocked";
+  if (v.allowlisted) return "On the allowlist. A shared platform that stays reachable.";
+  if (!v.blocked) return "Not on any list. Not confirmed by the swarm. Not a guarantee.";
+  const what = v.category ? CATEGORY_PHRASES[v.category] : null;
   const by = v.sources.includes("swarm")
-    ? `confirmed by ${v.reporters} node${v.reporters === 1 ? "" : "s"} in the swarm`
+    ? `Confirmed by ${v.reporters} node${v.reporters === 1 ? "" : "s"} in the swarm.`
     : v.sources.includes("list")
-      ? "on a subscribed list"
+      ? "On a subscribed list."
       : v.sources.includes("manual")
-        ? "blocked by an operator"
-        : "flagged by the extension";
-  return `${v.domain} is ${what}, ${by}. PayHole users never load it.`;
+        ? "Blocked by an operator."
+        : "Flagged by the extension.";
+  return what && what !== "blocked" ? `${what.charAt(0).toUpperCase()}${what.slice(1)}. ${by}` : by;
 }
 
 export function shareText(v: Verdict): string {
-  return `${describeVerdict(v)}\n\nChecked with PayHole, ${new Date(v.checkedAt).toISOString().slice(0, 16).replace("T", " ")} UTC. Check any link: https://payhole.org/check.html`;
+  return `${v.domain}: ${describeVerdict(v)}\n\nChecked with PayHole, ${new Date(v.checkedAt).toISOString().slice(0, 16).replace("T", " ")} UTC. Check any link: https://payhole.org/check.html`;
 }

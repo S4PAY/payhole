@@ -60,11 +60,12 @@ describe("words", () => {
   });
 
   it("describes swarm, list, operator, allowlisted, and clean verdicts", () => {
-    expect(describeVerdict(base)).toBe("kit.example is a wallet drainer, confirmed by 3 nodes in the swarm. PayHole users never load it.");
-    expect(describeVerdict({ ...base, sources: ["list"], category: "phishing" })).toContain("a phishing page, on a subscribed list");
-    expect(describeVerdict({ ...base, sources: ["manual"], category: null })).toContain("blocked, blocked by an operator");
+    expect(describeVerdict(base)).toBe("A wallet drainer. Confirmed by 3 nodes in the swarm.");
+    expect(describeVerdict({ ...base, sources: ["list"], category: "phishing" })).toBe("A phishing page. On a subscribed list.");
+    expect(describeVerdict({ ...base, sources: ["manual"], category: null })).toBe("Blocked by an operator.");
     expect(describeVerdict({ ...base, blocked: false, allowlisted: true })).toContain("allowlist");
-    expect(describeVerdict({ ...base, blocked: false, sources: [] })).toContain("not on any PayHole list");
+    expect(describeVerdict({ ...base, blocked: false, sources: [] })).toBe("Not on any list. Not confirmed by the swarm. Not a guarantee.");
     expect(shareText(base)).toContain("Checked with PayHole, 2023-11-14 22:13 UTC");
+    expect(shareText(base).startsWith("kit.example: A wallet drainer.")).toBe(true);
   });
 });

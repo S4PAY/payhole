@@ -151,6 +151,36 @@ export function parseProof(text: string, delegateAddress: string): { ok: true; p
   return { ok: true, proof: { peerId, address, issuedAt, signature } };
 }
 
+/** The text a phone signs for a hint; identical to the node's, keys sorted. */
+export function hintText(domain: string, category: Category | null, reason: string, ts: number, payTo: string | null): string {
+  return canonicalJson({ type: "hint", domain, category, reason, ts, payTo });
+}
+
+export interface SignedHint {
+  name: string;
+  category?: Category;
+  reason?: string;
+  key: string;
+  payTo: string | null;
+  ts: number;
+  signature: string;
+}
+
+/** A hint signed by this phone's key, naming the wallet rewards go to; the node records the first such report of a name. */
+export function signHint(privateKey: Uint8Array, domain: string, category: Category | null, reason: string, payTo: string | null, ts = Date.now()): SignedHint {
+  const key = privateKeyToAddress(privateKey);
+  const cleanPayTo = payTo ? checksumAddress(payTo) : null;
+  return {
+    name: domain,
+    ...(category ? { category } : {}),
+    ...(reason ? { reason } : {}),
+    key,
+    payTo: cleanPayTo,
+    ts,
+    signature: signMessage(privateKey, hintText(domain, category, reason, ts, cleanPayTo)),
+  };
+}
+
 /** A swarm flag signed by this phone on behalf of the wallet in the proof, in the node's message format. */
 export function buildDelegatedFlag(privateKey: Uint8Array, proof: Proof, body: FlagBody): DelegatedFlag {
   const delegate = privateKeyToAddress(privateKey);

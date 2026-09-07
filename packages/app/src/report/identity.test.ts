@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDelegatedFlag, canonicalJson, checksumAddress, membershipText, parseProof, privateKeyToAddress, recoverMessageSigner, signMessage } from "./identity";
+import { buildDelegatedFlag, canonicalJson, checksumAddress, hintText, membershipText, parseProof, privateKeyToAddress, recoverMessageSigner, signHint, signMessage } from "./identity";
 
 const phone = new Uint8Array(32).fill(0x33);
 const holder = new Uint8Array(32).fill(0x11);
@@ -40,5 +40,19 @@ describe("reporter identity", () => {
     expect(flag).toMatchObject({ kind: "flag", reporter: holderAddress, delegate: phoneAddress, body: { domain: "kit.example", category: "drainer" } });
     expect(recoverMessageSigner(canonicalJson(flag.body), flag.signature)).toBe(phoneAddress);
     expect(() => buildDelegatedFlag(holder, proof, flag.body)).toThrow(/this phone/);
+  });
+});
+
+describe("signed hints", () => {
+  it("signs the node's hint text with the phone key and names the rewards wallet", () => {
+    const wallet = "0x1111111111111111111111111111111111111111";
+    const hint = signHint(phone, "scam.example", "drainer", "seed form", wallet, 1_800_000_000_000);
+    expect(hint).toMatchObject({ name: "scam.example", category: "drainer", reason: "seed form", key: privateKeyToAddress(phone), payTo: wallet, ts: 1_800_000_000_000 });
+    expect(recoverMessageSigner(hintText("scam.example", "drainer", "seed form", 1_800_000_000_000, wallet), hint.signature)).toBe(privateKeyToAddress(phone));
+    expect(hintText("a.example", null, "", 1, null)).toBe('{"category":null,"domain":"a.example","payTo":null,"reason":"","ts":1,"type":"hint"}');
+    const bare = signHint(phone, "a.example", null, "", null, 1);
+    expect(bare).not.toHaveProperty("category");
+    expect(bare).not.toHaveProperty("reason");
+    expect(bare.payTo).toBeNull();
   });
 });

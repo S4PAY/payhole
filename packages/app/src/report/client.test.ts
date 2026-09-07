@@ -19,11 +19,11 @@ describe("report client", () => {
   });
 
   it("describes every outcome", () => {
-    expect(describeReport({ status: "hinted", domain: "a.example", hints: 1 }, false)).toContain("Yours is the first report");
-    expect(describeReport({ status: "hinted", domain: "a.example", hints: 3 }, true)).not.toContain("Link a tier");
-    expect(describeReport({ status: "flagged", domain: "a.example", reporters: 1 }, true)).toContain("1 reporter so far");
-    expect(describeReport({ status: "confirmed", domain: "a.example", reporters: 2 }, true)).toContain("blocked on every node");
-    expect(describeReport({ status: "already_blocked", domain: "a.example" }, false)).toBe("a.example is already blocked.");
+    expect(describeReport({ status: "hinted", domain: "a.example", hints: 1 }, false)).toBe("Counted. First report. Link a tier to flag.");
+    expect(describeReport({ status: "hinted", domain: "a.example", hints: 3 }, true)).toBe("Counted. 3 reports so far.");
+    expect(describeReport({ status: "flagged", domain: "a.example", reporters: 1 }, true)).toBe("Flagged. 1 reporter so far.");
+    expect(describeReport({ status: "confirmed", domain: "a.example", reporters: 2 }, true)).toBe("Confirmed. Blocked on every node.");
+    expect(describeReport({ status: "already_blocked", domain: "a.example" }, false)).toBe("Already blocked.");
     expect(describeReport({ status: "rejected", detail: "no" }, false)).toBe("no");
   });
 });

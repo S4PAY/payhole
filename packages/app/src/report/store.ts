@@ -4,10 +4,21 @@
 import { getRandomBytes } from "expo-crypto";
 import * as SecureStore from "expo-secure-store";
 
-import { bytesToHexString, hexToBytesArray, isPrivateKey, type Proof } from "./identity";
+import type { Category } from "../dns/verdict";
+import { storage } from "../store/persist";
+import { bytesToHexString, hexToBytesArray, isAddress, isPrivateKey, type Proof } from "./identity";
 
 const KEY_ITEM = "payhole.reporter.key";
 const PROOF_ITEM = "payhole.reporter.proof";
+const WALLET_ITEM = "payhole.reporter.wallet";
+const REPORTS_ITEM = "payhole.reporter.reports";
+
+/** A name this phone reported, kept so the app can show what became of it. */
+export interface LocalReport {
+  domain: string;
+  category: Category | null;
+  at: number;
+}
 
 /** The phone's reporter key, created on first use. */
 export async function loadOrCreateKey(): Promise<Uint8Array> {
@@ -39,4 +50,29 @@ export async function loadProof(): Promise<Proof | null> {
 export async function saveProof(proof: Proof | null): Promise<void> {
   if (proof) await SecureStore.setItemAsync(PROOF_ITEM, JSON.stringify(proof));
   else await SecureStore.deleteItemAsync(PROOF_ITEM);
+}
+
+export async function loadWallet(): Promise<string | null> {
+  const stored = await SecureStore.getItemAsync(WALLET_ITEM);
+  return stored && isAddress(stored) ? stored : null;
+}
+
+export async function saveWallet(wallet: string | null): Promise<void> {
+  if (wallet) await SecureStore.setItemAsync(WALLET_ITEM, wallet);
+  else await SecureStore.deleteItemAsync(WALLET_ITEM);
+}
+
+export async function loadReports(): Promise<LocalReport[]> {
+  try {
+    const stored = await storage.getItem(REPORTS_ITEM);
+    const value: unknown = stored ? JSON.parse(stored) : [];
+    if (!Array.isArray(value)) return [];
+    return value.filter((entry): entry is LocalReport => typeof entry === "object" && entry !== null && typeof (entry as LocalReport).domain === "string" && typeof (entry as LocalReport).at === "number");
+  } catch {
+    return [];
+  }
+}
+
+export async function saveReports(reports: LocalReport[]): Promise<void> {
+  await storage.setItem(REPORTS_ITEM, JSON.stringify(reports));
 }

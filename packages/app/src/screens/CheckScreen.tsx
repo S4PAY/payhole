@@ -5,7 +5,8 @@ import * as Clipboard from "expo-clipboard";
 import { describeVerdict, extractName, fetchVerdict, shareText, type Category, type Verdict } from "../dns/verdict";
 import { useReporter, type Reporter } from "../hooks/useReporter";
 import { LINKS } from "../links";
-import { describeReport } from "../report/client";
+import { describePayout, describeReport, type RewardEntry } from "../report/client";
+import { ago } from "../time";
 import { colors } from "../theme";
 import { Button } from "../ui/Button";
 import { Card } from "../ui/Card";
@@ -87,7 +88,7 @@ export function CheckScreen({ shared, onSharedConsumed }: CheckScreenProps) {
     const text = pendingProof;
     setPendingProof(null);
     linkReporter(text).then(
-      (problem) => setLinkNote(problem ?? "Linked. Reports from this phone now count as that wallet's flags."),
+      (problem) => setLinkNote(problem ?? "Linked."),
       (e: unknown) => setLinkNote(e instanceof Error ? e.message : String(e)),
     );
   }, [pendingProof, reporterReady, linkReporter]);
@@ -98,7 +99,7 @@ export function CheckScreen({ shared, onSharedConsumed }: CheckScreenProps) {
   };
 
   return (
-    <Screen eyebrow="Check" title="Check a link" intro="Paste a link, a domain, or the text of a message. The resolver says whether PayHole blocks it and why. From any app, use Share and pick PayHole.">
+    <Screen eyebrow="Check" title="Check a link" intro="Paste a link or share one from any app. The resolver says whether PayHole blocks it and why.">
       <Card>
         <Field label="Link or domain" value={input} onChangeText={setInput} placeholder="https://claim-airdrop.example/connect" keyboardType="url" />
         <Button
@@ -141,9 +142,11 @@ export function CheckScreen({ shared, onSharedConsumed }: CheckScreenProps) {
 
       <ReporterCard reporter={reporter} sharedNote={linkNote} />
 
+      <YourReportsCard reporter={reporter} />
+
       <Card>
         <Subtitle>What the answer means</Subtitle>
-        <Muted>Blocked means every PayHole user's phone refuses to load it, and why: a wallet drainer, phishing, drainer infrastructure, a counterfeit token site, a tracker, or an ad. Confirmed by the swarm means independent nodes run by tier holders agreed on it. Not blocked is only what the network knows today, not a promise.</Muted>
+        <Muted>Blocked: no PayHole phone loads it. Confirmed by the swarm: tier holders agreed. Not blocked: nothing known today, not a promise.</Muted>
       </Card>
     </Screen>
   );
@@ -161,7 +164,7 @@ function ReportCard({ domain, reporter }: { domain: string; reporter: Reporter }
     setOutcome(null);
     try {
       const { result, fellBack } = await reporter.report({ name: domain, category, reason: reason.trim() });
-      setOutcome(`${describeReport(result, reporter.holder !== null)}${fellBack ? " Signed reports are not open on the network yet, so this one was counted as a plain report." : ""}`);
+      setOutcome(`${describeReport(result, reporter.holder !== null)}${fellBack ? " Sent as a plain report; signed reports open soon." : ""}`);
     } catch (e) {
       setOutcome(e instanceof Error ? e.message : String(e));
     } finally {
@@ -172,11 +175,12 @@ function ReportCard({ domain, reporter }: { domain: string; reporter: Reporter }
   return (
     <Card>
       <Eyebrow>Report it</Eyebrow>
-      <Body>{reporter.holder ? "Your phone reports for a tier holder. This goes into the swarm as that wallet's flag." : "Seen this name in a scam? Say what it is. Reports are counted and shown to the tier holders who can confirm them."}</Body>
+      <Muted>{reporter.holder ? "Counts as your wallet's flag." : "Not blocked yet. Say what it is."}</Muted>
+      <Muted>{`Confirmed first report: 0.50 USDG drainer, 0.30 phishing${reporter.wallet ? "" : ". Add a rewards wallet to get paid"}.`}</Muted>
       {REPORT_KINDS.map((kind) => (
         <Choice key={kind.category} title={kind.title} detail={kind.detail} selected={category === kind.category} onSelect={() => setCategory(kind.category)} />
       ))}
-      <Field label="What happened, in a few words (optional)" value={reason} onChangeText={setReason} placeholder="Asked me to sign to claim an airdrop" />
+      <Field label="Note (optional)" value={reason} onChangeText={setReason} placeholder="Asked me to sign for an airdrop" />
       <Button
         label={busy ? "Sending" : `Report ${domain}`}
         disabled={busy || category === null}
@@ -199,7 +203,7 @@ function ReporterCard({ reporter, sharedNote }: { reporter: Reporter; sharedNote
   const copy = async () => {
     if (!reporter.address) return;
     await Clipboard.setStringAsync(reporter.address);
-    setNote("Reporter key copied.");
+    setNote("Copied.");
   };
 
   const link = async () => {
@@ -207,7 +211,7 @@ function ReporterCard({ reporter, sharedNote }: { reporter: Reporter; sharedNote
     setNote(null);
     try {
       const problem = await reporter.link(proofText);
-      setNote(problem ?? "Linked. Reports from this phone now count as that wallet's flags.");
+      setNote(problem ?? "Linked.");
       if (!problem) setProofText("");
     } finally {
       setBusy(false);
@@ -226,7 +230,7 @@ function ReporterCard({ reporter, sharedNote }: { reporter: Reporter; sharedNote
           </Mono>
           {reporter.holder ? (
             <>
-              <Body>{`Linked to ${reporter.holder.slice(0, 6)}…${reporter.holder.slice(-4)}. Reports from this phone count as that wallet's flags, and they take the fast lane when a list already names the domain.`}</Body>
+              <Body>{`Linked to ${reporter.holder.slice(0, 6)}…${reporter.holder.slice(-4)}. Reports count as its flags.`}</Body>
               <View style={styles.row}>
                 <Button label="Copy key" variant="ghost" onPress={() => void copy()} />
                 <Button label="Unlink" variant="ghost" onPress={() => void reporter.unlink()} />
@@ -234,18 +238,121 @@ function ReporterCard({ reporter, sharedNote }: { reporter: Reporter; sharedNote
             </>
           ) : (
             <>
-              <Muted>No money lives here; it only signs. A tier holder can make this phone report for their wallet: copy the key, open the link page with that wallet, sign once, and paste the proof below.</Muted>
+              <Muted>Signs reports. Holds no funds. Link a tier holder's wallet to report with weight.</Muted>
               <View style={styles.row}>
                 <Button label="Copy key" variant="ghost" onPress={() => void copy()} />
-                <Button label="Open the link page" variant="ghost" onPress={() => void Linking.openURL(`${LINKS.link}?key=${reporter.address ?? ""}`)} />
+                <Button label="Link page" variant="ghost" onPress={() => void Linking.openURL(`${LINKS.link}?key=${reporter.address ?? ""}`)} />
               </View>
-              <Field label="Proof from the link page" value={proofText} onChangeText={setProofText} placeholder='{"peerId":"0x…","address":"0x…",…}' />
-              <Button label={busy ? "Checking" : "Link this phone"} disabled={busy || proofText.trim().length === 0} onPress={() => void link()} />
+              <Field label="Proof" value={proofText} onChangeText={setProofText} placeholder='{"peerId":"0x…",…}' />
+              <Button label={busy ? "Checking" : "Link"} disabled={busy || proofText.trim().length === 0} onPress={() => void link()} />
             </>
           )}
+          <WalletField reporter={reporter} onNote={setNote} />
           {note === null ? null : <Muted>{note}</Muted>}
         </>
       )}
+    </Card>
+  );
+}
+
+/** Where bounties go. Any wallet address; the linked tier holder fills it by default. */
+function WalletField({ reporter, onNote }: { reporter: Reporter; onNote: (note: string) => void }) {
+  const [text, setText] = useState("");
+  const [editing, setEditing] = useState(false);
+  const save = async () => {
+    const problem = await reporter.setWallet(text);
+    onNote(problem ?? (text.trim() ? "Saved." : "Removed."));
+    if (!problem) {
+      setEditing(false);
+      setText("");
+    }
+  };
+  if (!editing) {
+    return (
+      <View style={styles.walletRow}>
+        <Muted style={styles.walletText}>{reporter.wallet ? `Rewards to ${reporter.wallet.slice(0, 6)}…${reporter.wallet.slice(-4)}${reporter.walletIsOwn ? "" : " (linked)"}` : "No rewards wallet"}</Muted>
+        <Button label={reporter.wallet ? "Change" : "Add wallet"} variant="ghost" onPress={() => setEditing(true)} />
+      </View>
+    );
+  }
+  return (
+    <>
+      <Field label="Rewards wallet" value={text} onChangeText={setText} placeholder="0x…" />
+      <View style={styles.row}>
+        <Button label="Save" disabled={text.trim().length === 0 && !reporter.walletIsOwn} onPress={() => void save()} />
+        <Button label="Cancel" variant="ghost" onPress={() => setEditing(false)} />
+      </View>
+    </>
+  );
+}
+
+const STATUS_WORDS: Record<RewardEntry["status"], string> = {
+  payable: "payable",
+  pending: "waiting",
+  capped: "over daily cap",
+  paid: "paid",
+  void: "not paid",
+};
+
+/** What became of this phone's reports, what the resolver owes the rewards wallet, and the payout request. */
+function YourReportsCard({ reporter }: { reporter: Reporter }) {
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (reporter.reports.length === 0 && !reporter.rewards) return null;
+  const byDomain = new Map((reporter.rewards?.entries ?? []).map((entry) => [entry.domain, entry]));
+  const rewards = reporter.rewards;
+  const canClaim = rewards !== null && rewards.owed >= rewards.minPayout && rewards.eligible?.ok !== false && rewards.claim === null;
+  const requestPayoutNow = async () => {
+    setBusy(true);
+    try {
+      const outcome = await reporter.claim();
+      setNote(describePayout(outcome, rewards?.minPayout ?? 10, rewards?.owed ?? 0));
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card>
+      <Eyebrow>Your reports</Eyebrow>
+      {rewards ? (
+        <Body>{`Owed ${rewards.owed.toFixed(2)} USDG · paid ${rewards.paid.toFixed(2)}${rewards.pending > 0 ? ` · ${rewards.pending} waiting` : ""}${rewards.claim?.paidAt === null ? ` · ${rewards.claim.amount.toFixed(2)} on its way` : ""}`}</Body>
+      ) : reporter.wallet ? (
+        <Muted>{reporter.rewardsError ?? "Loading"}</Muted>
+      ) : (
+        <Muted>Add a rewards wallet to see earnings.</Muted>
+      )}
+      {reporter.reports.slice(0, 20).map((report) => {
+        const entry = byDomain.get(report.domain);
+        return (
+          <View key={report.domain} style={styles.reportRow}>
+            <View style={styles.rowHead}>
+              <Mono selectable style={styles.reportName}>
+                {report.domain}
+              </Mono>
+              <Muted style={styles.rowWhen}>{ago(report.at)}</Muted>
+            </View>
+            <Muted style={styles.rowSmall}>{entry ? `${STATUS_WORDS[entry.status]}${entry.status === "payable" || entry.status === "paid" ? ` · ${entry.amount.toFixed(2)} USDG` : ""}${entry.corroboration ? ` · ${entry.corroboration.startsWith("list:") ? "list" : "swarm"}` : ""}` : "waiting"}</Muted>
+          </View>
+        );
+      })}
+      {rewards ? (
+        <>
+          {rewards.eligible && !rewards.eligible.ok ? (
+            <Muted>
+              {rewards.eligible.required > 0
+                ? `Payout needs a tier or $10 of PAYHOLE: ${rewards.eligible.required.toLocaleString()} now. Holds ${rewards.eligible.tokens.toLocaleString()}.`
+                : "Payout needs a tier or $10 of PAYHOLE. Price unavailable, retry soon."}
+            </Muted>
+          ) : null}
+          <View style={styles.row}>
+            <Button label={busy ? "Requesting" : `Request payout (min ${rewards.minPayout} USDG)`} disabled={busy || !canClaim} onPress={() => void requestPayoutNow()} />
+            <Button label="Refresh" variant="ghost" onPress={() => void reporter.refreshRewards()} />
+          </View>
+        </>
+      ) : null}
+      {note === null ? null : <Muted>{note}</Muted>}
     </Card>
   );
 }
@@ -257,4 +364,11 @@ const styles = StyleSheet.create({
   error: { color: colors.warn },
   actions: { paddingTop: 4 },
   row: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
+  walletRow: { gap: 8 },
+  walletText: { lineHeight: 20 },
+  reportRow: { paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.border, gap: 4 },
+  rowHead: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 12 },
+  reportName: { flex: 1, fontSize: 13, lineHeight: 20 },
+  rowWhen: { fontSize: 12, lineHeight: 16, minWidth: 96, textAlign: "right" },
+  rowSmall: { fontSize: 12, lineHeight: 16 },
 });
