@@ -5,6 +5,7 @@ import { isUpstream } from "./render/dnsmasq.js";
 import { CATEGORIES, parseCategory, type Category } from "./category.js";
 
 /** The curated allowlist every node fetches unless ALLOWLIST_URLS says otherwise. */
+export const DEFAULT_ADDRESS_LIST_URL = "https://raw.githubusercontent.com/scamsniffer/scam-database/refs/heads/main/blacklist/address.json";
 export const DEFAULT_ALLOWLIST_URL = "https://raw.githubusercontent.com/S4PAY/payhole/main/packages/sinkhole/lists/allow.txt";
 
 export interface SinkholeConfig {
@@ -28,6 +29,8 @@ export interface SinkholeConfig {
   reports: { delegates: boolean; relay: boolean; evidence: boolean; minHoldUsd: number; ponsFactory: string | undefined; priceUrl: string | undefined; priceJsonPath: string | undefined };
   queryLog: { enabled: boolean };
   lists: { urls: string[]; refreshHours: number };
+  /** The public list of bad addresses the extension's wallet guard checks against; null when off. */
+  addresses: { url: string | null };
   /** Names never blocked: fetched rule lists plus an optional local file. Refreshed with the blocklists. */
   allow: { urls: string[]; file: string | undefined };
   /** DNS over HTTPS on plain HTTP, meant to sit behind a TLS-terminating reverse proxy. */
@@ -164,6 +167,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): SinkholeConfig
     },
     queryLog: { enabled: flag(env["QUERY_LOG_ENABLED"], true) },
     lists: { urls: list(env["BLOCKLIST_URLS"]), refreshHours: integer(env["BLOCKLIST_REFRESH_HOURS"], 24, "BLOCKLIST_REFRESH_HOURS") },
+    addresses: { url: env["ADDRESS_LIST_URL"] === undefined ? DEFAULT_ADDRESS_LIST_URL : env["ADDRESS_LIST_URL"].trim().toLowerCase() === "off" ? null : env["ADDRESS_LIST_URL"].trim() },
     allow: {
       urls: env["ALLOWLIST_URLS"] === undefined ? [DEFAULT_ALLOWLIST_URL] : list(env["ALLOWLIST_URLS"]),
       file: optional(env["MANUAL_ALLOWLIST_FILE"]),

@@ -15,6 +15,7 @@ import type { EndpointAnnouncement } from "./swarm/probe.js";
 import { TierError } from "@payhole/sdk";
 import { MembershipError, type Membership } from "./membership.js";
 import { CATEGORIES, parseCategory, type Category } from "./category.js";
+import { normalizeAddress, type AddressList } from "./addresses.js";
 
 export interface AdminDeps {
   token: string;
@@ -45,6 +46,8 @@ export interface AdminDeps {
   ledger?: ((since: number) => LedgerEntry[]) | undefined;
   /** The bounty ledger: entries, claims, and the owner's paid marks. */
   rewards?: Pick<Rewards, "entries" | "allClaims" | "markPaid" | "balance" | "review"> | undefined;
+  /** Bad addresses for the wallet guard: the subscribed list plus the operator's own. */
+  addresses?: Pick<AddressList, "entries" | "status" | "addManual" | "removeManual" | "lookup" | "refresh"> | undefined;
   /** The operator wallet's BurnVault tier and the unlock action; absent when the node has no vault. */
   membership?: Membership | undefined;
   maxBodyBytes?: number;
@@ -330,6 +333,31 @@ export function createAdminServer(deps: AdminDeps): Server {
       const since = Date.now() - days * 24 * 60 * 60 * 1000;
       return json(res, 200, { since, hints: deps.hints.recent(since, limit) });
     }
+    if (path === "/api/addresses") {
+      if (!deps.addresses) throw new HttpError(404, "not_found", "the address list is not enabled");
+      if (method === "GET") return json(res, 200, { status: deps.addresses.status(), entries: deps.addresses.entries() });
+      if (method !== "POST") throw new HttpError(405, "method_not_allowed", "use GET or POST");
+      const body = await readJson(req, maxBody);
+      if (!isRecord(body)) throw new HttpError(400, "invalid_body", "body must be a JSON object");
+      const category = categoryParam(body["category"]) ?? "drainer";
+      const label = typeof body["label"] === "string" ? body["label"].slice(0, 120) : null;
+      const result = deps.addresses.addManual(body["address"], category, label);
+      if (!result) throw new HttpError(400, "invalid_address", "address must be an EVM address");
+      return json(res, result.added ? 201 : 200, { ...result, category, label });
+    }
+    if (path === "/api/addresses/refresh") {
+      if (!deps.addresses) throw new HttpError(404, "not_found", "the address list is not enabled");
+      if (method !== "POST") throw new HttpError(405, "method_not_allowed", "use POST");
+      return json(res, 200, { ...(await deps.addresses.refresh()), status: deps.addresses.status() });
+    }
+    const flaggedAddress = /^\/api\/addresses\/(0x[0-9a-fA-F]{40})$/.exec(path);
+    if (flaggedAddress?.[1] !== undefined) {
+      if (!deps.addresses) throw new HttpError(404, "not_found", "the address list is not enabled");
+      if (method === "GET") return json(res, 200, deps.addresses.lookup(flaggedAddress[1]));
+      if (method !== "DELETE") throw new HttpError(405, "method_not_allowed", "use GET or DELETE");
+      if (!deps.addresses.removeManual(flaggedAddress[1])) throw new HttpError(404, "not_found", "not a manual entry");
+      return json(res, 200, { address: flaggedAddress[1].toLowerCase(), removed: true });
+    }
     if (path === "/api/rewards") {
       if (method !== "GET") throw new HttpError(405, "method_not_allowed", "use GET");
       if (!deps.rewards) throw new HttpError(404, "not_found", "rewards are not enabled");
@@ -354,22 +382,31 @@ export function createAdminServer(deps: AdminDeps): Server {
       if (!deps.rewards) throw new HttpError(404, "not_found", "rewards are not enabled");
       const body = await readJson(req, maxBody);
       if (!isRecord(body)) throw new HttpError(400, "invalid_body", "body must be a JSON object");
-      const inspection = typeof body["domain"] === "string" ? deps.blocklist.inspect(body["domain"]) : null;
-      if (!inspection) throw new HttpError(400, "invalid_domain", "domain must be a hostname");
+      const subject = typeof body["domain"] === "string" ? body["domain"] : "";
+      const address = normalizeAddress(subject);
+      const inspection = address ? null : deps.blocklist.inspect(subject);
+      if (!address && !inspection) throw new HttpError(400, "invalid_domain", "domain must be a hostname or an EVM address");
+      const key = address ?? inspection?.domain ?? subject;
       const verdict = body["verdict"];
       if (verdict !== "confirm" && verdict !== "reject") throw new HttpError(400, "invalid_verdict", "verdict must be confirm or reject");
       const note = typeof body["note"] === "string" ? body["note"].slice(0, 200) : "";
-      const entry = await deps.rewards.review(inspection.domain, verdict, note);
-      // A confirmed report is a name the project vouches for: it joins the manual list and the PayHole list with it.
+      const entry = await deps.rewards.review(key, verdict, note);
+      // A confirmed report is something the project vouches for: a name joins the manual list and the PayHole
+      // list with it; an address joins the node's bad-address list.
       let blocked = false;
       if (verdict === "confirm" && body["block"] !== false) {
-        const category = entry?.category ?? categoryParam(body["category"]) ?? "phishing";
+        const category = entry?.category ?? categoryParam(body["category"]) ?? (address ? "drainer" : "phishing");
         const reason = note || "confirmed report";
-        const result = deps.blocklist.addManual(inspection.domain, reason, undefined, category);
-        blocked = result?.added ?? false;
-        if (result?.added) deps.publish?.([{ domain: result.domain, reason, category }]);
+        if (address) {
+          if (!deps.addresses) throw new HttpError(404, "not_found", "the address list is not enabled");
+          blocked = deps.addresses.addManual(address, category, reason)?.added ?? false;
+        } else {
+          const result = deps.blocklist.addManual(key, reason, undefined, category);
+          blocked = result?.added ?? false;
+          if (result?.added) deps.publish?.([{ domain: result.domain, reason, category }]);
+        }
       }
-      return json(res, 200, { domain: inspection.domain, verdict, blocked, entry });
+      return json(res, 200, { domain: key, verdict, blocked, entry });
     }
     if (path === "/api/reports/ledger") {
       if (method !== "GET") throw new HttpError(405, "method_not_allowed", "use GET");

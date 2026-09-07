@@ -1,4 +1,5 @@
 import { getAddress, isAddress, recoverMessageAddress, type Hex } from "viem";
+import { normalizeAddress, type AddressList } from "./addresses.js";
 import type { Blocklist } from "./blocklist.js";
 import type { Hints } from "./hints.js";
 import { canonicalJson, type AnySwarmMessage, type VerifyResult } from "./swarm/messages.js";
@@ -11,6 +12,8 @@ import { canonicalJson, type AnySwarmMessage, type VerifyResult } from "./swarm/
 
 export interface ReportInput {
   name?: unknown;
+  /** An EVM address instead of a name: a drainer contract or a wallet that receives from one. */
+  address?: unknown;
   category?: unknown;
   reason?: unknown;
   /** A signed hint: the phone's reporter key, the wallet rewards go to, the time, and the key's signature over the hint body. */
@@ -31,6 +34,8 @@ export type ReportResult =
 export interface ReporterDeps {
   blocklist: Pick<Blocklist, "inspect" | "recordFlag">;
   hints: Pick<Hints, "record" | "get">;
+  /** The node's bad-address list, so a listed address is answered `already_blocked`; absent when the node has none. */
+  addresses?: Pick<AddressList, "lookup"> | undefined;
   /** Called with every newly reported name, hint or flag, so evidence can be gathered; absent when evidence is off. */
   onReport?: ((domain: string) => void) | undefined;
   /** Verifies a signed report against the swarm rules and the reporter's tier; absent when this node cannot. */
@@ -78,6 +83,17 @@ export function createReporter(deps: ReporterDeps): (input: ReportInput) => Prom
       }
       if (result.changed) log(`report confirmed ${result.domain} (${result.reporters} reporters, via ${message.delegate})`);
       return { status: result.confirmed ? "confirmed" : "flagged", domain: result.domain, reporters: result.reporters };
+    }
+    if (input.name === undefined && input.address !== undefined) {
+      const address = normalizeAddress(input.address);
+      if (!address) return { status: "invalid", detail: "address is not an EVM address" };
+      if (deps.addresses?.lookup(address)?.flagged) return { status: "already_blocked", domain: address };
+      const now = clock();
+      const by = await signedBy(input, address, now);
+      if (typeof by === "string") return { status: "invalid", detail: by };
+      const hint = deps.hints.record(address, input.category, input.reason, now, by ?? undefined);
+      if (!hint) return { status: "invalid", detail: "address is not an EVM address" };
+      return { status: "hinted", domain: hint.domain, hints: hint.count };
     }
     const inspection = typeof input.name === "string" ? deps.blocklist.inspect(input.name) : null;
     if (!inspection) return { status: "invalid", detail: "name is not a hostname" };

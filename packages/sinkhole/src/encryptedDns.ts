@@ -11,6 +11,7 @@ import { isQuery, MAX_MESSAGE_BYTES, minTtl, servfail } from "./dnsWire.js";
 import type { MergedEntry } from "./blocklist.js";
 import type { RadarSnapshot } from "./radar.js";
 import { renderExport } from "./render/export.js";
+import type { AddressVerdict } from "./addresses.js";
 import type { ReportInput, ReportResult } from "./reports.js";
 import type { RateLimiter } from "./rateLimit.js";
 
@@ -42,6 +43,10 @@ export interface EncryptedDnsShared {
   curatedList?: (() => MergedEntry[]) | undefined;
   /** `GET /rewards?wallet=` and `POST /rewards/claim`; absent means the routes are not served. */
   rewards?: { summary(wallet: string): Promise<unknown>; claim(wallet: string): Promise<{ status: number; body: unknown }> } | undefined;
+  /** Answers `GET /address?address=` for the wallet guard; absent means the route is not served. */
+  address?: ((input: string) => AddressVerdict | null) | undefined;
+  /** The node's bad addresses, one per line, for `GET /lists/addresses.txt`. */
+  addressList?: (() => string) | undefined;
 }
 
 const DNS_MESSAGE = "application/dns-message";
@@ -203,6 +208,31 @@ export function createDohServer(shared: EncryptedDnsShared, counters: EncryptedD
           "cache-control": "public, max-age=60",
           "access-control-allow-origin": "*",
         });
+        return res.end(body);
+      }
+      if (url.pathname === "/address") {
+        if (!shared.address) return plain(res, 404, "not found");
+        if (req.method !== "GET") return plain(res, 405, "use GET", { allow: "GET" });
+        const input = url.searchParams.get("address");
+        if (input === null || input.length === 0) return plain(res, 400, "missing address parameter");
+        const limit = shared.limiter.take(clientAddress(req));
+        if (!limit.allowed) return plain(res, 429, "too many requests", { "retry-after": String(limit.retryAfterSeconds) });
+        const verdict = shared.address(input);
+        if (!verdict) return plain(res, 400, "not an EVM address");
+        const body = JSON.stringify({ ...verdict, checkedAt: Date.now() });
+        res.writeHead(200, {
+          "content-type": "application/json; charset=utf-8",
+          "content-length": Buffer.byteLength(body),
+          "cache-control": "no-store",
+          "access-control-allow-origin": "*",
+        });
+        return res.end(body);
+      }
+      if (url.pathname === "/lists/addresses.txt") {
+        if (!shared.addressList) return plain(res, 404, "not found");
+        if (req.method !== "GET") return plain(res, 405, "use GET", { allow: "GET" });
+        const body = shared.addressList();
+        res.writeHead(200, { "content-type": "text/plain; charset=utf-8", "content-length": Buffer.byteLength(body), "cache-control": "public, max-age=300", "access-control-allow-origin": "*" });
         return res.end(body);
       }
       if (url.pathname === "/verdict") {

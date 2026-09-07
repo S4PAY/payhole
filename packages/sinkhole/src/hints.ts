@@ -1,4 +1,5 @@
 import { parseCategory, type Category } from "./category.js";
+import { normalizeAddress } from "./addresses.js";
 import { cleanReason, normalizeHostname } from "./hostname.js";
 import type { Evidence } from "./evidence.js";
 import { readJson, writeJsonAtomic } from "./store.js";
@@ -61,7 +62,7 @@ export class Hints {
     this.log = options.log ?? (() => undefined);
     if (state?.version === 1 && Array.isArray(state.hints)) {
       for (const entry of state.hints) {
-        const domain = typeof entry.domain === "string" ? normalizeHostname(entry.domain) : null;
+        const domain = typeof entry.domain === "string" ? (normalizeHostname(entry.domain) ?? normalizeAddress(entry.domain)) : null;
         if (!domain || typeof entry.count !== "number" || typeof entry.lastAt !== "number") continue;
         const categories: Partial<Record<Category, number>> = {};
         for (const [key, value] of Object.entries(entry.categories ?? {})) {
@@ -94,9 +95,9 @@ export class Hints {
     return this.hints.get(domain);
   }
 
-  /** Counts one report of a name. Null when the input is not a hostname. */
+  /** Counts one report of a name, or of an address. Null when the input is neither. */
   record(input: unknown, category: unknown = null, reason: unknown = "", now = this.clock(), by?: { key: string; payTo: string | null }): Hint | null {
-    const domain = normalizeHostname(input);
+    const domain = normalizeHostname(input) ?? normalizeAddress(input);
     if (!domain) return null;
     let hint = this.hints.get(domain);
     if (!hint) {

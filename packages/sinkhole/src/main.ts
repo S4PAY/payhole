@@ -21,6 +21,7 @@ import { Hints } from "./hints.js";
 import { buildLedger, buildRadar, memoize } from "./radar.js";
 import { createReporter } from "./reports.js";
 import { PONS_V2_FACTORY, createPriceSource } from "./price.js";
+import { AddressList, normalizeAddress } from "./addresses.js";
 import { MIN_PAYOUT_USDG, Rewards, createHoldingCheck } from "./rewards.js";
 import { Subscriptions } from "./subscriptions.js";
 import { parseAllowlistText } from "./allowlist.js";
@@ -164,6 +165,8 @@ async function run(config: SinkholeConfig): Promise<void> {
   if (config.manualFile) await loadManualFile(blocklist, config.manualFile);
 
   const subscriptions = await Subscriptions.load({ dir: join(config.dataDir, "lists"), refreshMs: config.lists.refreshHours * HOUR, log }, config.lists.urls);
+  const addresses = await AddressList.load({ path: join(config.dataDir, "addresses.json"), url: config.addresses.url, refreshMs: config.lists.refreshHours * HOUR, log });
+  if (addresses.size > 0) log(`${addresses.size} bad addresses known`);
   blocklist.setListCategoryResolver((domain) => subscriptions.categoryOf(domain));
   blocklist.setLists(subscriptions.domains());
   subscriptions.onChange(() => blocklist.setLists(subscriptions.domains()));
@@ -178,9 +181,9 @@ async function run(config: SinkholeConfig): Promise<void> {
       confirmations: (since) => blocklist.recentConfirmations(since),
       flags: (now) => blocklist.flagSummaries(now),
       hints: () => hints.all(),
-      listArrival: (domain) => subscriptions.listArrival(domain),
-      isBlocked: (domain) => blocklist.inspect(domain)?.blocked ?? false,
-      isAllowlisted: (domain) => blocklist.inspect(domain)?.allowlisted ?? false,
+      listArrival: (domain) => (normalizeAddress(domain) ? addresses.arrivalOf(domain) : subscriptions.listArrival(domain)),
+      isBlocked: (domain) => (normalizeAddress(domain) ? addresses.isFlagged(domain) : (blocklist.inspect(domain)?.blocked ?? false)),
+      isAllowlisted: (domain) => (normalizeAddress(domain) ? false : (blocklist.inspect(domain)?.allowlisted ?? false)),
       evidenceOf: (domain) => hints.get(domain)?.evidence ?? null,
     },
     { path: join(config.dataDir, "rewards.json"), log },
@@ -333,7 +336,12 @@ async function run(config: SinkholeConfig): Promise<void> {
   const report = createReporter({
     blocklist,
     hints,
-    onReport: evidence ? (domain) => evidence.enqueue(domain) : undefined,
+    addresses,
+    onReport: evidence
+      ? (domain) => {
+          if (!normalizeAddress(domain)) evidence.enqueue(domain);
+        }
+      : undefined,
     verify: (raw) => verifySwarmMessage(raw, "", { tierOf: tierOfRef, minTier: config.membership.minTier }),
     publish: (message) => (swarm ? swarm.publish(message) : Promise.resolve(0)),
     acceptDelegates: config.reports.delegates,
@@ -354,6 +362,8 @@ async function run(config: SinkholeConfig): Promise<void> {
       report,
       curatedList: () => blocklist.curatedEntries(),
       rewards: rewardRoutes,
+      address: (input: string) => addresses.lookup(input),
+      addressList: () => addresses.export(),
     };
     if (config.doh.enabled) {
       doh = createDohServer(shared);
@@ -534,6 +544,7 @@ async function run(config: SinkholeConfig): Promise<void> {
     hints,
     ledger: (since: number) => buildLedger(blocklist, since),
     rewards,
+    addresses,
     subscriptions: {
       list: () => subscriptions.list(),
       get: (id) => subscriptions.get(id),
@@ -573,9 +584,11 @@ async function run(config: SinkholeConfig): Promise<void> {
     }, MINUTE),
     setInterval(() => void subscriptions.refreshDue(), 5 * MINUTE),
     setInterval(() => void allowlists.refreshDue(), 5 * MINUTE),
+    setInterval(() => void addresses.refreshDue(), 5 * MINUTE),
   ];
   void subscriptions.refreshDue();
   void allowlists.refreshDue();
+  void addresses.refreshDue();
   if (stats) {
     const live = stats;
     timers.push(setInterval(() => live.sweep(), 5_000));
@@ -605,6 +618,7 @@ async function run(config: SinkholeConfig): Promise<void> {
       if (swarm) await swarm.stop().catch((error: unknown) => log(`swarm stop failed: ${errorText(error)}`));
       await dnsmasq.stop();
       await persist.flush();
+      await addresses.flush();
       await persistStats();
       process.exit(0);
     })();

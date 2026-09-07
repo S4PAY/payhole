@@ -107,6 +107,23 @@ serve this node's curated names, the extension's, the operator's manual entries,
 and hosts format with a five-minute cache. Any Pi-hole, AdGuard Home, or Sinkhole can subscribe to it; subscribed public lists
 are not repeated in it.
 
+### Addresses
+
+Names are the DNS layer; addresses are the other layer, for the browser extension's wallet guard. The node keeps a list
+of bad addresses, drainer contracts and the wallets that receive from them, from three sources: a public list
+(`ADDRESS_LIST_URL`, ScamSniffer's address blacklist by default, refreshed with the blocklists; `off` disables it), the
+operator's own entries, and reports the project reviewed and confirmed. Every address is kept lowercase.
+
+- `GET /address?address=0x...` (public, cross-origin) answers `{address, flagged, category, sources, label, checkedAt}`.
+- `GET /lists/addresses.txt` (public) is the whole list, one address per line.
+- `POST /report` with `{"address": "0x...", "category": "drainer" | "phishing" | "infra", ...}` reports an address the
+  way a name is reported, signed or not; a listed address is answered `already_blocked`. Bounties are the same as for
+  names: 0.50 USDG for a drainer contract or its infrastructure, 0.30 for a phishing wallet.
+- `GET /api/addresses` (admin) lists the entries and the fetch status; `POST /api/addresses` with
+  `{"address", "category", "label"}` adds one; `DELETE /api/addresses/0x...` removes a manual one;
+  `POST /api/addresses/refresh` fetches the list now. Confirming an address report through `/api/rewards/review` adds
+  the address as a manual entry.
+
 ### Radar
 
 `GET /radar` on the DoH listener (public on `https://dns.payhole.org/radar`) and `GET /api/radar` on the admin API answer what
