@@ -122,7 +122,7 @@ export function CheckScreen({ shared, onSharedConsumed }: CheckScreenProps) {
             {verdict.domain}
           </Mono>
           <Body>{describeVerdict(verdict)}</Body>
-          {verdict.sources.length > 0 ? (
+          {verdict.sources.length > 1 || verdict.reporters > 0 ? (
             <Muted>{verdict.sources.map((s) => SOURCE_WORDS[s] ?? s).join(", ")}{verdict.reporters > 0 ? `, ${verdict.reporters} reporter${verdict.reporters === 1 ? "" : "s"}` : ""}</Muted>
           ) : null}
           {verdict.reasons.length > 0 ? <Muted>{verdict.reasons.join("; ")}</Muted> : null}
@@ -294,6 +294,13 @@ const STATUS_WORDS: Record<RewardEntry["status"], string> = {
   void: "not paid",
 };
 
+/** One line per report: its status, the amount when it pays, who agreed, and what the probes saw while it waits. */
+function describeEntry(entry: RewardEntry): string {
+  const agreed = entry.review ? "reviewed" : entry.corroboration?.startsWith("list:") ? "list" : entry.corroboration ? "swarm" : null;
+  const seen = entry.status === "pending" && entry.evidence ? (entry.evidence.marks[0] ?? "checked, nothing found") : null;
+  return [STATUS_WORDS[entry.status], entry.status === "payable" || entry.status === "paid" ? `${entry.amount.toFixed(2)} USDG` : null, agreed, seen].filter((part) => part !== null).join(" · ");
+}
+
 /** What became of this phone's reports, what the resolver owes the rewards wallet, and the payout request. */
 function YourReportsCard({ reporter }: { reporter: Reporter }) {
   const [note, setNote] = useState<string | null>(null);
@@ -333,7 +340,7 @@ function YourReportsCard({ reporter }: { reporter: Reporter }) {
               </Mono>
               <Muted style={styles.rowWhen}>{ago(report.at)}</Muted>
             </View>
-            <Muted style={styles.rowSmall}>{entry ? `${STATUS_WORDS[entry.status]}${entry.status === "payable" || entry.status === "paid" ? ` · ${entry.amount.toFixed(2)} USDG` : ""}${entry.corroboration ? ` · ${entry.corroboration.startsWith("list:") ? "list" : "swarm"}` : ""}` : "waiting"}</Muted>
+            <Muted style={styles.rowSmall}>{entry ? describeEntry(entry) : "waiting"}</Muted>
           </View>
         );
       })}

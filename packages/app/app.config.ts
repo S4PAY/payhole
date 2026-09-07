@@ -21,7 +21,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   name: "PayHole",
   slug: "payhole",
   scheme: "payhole",
-  version: "0.5.0",
+  version: "0.5.1",
   orientation: "portrait",
   icon: "./assets/icon.png",
   userInterfaceStyle: "dark",
@@ -36,7 +36,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     package: "org.payhole.app",
-    versionCode: 10,
+    versionCode: 11,
     blockedPermissions: [
       "android.permission.READ_EXTERNAL_STORAGE",
       "android.permission.WRITE_EXTERNAL_STORAGE",

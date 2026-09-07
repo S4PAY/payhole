@@ -26,6 +26,10 @@ export interface RewardEntry {
   confirmedAt: number | null;
   corroboration: string | null;
   paidTx: string | null;
+  /** What the resolver's probes found, once they ran. */
+  evidence: { score: number; marks: string[] } | null;
+  /** The project's verdict on the report, when it gave one. */
+  review: "confirm" | "reject" | null;
 }
 
 export interface RewardsSummary {
@@ -106,6 +110,9 @@ export async function fetchRewards(url: string, wallet: string, fetchImpl: typeo
     const entry = record(item);
     if (!entry || typeof entry["domain"] !== "string") continue;
     const status = typeof entry["status"] === "string" && REWARD_STATUSES.has(entry["status"]) ? (entry["status"] as RewardStatus) : "pending";
+    const evidenceRaw = record(entry["evidence"]);
+    const reviewRaw = record(entry["review"]);
+    const verdict = reviewRaw?.["verdict"];
     entries.push({
       domain: entry["domain"],
       category: typeof entry["category"] === "string" ? (entry["category"] as Category) : null,
@@ -115,6 +122,8 @@ export async function fetchRewards(url: string, wallet: string, fetchImpl: typeo
       confirmedAt: typeof entry["confirmedAt"] === "number" ? entry["confirmedAt"] : null,
       corroboration: typeof entry["corroboration"] === "string" ? entry["corroboration"] : null,
       paidTx: typeof entry["paidTx"] === "string" ? entry["paidTx"] : null,
+      evidence: evidenceRaw ? { score: num(evidenceRaw["score"]), marks: (Array.isArray(evidenceRaw["marks"]) ? evidenceRaw["marks"] : []).filter((mark): mark is string => typeof mark === "string") } : null,
+      review: verdict === "confirm" || verdict === "reject" ? verdict : null,
     });
   }
   return {
