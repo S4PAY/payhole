@@ -48,7 +48,7 @@ export function Blocklist() {
           </label>
           <button type="submit" className="primary" disabled={action.busy}>Block</button>
         </form>
-        <p className="muted">Blocked hostnames and all their subdomains get no payments; their 402s are refused. The Sinkhole turns the same list into DNS answers.</p>
+        <p className="muted">Blocked hostnames and all their subdomains never load in this browser: every request to them is dropped, and with the pocket on their 402s are refused. Push the list to your Sinkhole node and it becomes DNS answers for every device.</p>
       </Panel>
       <Panel title={`Blocked (${data.entries.length})`}>
         {data.entries.length === 0 ? <p className="muted">Nothing blocked.</p> : null}

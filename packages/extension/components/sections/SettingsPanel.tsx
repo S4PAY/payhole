@@ -67,6 +67,13 @@ export function SettingsPanel() {
 
   if (view.error) return <Notice kind="error">{view.error}</Notice>;
   if (!form) return <p className="muted">Loading...</p>;
+  if (!view.data?.pay.enabled) {
+    return (
+      <Panel title="Settings">
+        <p className="muted">The shield's switches and the resolver are on the Shield tab. The pocket's chain, contract, and spending settings appear here once the Pay module is on.</p>
+      </Panel>
+    );
+  }
   const field = (key: keyof Form, label: string, type = "text") => (
     <label key={key}>
       {label}

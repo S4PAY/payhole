@@ -26,6 +26,10 @@ export default defineBackground(() => {
     return false;
   });
 
+  browser.runtime.onInstalled.addListener((details) => {
+    void app.onInstalled(details.reason);
+  });
+
   // The shield: every top-level navigation is checked against the resolver before it gets far.
   browser.webNavigation.onBeforeNavigate.addListener((details) => {
     void app.onBeforeNavigate(details);

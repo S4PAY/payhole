@@ -30,10 +30,13 @@ before a single request leaves.
 Before MetaMask, Rabby, or any wallet opens, PayHole reads what the page asked for: a send, an approval, a permit, a
 signature. Every address in it is checked against the network's list of drainer contracts and the wallets behind
 them. A known one is stopped with a warning you can override; an unlimited approval to an address nobody knows gets a
-heads-up. It works with every wallet, on every EVM chain, and never touches a seed.
+heads-up, once per spender: Continue and it does not ask about that spender again. It works with every wallet, on
+every EVM chain, and never touches a seed.
 
 What it does
 - Checks each site as it loads and walls off listed names: drainers, phishing, counterfeit token sites.
+- Drops requests inside pages to names on the PayHole list, the scripts and frames a page pulls in, not only the
+  page itself.
 - Reads wallet requests before the wallet sees them and stops sends, approvals, and permits to known drainer
   addresses. Optional warning on unlimited approvals.
 - Shows a badge on blocked tabs; the popup gives the verdict for any site, a box to check any link or address, and a
@@ -51,6 +54,10 @@ What it does not do
   Robinhood Chain is included, off by default, for sites that charge per page.)
 - No rewards in a token, ever. Bounties are paid in USDG by the project.
 
+What it cannot see
+- Wallets that speak to a phone over a QR code (WalletConnect) never pass through the browser, so the guard does not
+  see them. Non-EVM chains are not covered.
+
 Getting started
 1. Pin the icon. Everything is on from the first page.
 2. Open the dashboard from the popup for the session log, the switches, and your reporter key.
@@ -61,6 +68,7 @@ Open source under the MIT license. Privacy policy at payhole.org/privacy.html.
 Official URL: https://payhole.org
 Homepage URL: https://payhole.org
 Support URL: https://payhole.org/extension.html
+Privacy policy URL: https://payhole.org/privacy.html (required because Web history is declared under data usage)
 Contact email: hello@payhole.org
 
 ## Privacy tab
@@ -78,14 +86,16 @@ Permission justifications:
 - webNavigation: to notice a page load as it starts, ask the resolver about the name, and send a listed one to the
   wall page before it loads.
 - declarativeNetRequest and declarativeNetRequestWithHostAccess: to redirect a name the browser already saw blocked
-  to the wall page before any request leaves, and to block domains from the user's own list.
+  to the wall page before any request leaves, and to drop requests inside pages to names on the PayHole list and the
+  user's own list.
 - tabs: to know which site is in the active tab so the popup and the badge show the right verdict, and to open the
   wall page.
 - contextMenus: for "Check this link with PayHole" and "Check this page with PayHole".
 - webRequest: to notice HTTP 402 responses when the optional spending pocket is on. Request bodies are never read.
-- storage: to keep settings, the reporter key, the rewards wallet, the user's own blocklist, and the session log on
-  the device; with the pocket on, the encrypted vault and the ledger too. Nothing is synced or sent to us.
-- alarms: to refresh the user's own blocklist on a schedule while the extension is idle.
+- storage: to keep settings, the reporter key, the rewards wallet, the user's own blocklist, the PayHole list, the
+  spenders the user continued for, and the session log on the device; with the pocket on, the encrypted vault and
+  the ledger too. Nothing is synced or sent to us.
+- alarms: to refresh the PayHole list and the user's own blocklist on a schedule while the extension is idle.
 - Content scripts on all sites: one in the page's world wraps the wallet's request function so a request can be read
   before the wallet sees it; one in the isolated world shows the warning and talks to the extension.
 

@@ -6,7 +6,7 @@ export default defineConfig({
   outDir: ".output",
   manifest: {
     name: "PayHole",
-    description: "Scam links stop loading. Every site is checked against PayHole's resolver; wallet drainers, phishing, and counterfeit token sites are stopped before they load.",
+    description: "Scam links stop loading, and drainers stop before your wallet opens. Every site and every wallet request is checked.",
     permissions: [
       "storage",
       "alarms",

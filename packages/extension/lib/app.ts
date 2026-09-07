@@ -16,6 +16,7 @@ import type { Api, ApiName, ApiRequest, ApiResponse, BudgetView, ReporterStatus,
 import { AttemptLog, ObservedOffers, type ObservedResourceType } from "./observed";
 import { PaymentCore, type ApprovalRequest } from "./payments";
 import { lookupCreator } from "./registry";
+import { CURATED_KEY, EMPTY_CURATED, curatedRules, fetchCurated, isCuratedRuleId, type CuratedState } from "./curated";
 import { AddressCache, assess, fetchAddress, inspectRequest, type GuardVerdict } from "./guard";
 import type { GuardMessage } from "./messages";
 import { postReport, type ReportResult } from "./report";
@@ -30,6 +31,10 @@ import { VaultStore } from "./vault";
 
 export const AUTOLOCK_ALARM = "payhole-autolock";
 export const SYNC_ALARM = "payhole-blocklist-sync";
+export const CURATED_ALARM = "payhole-curated";
+export const CURATED_REAPPLY_ALARM = "payhole-curated-reapply";
+const CURATED_REFRESH_MS = 6 * 60 * 60 * 1000;
+const TRUSTED_KEY = "guardTrusted";
 export const APPROVAL_TIMEOUT_MS = 180_000;
 const TIER_CACHE_MS = 5 * 60 * 1000;
 const MENU_CHECK_LINK = "payhole-check-link";
@@ -95,6 +100,9 @@ export class BackgroundApp {
   private readonly allow = new AllowOnce(sessionStore);
   private readonly addressCache = new AddressCache((address) => fetchAddress(address, this.settings.shield.resolver));
   private readonly reporter = new ReporterStore(localStore);
+  private curated: CuratedState = EMPTY_CURATED;
+  private appliedCurated: string | null = null;
+  private trusted = new Set<string>();
   private recentEvents: ShieldEvent[] = [];
   readonly ready: Promise<void>;
 
@@ -142,6 +150,8 @@ export class BackgroundApp {
     this.settings = await loadSettings(localStore);
     await Promise.all([this.ledger.load(), this.blocklist.load(), this.agents.load(), this.tips.load(), this.allow.load(), this.reporter.load()]);
     this.recentEvents = (await sessionStore.get<ShieldEvent[]>(SHIELD_RECENT_KEY)) ?? [];
+    this.curated = (await localStore.get<CuratedState>(CURATED_KEY)) ?? EMPTY_CURATED;
+    this.trusted = new Set((await localStore.get<string[]>(TRUSTED_KEY)) ?? []);
     try {
       await browser.storage.session.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
     } catch {
@@ -151,12 +161,30 @@ export class BackgroundApp {
     if (mnemonic) await this.setUnlocked(mnemonic);
     try {
       await browser.alarms.create(SYNC_ALARM, { periodInMinutes: 15 });
+      await browser.alarms.create(CURATED_ALARM, { periodInMinutes: 360 });
     } catch {
       // alarms are optional for the core flow
     }
     await this.cleanupStaleRules();
     await this.installMenus();
-    if (!this.settings.shield.enabled) await this.dropShieldRules();
+    if (!this.settings.shield.enabled) {
+      await this.dropShieldRules();
+      await this.dropCuratedRules();
+    } else {
+      await this.applyCurated();
+      if (this.curated.fetchedAt === null || Date.now() - this.curated.fetchedAt > CURATED_REFRESH_MS) void this.refreshCurated();
+    }
+  }
+
+  /** Opens the dashboard once, the first time the extension is installed. */
+  async onInstalled(reason: string): Promise<void> {
+    await this.ready;
+    if (reason !== "install") return;
+    try {
+      await browser.tabs.create({ url: browser.runtime.getURL("/dashboard.html") });
+    } catch {
+      // no window to open it in
+    }
   }
 
   // ------------------------------------------------------------------ helpers
@@ -412,6 +440,59 @@ export class BackgroundApp {
     }
   }
 
+  // ---------------------------------------------------------- curated rules
+
+  /** The names dropped inside pages: the resolver's PayHole list plus the person's own blocklist. */
+  private curatedNames(): string[] {
+    return [...new Set([...this.curated.names, ...this.blocklist.list().map((entry) => entry.domain)])].sort();
+  }
+
+  /** Puts the current names into the browser's dynamic rules, minus what is allowed for the moment; a no-op when nothing changed. */
+  private async applyCurated(): Promise<void> {
+    if (!this.settings.shield.enabled) return;
+    const names = this.curatedNames();
+    const except = new Set(names.filter((name) => this.allow.isAllowed(name)));
+    const rules = curatedRules(names, except);
+    const signature = JSON.stringify(rules.map((rule) => rule.condition.urlFilter));
+    if (signature === this.appliedCurated) return;
+    try {
+      const existing = (await browser.declarativeNetRequest.getDynamicRules()).map((rule) => rule.id).filter(isCuratedRuleId);
+      await browser.declarativeNetRequest.updateDynamicRules({ removeRuleIds: existing, addRules: rules });
+      this.appliedCurated = signature;
+      if (rules.length > 0) this.log(`${rules.length} names blocked inside pages`);
+    } catch (error) {
+      this.log(`could not apply the PayHole list: ${errorText(error)}`);
+    }
+  }
+
+  private async dropCuratedRules(): Promise<void> {
+    try {
+      const existing = (await browser.declarativeNetRequest.getDynamicRules()).map((rule) => rule.id).filter(isCuratedRuleId);
+      if (existing.length) await browser.declarativeNetRequest.updateDynamicRules({ removeRuleIds: existing });
+      this.appliedCurated = null;
+    } catch {
+      // no declarativeNetRequest in this runtime
+    }
+  }
+
+  /** Fetches the resolver's PayHole list and applies it; failures are kept for the dashboard, never thrown. */
+  private async refreshCurated(): Promise<CuratedState> {
+    try {
+      const fetched = await fetchCurated(this.settings.shield.resolver, this.curated.etag);
+      this.curated = fetched.status === 304 ? { ...this.curated, fetchedAt: Date.now(), error: null } : { names: fetched.names, fetchedAt: Date.now(), etag: fetched.etag, error: null };
+    } catch (error) {
+      this.curated = { ...this.curated, fetchedAt: Date.now(), error: errorText(error) };
+      this.log(`PayHole list: ${this.curated.error}`);
+    }
+    await localStore.set(CURATED_KEY, this.curated);
+    await this.applyCurated();
+    return this.curated;
+  }
+
+  private curatedSummary(): { names: number; fetchedAt: number | null; error: string | null } {
+    return { names: this.curated.names.length, fetchedAt: this.curated.fetchedAt, error: this.curated.error };
+  }
+
   private async dropShieldRules(): Promise<void> {
     try {
       const rules = await browser.declarativeNetRequest.getSessionRules();
@@ -506,6 +587,12 @@ export class BackgroundApp {
   private async allowOnce(host: string): Promise<number> {
     const until = await this.allow.allow(host);
     await this.dropShieldRule(host);
+    await this.applyCurated();
+    try {
+      await browser.alarms.create(CURATED_REAPPLY_ALARM, { when: until + 1000 });
+    } catch {
+      // the next refresh restores the rule
+    }
     await this.remember({ host, url: `https://${host}/`, category: this.verdicts.known(host)?.category ?? null, action: "opened", at: Date.now() });
     return until;
   }
@@ -534,6 +621,10 @@ export class BackgroundApp {
     const clear: GuardVerdict = { level: "clear", flagged: [], unlimited: [], summary: "Nothing known." };
     if (sender.id !== browser.runtime.id || !sender.tab) return message.type === "check" ? clear : { ok: false };
     if (message.type === "decided") {
+      if (message.choice === "proceed" && message.verdict.level === "warn") {
+        for (const approval of message.verdict.unlimited) this.trusted.add(approval.spender);
+        await localStore.set(TRUSTED_KEY, [...this.trusted]);
+      }
       const host = hostnameOf(message.origin) ?? message.origin;
       await this.remember({ host, url: message.origin, category: (message.verdict.flagged[0]?.category as ShieldEvent["category"]) ?? null, action: message.choice === "stop" ? "tx-stopped" : "tx-continued", at: Date.now() });
       this.log(`wallet request on ${host}: ${message.choice === "stop" ? "stopped" : "continued"} (${message.verdict.summary})`);
@@ -543,7 +634,7 @@ export class BackgroundApp {
     const inspection = inspectRequest(message.method, message.params);
     if (!inspection || inspection.addresses.length === 0) return clear;
     const lookups = await this.addressCache.lookupAll(inspection.addresses);
-    return assess(inspection, lookups, { warnUnlimited: this.settings.guard.warnUnlimited });
+    return assess(inspection, lookups, { warnUnlimited: this.settings.guard.warnUnlimited, trusted: this.trusted });
   }
 
   // --------------------------------------------------------------- webRequest
@@ -719,6 +810,10 @@ export class BackgroundApp {
       this.log("auto-locked");
     } else if (name === SYNC_ALARM) {
       await this.syncBlocklist();
+    } else if (name === CURATED_ALARM) {
+      await this.refreshCurated();
+    } else if (name === CURATED_REAPPLY_ALARM) {
+      await this.applyCurated();
     }
   }
 
@@ -827,12 +922,19 @@ export class BackgroundApp {
     const sinkholeChanged = next.sinkhole.url !== this.settings.sinkhole.url || next.sinkhole.token !== this.settings.sinkhole.token;
     const resolverChanged = next.shield.resolver !== this.settings.shield.resolver;
     const shieldOff = !next.shield.enabled && this.settings.shield.enabled;
+    const shieldOn = next.shield.enabled && !this.settings.shield.enabled;
     this.settings = next;
     if (resolverChanged) {
       this.verdicts.clear();
       this.addressCache.clear();
+      this.curated = EMPTY_CURATED;
+      void this.refreshCurated();
     }
-    if (shieldOff) await this.dropShieldRules();
+    if (shieldOff) {
+      await this.dropShieldRules();
+      await this.dropCuratedRules();
+    }
+    if (shieldOn) await this.applyCurated();
     if (chainChanged) {
       this.clients.clear();
       this.tierCache = null;
@@ -888,6 +990,17 @@ export class BackgroundApp {
       return requestPayout(this.settings.shield.resolver, wallet);
     },
     "shield:recent": () => Promise.resolve([...this.recentEvents]),
+    "shield:curated": () => Promise.resolve(this.curatedSummary()),
+    "shield:refreshCurated": async () => {
+      await this.refreshCurated();
+      return this.curatedSummary();
+    },
+    "guard:trusted": () => Promise.resolve([...this.trusted].sort()),
+    "guard:forget": async () => {
+      this.trusted.clear();
+      await localStore.set(TRUSTED_KEY, []);
+      return { ok: true };
+    },
     "vault:status": () => this.status(),
     "vault:create": async ({ password }) => {
       const mnemonic = newMnemonic();
@@ -1048,11 +1161,13 @@ export class BackgroundApp {
     "blocklist:add": async ({ domain, reason }) => {
       await this.blocklist.add(domain, reason);
       void this.syncBlocklist();
+      await this.applyCurated();
       return this.blocklistView();
     },
     "blocklist:remove": async ({ domain }) => {
       await this.blocklist.remove(domain);
       void this.syncBlocklist();
+      await this.applyCurated();
       return this.blocklistView();
     },
     "blocklist:export": ({ format }) => Promise.resolve({ text: this.blocklist.export(format) }),

@@ -146,6 +146,10 @@ export interface Api {
   "shield:allowOnce": { params: { host: string }; result: { until: number } };
   "shield:report": { params: { name: string; category?: Category; reason?: string }; result: { result: ReportResult; fellBack: boolean } };
   "shield:recent": { params: Record<string, never>; result: ShieldEvent[] };
+  "shield:curated": { params: Record<string, never>; result: { names: number; fetchedAt: number | null; error: string | null } };
+  "shield:refreshCurated": { params: Record<string, never>; result: { names: number; fetchedAt: number | null; error: string | null } };
+  "guard:trusted": { params: Record<string, never>; result: string[] };
+  "guard:forget": { params: Record<string, never>; result: { ok: true } };
   "vault:status": { params: Record<string, never>; result: VaultStatus };
   "vault:create": { params: { password: string }; result: { mnemonic: string; owner: Address } };
   "vault:import": { params: { mnemonic: string; password: string }; result: { owner: Address } };

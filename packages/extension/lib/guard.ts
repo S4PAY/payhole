@@ -60,6 +60,8 @@ export interface GuardVerdict {
 }
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+/** Spenders every wallet user meets: an unlimited approval to them is the normal way in, not a trap. */
+export const KNOWN_SPENDERS: ReadonlySet<string> = new Set(["0x000000000022d473030f116ddee9f6b43ac78ba3"]);
 const UNLIMITED_256 = 1n << 255n;
 const UNLIMITED_160 = 1n << 159n;
 
@@ -296,7 +298,7 @@ export function rolesOf(inspection: Inspection): Map<string, Role> {
 }
 
 /** Weighs what was read against what the network knows about each address. */
-export function assess(inspection: Inspection, lookups: ReadonlyMap<string, AddressLookup | null>, options: { warnUnlimited: boolean }): GuardVerdict {
+export function assess(inspection: Inspection, lookups: ReadonlyMap<string, AddressLookup | null>, options: { warnUnlimited: boolean; trusted?: ReadonlySet<string> | undefined }): GuardVerdict {
   const roles = rolesOf(inspection);
   const flagged: AddressFlag[] = [];
   for (const address of inspection.addresses) {
@@ -305,7 +307,8 @@ export function assess(inspection: Inspection, lookups: ReadonlyMap<string, Addr
   }
   const order: Role[] = ["recipient", "spender", "contract", "party"];
   flagged.sort((a, b) => order.indexOf(a.role) - order.indexOf(b.role));
-  const unlimited = inspection.approvals.filter((approval) => approval.unlimited && !lookups.get(approval.spender)?.flagged);
+  const trusted = options.trusted ?? new Set<string>();
+  const unlimited = inspection.approvals.filter((approval) => approval.unlimited && !lookups.get(approval.spender)?.flagged && !KNOWN_SPENDERS.has(approval.spender) && !trusted.has(approval.spender));
   if (flagged.length > 0) return { level: "stop", flagged, unlimited, summary: describeFlag(flagged[0]!) };
   if (unlimited.length > 0 && options.warnUnlimited) {
     const first = unlimited[0]!;

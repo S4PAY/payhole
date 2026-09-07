@@ -11,9 +11,13 @@ const ACTION_WORDS: Record<string, string> = { blocked: "stopped a page", opened
 export function Shield() {
   const settings = useApi("settings:get", {});
   const recent = useApi("shield:recent", {});
+  const curated = useApi("shield:curated", {});
+  const trusted = useApi("guard:trusted", {});
   const action = useAction(() => {
     settings.reload();
     recent.reload();
+    curated.reload();
+    trusted.reload();
   });
   const [resolver, setResolver] = useState<string | null>(null);
 
@@ -38,6 +42,12 @@ export function Shield() {
             Check every site and stop the listed ones
           </label>
           <p className="muted small">Each new site is asked about once at the public resolver, the same answer the app gets. No page content leaves the browser, only the name.</p>
+          <p className="muted small">
+            {curated.data
+              ? `Inside pages: ${curated.data.names.toLocaleString()} names from the PayHole list are dropped before they load${curated.data.fetchedAt ? `, refreshed ${formatTimestamp(curated.data.fetchedAt)}` : ""}.${curated.data.error ? ` Last fetch failed: ${curated.data.error}` : ""}`
+              : "Inside pages: loading."}{" "}
+            <button type="button" className="chip" disabled={action.busy} onClick={() => action.run(async () => { await call("shield:refreshCurated", {}); })}>Refresh now</button>
+          </p>
           <label>
             Resolver
             <input type="url" value={resolver ?? shield.resolver} onChange={(e) => setResolver(e.target.value)} />
@@ -74,6 +84,12 @@ export function Shield() {
             />
             Also warn on unlimited approvals to unknown addresses
           </label>
+          {trusted.data && trusted.data.length > 0 ? (
+            <p className="muted small">
+              {`Continued for ${trusted.data.length} spender${trusted.data.length === 1 ? "" : "s"}; they no longer warn.`}{" "}
+              <button type="button" className="chip" disabled={action.busy} onClick={() => action.run(async () => { await call("guard:forget", {}); })}>Forget them</button>
+            </p>
+          ) : null}
         </div>
       </Panel>
       <Panel title={`This session (${events.length})`}>

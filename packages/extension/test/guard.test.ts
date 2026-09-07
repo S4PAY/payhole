@@ -72,10 +72,11 @@ describe("weighing requests", () => {
     expect(spender).toMatchObject({ level: "stop", unlimited: [] });
     expect(spender.summary).toContain("lets 0x101c…0fc0 move your tokens");
 
-    const unlimited = inspectRequest("eth_sendTransaction", [{ to: TOKEN, data: `0x095ea7b3${word(SPENDER)}${MAX.slice(2)}` }])!;
+    const ROUTER = "0x" + "9".repeat(40);
+    const unlimited = inspectRequest("eth_sendTransaction", [{ to: TOKEN, data: `0x095ea7b3${word(ROUTER)}${MAX.slice(2)}` }])!;
     const warned = assess(unlimited, lookups([]), { warnUnlimited: true });
     expect(warned.level).toBe("warn");
-    expect(warned.summary).toContain("Unlimited approval to 0x0000…8ba3");
+    expect(warned.summary).toContain("Unlimited approval to 0x9999…9999");
     expect(assess(unlimited, lookups([]), { warnUnlimited: false }).level).toBe("clear");
 
     const call = inspectRequest("eth_sendTransaction", [{ to: DRAINER, data: "0x12345678" }])!;
@@ -105,5 +106,17 @@ describe("asking about addresses", () => {
     now += 1500;
     expect(cache.known(TOKEN)).toBeNull();
     expect(cache.known(DRAINER)?.flagged).toBe(true);
+  });
+});
+
+describe("quiet by habit", () => {
+  it("does not warn on Permit2 or on a spender the person already continued for", () => {
+    const permit2 = inspectRequest("eth_sendTransaction", [{ to: TOKEN, data: `0x095ea7b3${word(SPENDER)}${MAX.slice(2)}` }])!;
+    expect(assess(permit2, lookups([]), { warnUnlimited: true }).level).toBe("clear");
+    const router = "0x" + "9".repeat(40);
+    const approve = inspectRequest("eth_sendTransaction", [{ to: TOKEN, data: `0x095ea7b3${word(router)}${MAX.slice(2)}` }])!;
+    expect(assess(approve, lookups([]), { warnUnlimited: true }).level).toBe("warn");
+    expect(assess(approve, lookups([]), { warnUnlimited: true, trusted: new Set([router]) }).level).toBe("clear");
+    expect(assess(approve, lookups([router]), { warnUnlimited: true, trusted: new Set([router]) }).level).toBe("stop");
   });
 });
