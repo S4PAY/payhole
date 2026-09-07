@@ -1,5 +1,5 @@
-import { erc20Abi, maxUint256, type Account, type Address, type Chain, type Hex, type PublicClient, type Transport, type WalletClient } from "viem";
-import { burnVaultAbi } from "@payhole/sdk";
+import type { Account, Address, Chain, Hex, PublicClient, Transport, WalletClient } from "viem";
+import { readTierState as readVaultTier, unlockTier as unlockVaultTier } from "@payhole/sdk";
 
 export interface TierLimits {
   /** Live agent session keys at once. */
@@ -11,8 +11,8 @@ export interface TierLimits {
 }
 
 /**
- * Limits by BurnVault tier. Tier 0 is everyone; higher tiers are unlocked by burning $PayHole. Tier 2 and above share
- * the last row.
+ * Limits by BurnVault tier. Tier 0 is everyone; higher tiers are bought with USDG that the vault turns into burned
+ * PAYHOLE. Tier 2 and above share the last row.
  */
 export const TIER_LIMITS: readonly TierLimits[] = [
   { agentKeys: 3, globalCap: 25_000_000n, siteCap: 5_000_000n },
@@ -30,60 +30,31 @@ export const ZERO_ADDRESS: Address = "0x0000000000000000000000000000000000000000
 export interface TierState {
   tier: number;
   limits: TierLimits;
-  token: Address;
-  tokenSet: boolean;
-  /** Cost of the next tier in token base units, zero when not offered. */
-  nextTierCost: bigint;
+  /** True once the vault can swap USDG for PAYHOLE; before that an unlock's USDG is held for a later burn. */
+  routeSet: boolean;
+  /** Price of the next tier in USDG base units, zero when not offered. */
+  nextTierPrice: bigint;
 }
 
-export async function readTierState(client: PublicClient, vault: Address, owner: Address): Promise<TierState> {
-  const [tier, token] = await Promise.all([
-    client.readContract({ address: vault, abi: burnVaultAbi, functionName: "tierOf", args: [owner] }),
-    client.readContract({ address: vault, abi: burnVaultAbi, functionName: "token" }),
-  ]);
-  const nextTier = tier + 1;
-  const nextTierCost =
-    nextTier <= 255 ? await client.readContract({ address: vault, abi: burnVaultAbi, functionName: "tierCost", args: [nextTier] }) : 0n;
-  return { tier, limits: limitsForTier(tier), token, tokenSet: token !== ZERO_ADDRESS, nextTierCost };
+export async function readTierState(client: PublicClient, vault: Address, usdg: Address, owner: Address): Promise<TierState> {
+  const state = await readVaultTier(client, { vault, usdg, address: owner });
+  const nextTier = state.tier + 1;
+  const nextTierPrice = nextTier <= 3 ? (state.prices[nextTier] ?? 0n) : 0n;
+  return { tier: state.tier, limits: limitsForTier(state.tier), routeSet: state.routeSet, nextTierPrice };
 }
 
 export interface UnlockParams {
   publicClient: PublicClient;
   walletClient: WalletClient<Transport, Chain, Account>;
   vault: Address;
+  usdg: Address;
   tier: number;
 }
 
-/** Approves the tier cost in $PayHole to the vault and calls `unlock(tier)`. */
+/** Approves the tier's USDG price to the vault when needed and calls `unlock`; the vault buys and burns PAYHOLE with it. */
 export async function unlockTier(params: UnlockParams): Promise<Hex[]> {
-  const { publicClient, walletClient, vault, tier } = params;
-  if (!Number.isInteger(tier) || tier < 1 || tier > 255) throw new Error("tier must be between 1 and 255");
-  const token = await publicClient.readContract({ address: vault, abi: burnVaultAbi, functionName: "token" });
-  if (token === ZERO_ADDRESS) throw new Error("the $PayHole token is not set on the vault yet");
-  const cost = await publicClient.readContract({ address: vault, abi: burnVaultAbi, functionName: "tierCost", args: [tier] });
-  if (cost === 0n) throw new Error(`tier ${tier} is not offered`);
-  const owner = walletClient.account.address;
-  const [balance, allowance] = await Promise.all([
-    publicClient.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [owner] }),
-    publicClient.readContract({ address: token, abi: erc20Abi, functionName: "allowance", args: [owner, vault] }),
-  ]);
-  if (balance < cost) throw new Error(`the owner holds ${balance.toString()} token units, the tier costs ${cost.toString()}`);
-  const hashes: Hex[] = [];
-  if (allowance < cost) {
-    const approve = await walletClient.writeContract({ address: token, abi: erc20Abi, functionName: "approve", args: [vault, maxUint256] });
-    await publicClient.waitForTransactionReceipt({ hash: approve });
-    hashes.push(approve);
-  }
-  const { request } = await publicClient.simulateContract({
-    account: walletClient.account,
-    address: vault,
-    abi: burnVaultAbi,
-    functionName: "unlock",
-    args: [tier],
-  });
-  const hash = await walletClient.writeContract(request);
-  const receipt = await publicClient.waitForTransactionReceipt({ hash });
-  if (receipt.status !== "success") throw new Error("unlock reverted");
-  hashes.push(hash);
-  return hashes;
+  const { publicClient, walletClient, vault, usdg, tier } = params;
+  if (!Number.isInteger(tier) || tier < 1 || tier > 3) throw new Error("tier must be 1, 2, or 3");
+  const result = await unlockVaultTier(publicClient, walletClient, { vault, usdg, tier });
+  return result.approveHash ? [result.approveHash, result.unlockHash] : [result.unlockHash];
 }

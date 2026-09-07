@@ -1,6 +1,6 @@
 // Composes the Chrome Web Store images from the raw captures in store/raw and the banner artwork.
 // Run from packages/extension after scripts/store-shots.ts: node scripts/store-frames.mjs
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";

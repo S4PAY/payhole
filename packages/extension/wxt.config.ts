@@ -6,11 +6,12 @@ export default defineConfig({
   outDir: ".output",
   manifest: {
     name: "PayHole",
-    description: "A capped spending pocket on Robinhood Chain that pays websites, tools, and agents over x402 while you browse.",
+    description: "Scam links stop loading. Every site is checked against PayHole's resolver; wallet drainers, phishing, and counterfeit token sites are stopped before they load.",
     permissions: [
       "storage",
       "alarms",
       "tabs",
+      "contextMenus",
       "webRequest",
       "webNavigation",
       "declarativeNetRequest",
@@ -19,5 +20,6 @@ export default defineConfig({
     host_permissions: ["<all_urls>"],
     minimum_chrome_version: "116",
     action: { default_title: "PayHole" },
+    web_accessible_resources: [{ resources: ["check.html"], matches: ["<all_urls>"] }],
   },
 });

@@ -1,5 +1,5 @@
 import { useAction, useApi } from "@/components/hooks";
-import { ActionStatus, Address, Notice, Panel, Usdg } from "@/components/ui";
+import { ActionStatus, Notice, Panel, Usdg } from "@/components/ui";
 import { call } from "@/lib/rpc";
 import { TIER_LIMITS } from "@/lib/tiers";
 
@@ -11,7 +11,7 @@ export function Tiers() {
   if (!view.data) return <p className="muted">Loading...</p>;
   const data = view.data;
   const nextTier = data.tier + 1;
-  const canUnlock = data.configured && data.tokenSet && data.nextTierCost !== "0";
+  const canUnlock = data.configured && data.nextTierPrice !== "0";
 
   return (
     <>
@@ -25,8 +25,8 @@ export function Tiers() {
           <dd><Usdg value={data.limits.globalCap} /></dd>
           <dt>Per-site cap up to</dt>
           <dd><Usdg value={data.limits.siteCap} /></dd>
-          <dt>$PayHole token</dt>
-          <dd>{data.tokenSet ? <Address value={data.token} short={false} /> : <span className="muted">not set yet</span>}</dd>
+          <dt>Burn route</dt>
+          <dd>{data.routeSet ? "set: every unlock buys and burns PAYHOLE" : <span className="muted">not set yet: the vault holds the USDG for a later burn</span>}</dd>
         </dl>
       </Panel>
       <Panel title="Tier table">
@@ -55,12 +55,11 @@ export function Tiers() {
       </Panel>
       <Panel title={`Unlock tier ${nextTier}`}>
         <p>
-          Burns {data.nextTierCost === "0" ? "an amount not yet configured" : `${data.nextTierCost} token base units`} of $PayHole through the BurnVault. The token is only ever bought and burned; it never pays anyone.
+          {data.nextTierPrice === "0" ? "Not offered by the vault." : <>Costs <Usdg value={data.nextTierPrice} /> USDG. The vault buys PAYHOLE with it and burns it. The token is only ever bought and burned; it never pays anyone.</>}
         </p>
         <button type="button" className="primary" disabled={!canUnlock || action.busy} onClick={() => action.run(async () => `unlocked in ${(await call("tiers:unlock", { tier: nextTier })).txHashes.join(", ")}`)}>
           Unlock tier {nextTier}
         </button>
-        {!data.tokenSet ? <p className="muted">Unlocking is disabled until the token address is set on the vault.</p> : null}
       </Panel>
     </>
   );

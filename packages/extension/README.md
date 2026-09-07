@@ -1,6 +1,8 @@
 # @payhole/extension
 
-Manifest V3 extension for Chromium: a spending-pocket wallet on Robinhood Chain (chain id 4663). Every site gets its own capped address derived from the user's seed; x402 payments (EIP-3009 `transferWithAuthorization` on USDG) are signed by that address and settled by the server's facilitator, so the payer never pays gas. The owner account controls a `BudgetAccount` contract that funds the per-site addresses under on-chain caps, issues session keys to agents, pays creator tips, and burns the top-up fee through the `BurnVault`.
+Manifest V3 extension for Chromium: the shield first, the pocket second. The shield checks every top-level navigation against the public PayHole resolver (`GET /verdict` on dns.payhole.org, the same answer the Android app gets), sends a listed name to a wall page before it loads, remembers blocked names as session redirect rules so a second visit never leaves the browser, shows a badge on the tab, takes reports, and checks any link from the context menu. No wallet is involved.
+
+The pocket, off by default, is a spending-pocket wallet on Robinhood Chain (chain id 4663). Every site gets its own capped address derived from the user's seed; x402 payments (EIP-3009 `transferWithAuthorization` on USDG) are signed by that address and settled by the server's facilitator, so the payer never pays gas. The owner account controls a `BudgetAccount` contract that funds the per-site addresses under on-chain caps, issues session keys to agents, pays creator tips, and burns the top-up fee through the `BurnVault`.
 
 Built with WXT, React 19, viem, and `@payhole/sdk` (the x402 core and the contract ABIs are reused, not reimplemented).
 

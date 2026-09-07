@@ -18,6 +18,18 @@ export interface SinkholeSettings {
   token: string;
 }
 
+export interface ShieldSettings {
+  /** Check every site against the resolver and stop the listed ones. */
+  enabled: boolean;
+  /** The public resolver's base URL; `/verdict` and `/report` live under it. */
+  resolver: string;
+}
+
+export interface PaySettings {
+  /** The x402 spending pocket. Off until a person turns it on; the shield needs none of it. */
+  enabled: boolean;
+}
+
 export interface Settings {
   rpcUrl: string;
   chainId: number;
@@ -40,6 +52,8 @@ export interface Settings {
   siteCaps: Record<string, string>;
   tips: TipSettings;
   sinkhole: SinkholeSettings;
+  shield: ShieldSettings;
+  pay: PaySettings;
 }
 
 export const SETTINGS_KEY = "settings";
@@ -66,6 +80,8 @@ export const DEFAULT_SETTINGS: Settings = {
   siteCaps: {},
   tips: { enabled: false, amount: "10000", intervalHours: 24, float: "1000000" },
   sinkhole: { url: "", token: "" },
+  shield: { enabled: true, resolver: "https://dns.payhole.org" },
+  pay: { enabled: false },
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -135,6 +151,12 @@ export function validateSettings(settings: Settings): SettingsProblem[] {
     } catch {
       problems.push({ field: "sinkhole.url", message: "must be a URL" });
     }
+  }
+  try {
+    const resolver = new URL(settings.shield.resolver);
+    if (resolver.protocol !== "https:" && resolver.protocol !== "http:") problems.push({ field: "shield.resolver", message: "must be an http(s) URL" });
+  } catch {
+    problems.push({ field: "shield.resolver", message: "must be a URL" });
   }
   return problems;
 }

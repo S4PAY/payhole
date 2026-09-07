@@ -4,7 +4,9 @@ import type { AgentView } from "./agents";
 import type { BlockEntry, BlockReason, ExportFormat, SyncStatus } from "./blocklist";
 import type { LedgerEntry } from "./ledger";
 import type { ApprovalRequest } from "./payments";
+import type { ReportResult } from "./report";
 import type { Settings, SinkholeSettings, TipSettings } from "./settings";
+import type { Category, ShieldEvent, Verdict } from "./shield";
 
 export const API_KIND = "payhole-api";
 
@@ -62,9 +64,10 @@ export interface TierView {
   configured: boolean;
   tier: number;
   limits: { agentKeys: number; globalCap: string; siteCap: string };
-  token: string;
-  tokenSet: boolean;
-  nextTierCost: string;
+  /** True once the vault can swap USDG for PAYHOLE; until then an unlock's USDG is held for a later burn. */
+  routeSet: boolean;
+  /** USDG base units the next tier costs; zero when not offered. */
+  nextTierPrice: string;
 }
 
 export interface BlocklistView {
@@ -95,7 +98,24 @@ export interface AgentsView {
   budgetAccount: string;
 }
 
+/** What the shield knows about one tab's site. */
+export interface ShieldStatus {
+  enabled: boolean;
+  resolver: string;
+  /** The checkable hostname, or null for pages the resolver cannot be asked about. */
+  host: string | null;
+  verdict: Verdict | null;
+  /** When a person chose to open this name anyway, until when. */
+  allowedUntil: number | null;
+  error: string | null;
+}
+
 export interface Api {
+  "shield:status": { params: { url: string }; result: ShieldStatus };
+  "shield:check": { params: { input: string }; result: { host: string; verdict: Verdict } };
+  "shield:allowOnce": { params: { host: string }; result: { until: number } };
+  "shield:report": { params: { name: string; category?: Category; reason?: string }; result: ReportResult };
+  "shield:recent": { params: Record<string, never>; result: ShieldEvent[] };
   "vault:status": { params: Record<string, never>; result: VaultStatus };
   "vault:create": { params: { password: string }; result: { mnemonic: string; owner: Address } };
   "vault:import": { params: { mnemonic: string; password: string }; result: { owner: Address } };

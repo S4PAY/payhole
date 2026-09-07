@@ -12,10 +12,12 @@ import { allocateRuleId, isNavigationRuleId, navigationRule, NAVIGATION_RULE_TTL
 import { errorText, toBigint } from "./format";
 import { agentAccount, isValidMnemonic, newMnemonic, normalizeMnemonic, normalizeOrigin, originAccount, ownerAccount, seedFromMnemonic } from "./keys";
 import { Ledger } from "./ledger";
-import type { Api, ApiName, ApiRequest, ApiResponse, BudgetView, SiteCard, VaultStatus } from "./messages";
+import type { Api, ApiName, ApiRequest, ApiResponse, BudgetView, ShieldStatus, SiteCard, VaultStatus } from "./messages";
 import { AttemptLog, ObservedOffers, type ObservedResourceType } from "./observed";
 import { PaymentCore, type ApprovalRequest } from "./payments";
 import { lookupCreator } from "./registry";
+import { sendReport } from "./report";
+import { AllowOnce, RECENT_EVENTS_KEPT, SHIELD_RECENT_KEY, VerdictCache, blockRule, checkPageUrl, describeVerdict, extractName, fetchVerdict, hostnameOf, isShieldRuleId, shieldRuleId, shouldBlock, type ShieldEvent, type Verdict } from "./shield";
 import { DEFAULT_SETTINGS, loadSettings, mergeSettings, saveSettings, SETTINGS_KEY, siteCapFor, validateSettings, type Settings } from "./settings";
 import { localStore, sessionStore } from "./storage";
 import { limitsForTier, readTierState, unlockTier, ZERO_ADDRESS, type TierLimits } from "./tiers";
@@ -27,6 +29,9 @@ export const AUTOLOCK_ALARM = "payhole-autolock";
 export const SYNC_ALARM = "payhole-blocklist-sync";
 export const APPROVAL_TIMEOUT_MS = 180_000;
 const TIER_CACHE_MS = 5 * 60 * 1000;
+const MENU_CHECK_LINK = "payhole-check-link";
+const MENU_CHECK_PAGE = "payhole-check-page";
+const BADGE_COLOR = "#ff4d4d";
 
 interface Unlocked {
   mnemonic: string;
@@ -83,6 +88,9 @@ export class BackgroundApp {
   private readonly pendingApprovals = new Map<string, PendingApproval>();
   private readonly clients = new Map<string, PublicClient>();
   private tierCache: { at: number; owner: Address; limits: TierLimits; tier: number } | null = null;
+  private readonly verdicts = new VerdictCache((name) => fetchVerdict(name, this.settings.shield.resolver));
+  private readonly allow = new AllowOnce(sessionStore);
+  private recentEvents: ShieldEvent[] = [];
   readonly ready: Promise<void>;
 
   constructor() {
@@ -127,7 +135,8 @@ export class BackgroundApp {
 
   private async init(): Promise<void> {
     this.settings = await loadSettings(localStore);
-    await Promise.all([this.ledger.load(), this.blocklist.load(), this.agents.load(), this.tips.load()]);
+    await Promise.all([this.ledger.load(), this.blocklist.load(), this.agents.load(), this.tips.load(), this.allow.load()]);
+    this.recentEvents = (await sessionStore.get<ShieldEvent[]>(SHIELD_RECENT_KEY)) ?? [];
     try {
       await browser.storage.session.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
     } catch {
@@ -141,6 +150,8 @@ export class BackgroundApp {
       // alarms are optional for the core flow
     }
     await this.cleanupStaleRules();
+    await this.installMenus();
+    if (!this.settings.shield.enabled) await this.dropShieldRules();
   }
 
   // ------------------------------------------------------------------ helpers
@@ -211,7 +222,7 @@ export class BackgroundApp {
       return { tier: this.tierCache.tier, limits: this.tierCache.limits };
     }
     try {
-      const state = await readTierState(this.publicClient(), vault, owner);
+      const state = await readTierState(this.publicClient(), vault, this.settings.usdg, owner);
       this.tierCache = { at: Date.now(), owner, limits: state.limits, tier: state.tier };
       return { tier: state.tier, limits: state.limits };
     } catch {
@@ -243,7 +254,7 @@ export class BackgroundApp {
         paused: this.settings.pausedAll,
         globalCap: toBigint(this.settings.globalCap),
         siteCap: (origin) => siteCapFor(this.settings, origin),
-        isBlocked: (hostname) => this.blocklist.isBlocked(hostname) !== undefined,
+        isBlocked: (hostname) => this.blocklist.isBlocked(hostname) !== undefined || this.verdicts.known(hostname)?.blocked === true,
       }),
       prompt: (request) => this.prompt(request),
       log: (message) => this.log(message),
@@ -328,6 +339,155 @@ export class BackgroundApp {
         pending.resolve(false);
       }
     }
+  }
+
+  // ------------------------------------------------------------------ shield
+
+  private checkPage(): string {
+    return browser.runtime.getURL("/check.html");
+  }
+
+  /** A top-level navigation is starting: stop it when the resolver calls the name blocked. */
+  async onBeforeNavigate(details: { tabId: number; frameId: number; url: string }): Promise<void> {
+    await this.ready;
+    if (details.frameId !== 0 || details.tabId < 0 || !this.settings.shield.enabled) return;
+    const host = hostnameOf(details.url);
+    if (!host || this.allow.isAllowed(host)) return;
+    const known = this.verdicts.known(host);
+    if (known) {
+      if (shouldBlock(known, false)) await this.stopNavigation(details.tabId, details.url, host, known);
+      return;
+    }
+    let verdict: Verdict;
+    try {
+      verdict = await this.verdicts.lookup(host);
+    } catch (error) {
+      this.log(`${host}: no verdict: ${errorText(error)}`);
+      return;
+    }
+    if (!shouldBlock(verdict, false)) return;
+    // The answer took a moment; only act when the tab is still on its way to, or at, that name.
+    try {
+      const tab = await browser.tabs.get(details.tabId);
+      const current = hostnameOf(tab.pendingUrl ?? tab.url ?? "");
+      if (current !== host) return;
+    } catch {
+      return;
+    }
+    await this.stopNavigation(details.tabId, details.url, host, verdict);
+  }
+
+  private async stopNavigation(tabId: number, url: string, host: string, verdict: Verdict): Promise<void> {
+    await this.ensureShieldRule(host);
+    try {
+      await browser.tabs.update(tabId, { url: checkPageUrl(this.checkPage(), url) });
+    } catch (error) {
+      this.log(`${host}: could not stop the navigation: ${errorText(error)}`);
+      return;
+    }
+    this.log(`stopped ${url}: ${describeVerdict(verdict)}`);
+    await this.remember({ host, url, category: verdict.category, action: "blocked", at: Date.now() });
+  }
+
+  /** A session rule that sends the next navigation to `host` to the check page before any request leaves. */
+  private async ensureShieldRule(host: string): Promise<void> {
+    try {
+      const rule = blockRule(host, this.checkPage());
+      await browser.declarativeNetRequest.updateSessionRules({ addRules: [rule], removeRuleIds: [rule.id] });
+    } catch (error) {
+      this.log(`${host}: could not add the block rule: ${errorText(error)}`);
+    }
+  }
+
+  private async dropShieldRule(host: string): Promise<void> {
+    try {
+      await browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: [shieldRuleId(host)] });
+    } catch {
+      // already gone
+    }
+  }
+
+  private async dropShieldRules(): Promise<void> {
+    try {
+      const rules = await browser.declarativeNetRequest.getSessionRules();
+      const ids = rules.map((rule) => rule.id).filter(isShieldRuleId);
+      if (ids.length) await browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: ids });
+    } catch {
+      // no declarativeNetRequest in this runtime
+    }
+  }
+
+  private async remember(event: ShieldEvent): Promise<void> {
+    this.recentEvents = [event, ...this.recentEvents].slice(0, RECENT_EVENTS_KEPT);
+    await sessionStore.set(SHIELD_RECENT_KEY, this.recentEvents);
+  }
+
+  /** The toolbar badge for a tab: a mark on a blocked name, nothing otherwise. */
+  async updateBadge(tabId: number, url: string | undefined): Promise<void> {
+    await this.ready;
+    const host = url ? hostnameOf(url) : null;
+    let text = "";
+    let title = "PayHole";
+    if (host && this.settings.shield.enabled) {
+      const verdict = this.verdicts.known(host) ?? (await this.verdicts.lookup(host).catch(() => null));
+      if (verdict?.blocked && !verdict.allowlisted) {
+        text = "!";
+        title = `PayHole: ${describeVerdict(verdict)}`;
+      } else if (verdict) {
+        title = `PayHole: ${host} is not on any list`;
+      }
+    }
+    try {
+      await browser.action.setBadgeText({ tabId, text });
+      if (text) await browser.action.setBadgeBackgroundColor({ tabId, color: BADGE_COLOR });
+      await browser.action.setTitle({ tabId, title });
+    } catch {
+      // the tab is gone
+    }
+  }
+
+  async onTabActivated(tabId: number): Promise<void> {
+    try {
+      const tab = await browser.tabs.get(tabId);
+      await this.updateBadge(tabId, tab.url);
+    } catch {
+      // the tab is gone
+    }
+  }
+
+  private async shieldStatus(url: string): Promise<ShieldStatus> {
+    const host = hostnameOf(url);
+    const base = { enabled: this.settings.shield.enabled, resolver: this.settings.shield.resolver, host, verdict: null, allowedUntil: null, error: null };
+    if (!host) return base;
+    const allowedUntil = this.allow.isAllowed(host) ? ((await sessionStore.get<Record<string, number>>("shieldAllow"))?.[host] ?? null) : null;
+    try {
+      return { ...base, verdict: await this.verdicts.lookup(host), allowedUntil };
+    } catch (error) {
+      return { ...base, allowedUntil, error: errorText(error) };
+    }
+  }
+
+  private async allowOnce(host: string): Promise<number> {
+    const until = await this.allow.allow(host);
+    await this.dropShieldRule(host);
+    await this.remember({ host, url: `https://${host}/`, category: this.verdicts.known(host)?.category ?? null, action: "opened", at: Date.now() });
+    return until;
+  }
+
+  private async installMenus(): Promise<void> {
+    try {
+      await browser.contextMenus.removeAll();
+      browser.contextMenus.create({ id: MENU_CHECK_LINK, title: "Check this link with PayHole", contexts: ["link"] });
+      browser.contextMenus.create({ id: MENU_CHECK_PAGE, title: "Check this page with PayHole", contexts: ["page"] });
+    } catch {
+      // no context menus in this runtime
+    }
+  }
+
+  async onMenuClick(info: { menuItemId: string | number; linkUrl?: string | undefined; pageUrl?: string | undefined }): Promise<void> {
+    const url = info.menuItemId === MENU_CHECK_LINK ? info.linkUrl : info.menuItemId === MENU_CHECK_PAGE ? info.pageUrl : undefined;
+    if (!url) return;
+    await browser.tabs.create({ url: checkPageUrl(this.checkPage(), url) });
   }
 
   // --------------------------------------------------------------- webRequest
@@ -486,6 +646,8 @@ export class BackgroundApp {
   async onNavigationCommitted(details: Browser.webNavigation.WebNavigationTransitionCallbackDetails): Promise<void> {
     await this.ready;
     if (details.frameId !== 0 || !isHttpUrl(details.url)) return;
+    void this.updateBadge(details.tabId, details.url);
+    if (!this.settings.pay.enabled) return;
     const result = await this.tips.onNavigation(details.url);
     if (result.kind === "tipped") this.log(`tipped ${result.hostname} ${result.amount.toString()} base units in ${result.txHash}`);
     else if (result.kind === "failed") this.log(`tip to ${result.hostname} failed: ${result.error}`);
@@ -606,7 +768,11 @@ export class BackgroundApp {
     }
     const chainChanged = next.chainId !== this.settings.chainId || next.rpcUrl !== this.settings.rpcUrl || next.usdg !== this.settings.usdg;
     const sinkholeChanged = next.sinkhole.url !== this.settings.sinkhole.url || next.sinkhole.token !== this.settings.sinkhole.token;
+    const resolverChanged = next.shield.resolver !== this.settings.shield.resolver;
+    const shieldOff = !next.shield.enabled && this.settings.shield.enabled;
     this.settings = next;
+    if (resolverChanged) this.verdicts.clear();
+    if (shieldOff) await this.dropShieldRules();
     if (chainChanged) {
       this.clients.clear();
       this.tierCache = null;
@@ -617,6 +783,25 @@ export class BackgroundApp {
   }
 
   private readonly handlers: { [K in ApiName]: (params: Api[K]["params"]) => Promise<Api[K]["result"]> } = {
+    "shield:status": ({ url }) => this.shieldStatus(url),
+    "shield:check": async ({ input }) => {
+      const host = extractName(input);
+      if (!host) throw new Error("That is not a link or a domain name.");
+      return { host, verdict: await this.verdicts.lookup(host) };
+    },
+    "shield:allowOnce": async ({ host }) => {
+      const clean = hostnameOf(`https://${host}/`);
+      if (!clean) throw new Error("not a hostname");
+      return { until: await this.allowOnce(clean) };
+    },
+    "shield:report": async ({ name, category, reason }) => {
+      const host = extractName(name);
+      if (!host) throw new Error("That is not a link or a domain name.");
+      const result = await sendReport(this.settings.shield.resolver, { name: host, category, reason });
+      if (result.status === "confirmed" || result.status === "already_blocked") this.verdicts.forget(host);
+      return result;
+    },
+    "shield:recent": () => Promise.resolve([...this.recentEvents]),
     "vault:status": () => this.status(),
     "vault:create": async ({ password }) => {
       const mnemonic = newMnemonic();
@@ -807,24 +992,23 @@ export class BackgroundApp {
       const owner = this.unlocked?.owner.address;
       if (!vault || !owner) {
         const limits = limitsForTier(0);
-        return { configured: false, tier: 0, limits: { agentKeys: limits.agentKeys, globalCap: limits.globalCap.toString(), siteCap: limits.siteCap.toString() }, token: "", tokenSet: false, nextTierCost: "0" };
+        return { configured: false, tier: 0, limits: { agentKeys: limits.agentKeys, globalCap: limits.globalCap.toString(), siteCap: limits.siteCap.toString() }, routeSet: false, nextTierPrice: "0" };
       }
-      const state = await readTierState(this.publicClient(), vault, owner);
+      const state = await readTierState(this.publicClient(), vault, this.settings.usdg, owner);
       this.tierCache = { at: Date.now(), owner, limits: state.limits, tier: state.tier };
       return {
         configured: true,
         tier: state.tier,
         limits: { agentKeys: state.limits.agentKeys, globalCap: state.limits.globalCap.toString(), siteCap: state.limits.siteCap.toString() },
-        token: state.token,
-        tokenSet: state.tokenSet,
-        nextTierCost: state.nextTierCost.toString(),
+        routeSet: state.routeSet,
+        nextTierPrice: state.nextTierPrice.toString(),
       };
     },
     "tiers:unlock": async ({ tier }) => {
       const unlocked = this.requireUnlocked();
       const vault = this.vaultAddress();
       if (!vault) throw new Error("the BurnVault address is not set (Settings)");
-      const txHashes = await unlockTier({ publicClient: this.publicClient(), walletClient: walletClientFor(this.settings, unlocked.owner), vault, tier });
+      const txHashes = await unlockTier({ publicClient: this.publicClient(), walletClient: walletClientFor(this.settings, unlocked.owner), vault, usdg: this.settings.usdg, tier });
       this.tierCache = null;
       return { txHashes };
     },
