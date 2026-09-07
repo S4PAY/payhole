@@ -30,6 +30,13 @@ export interface PaySettings {
   enabled: boolean;
 }
 
+export interface GuardSettings {
+  /** Look at what a wallet is asked to sign and stop known-bad addresses. */
+  enabled: boolean;
+  /** Also warn on an unlimited approval to an address nobody knows. */
+  warnUnlimited: boolean;
+}
+
 export interface Settings {
   rpcUrl: string;
   chainId: number;
@@ -54,6 +61,7 @@ export interface Settings {
   sinkhole: SinkholeSettings;
   shield: ShieldSettings;
   pay: PaySettings;
+  guard: GuardSettings;
 }
 
 export const SETTINGS_KEY = "settings";
@@ -82,6 +90,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sinkhole: { url: "", token: "" },
   shield: { enabled: true, resolver: "https://dns.payhole.org" },
   pay: { enabled: false },
+  guard: { enabled: true, warnUnlimited: true },
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {

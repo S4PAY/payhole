@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAction, useApi } from "@/components/hooks";
 import { ActionStatus, Brand, Notice, Panel } from "@/components/ui";
 import { Shield } from "@/components/sections/Shield";
+import { Reports } from "@/components/sections/Reports";
 import { Budget } from "@/components/sections/Budget";
 import { Sites } from "@/components/sections/Sites";
 import { Agents } from "@/components/sections/Agents";
@@ -12,7 +13,7 @@ import { Tiers } from "@/components/sections/Tiers";
 import { SettingsPanel } from "@/components/sections/SettingsPanel";
 import { call } from "@/lib/rpc";
 
-const SHIELD_TABS = ["Shield", "Blocklist", "Settings"] as const;
+const SHIELD_TABS = ["Shield", "Reports", "Blocklist", "Settings"] as const;
 const PAY_TABS = ["Budget", "Sites", "Agents", "Registry", "Tips", "Tiers"] as const;
 type Tab = (typeof SHIELD_TABS)[number] | (typeof PAY_TABS)[number];
 
@@ -125,6 +126,7 @@ export function App() {
         ))}
       </nav>
       {current === "Shield" ? <Shield /> : null}
+      {current === "Reports" ? <Reports /> : null}
       {current === "Blocklist" ? <Blocklist /> : null}
       {current === "Settings" ? <SettingsPanel /> : null}
       {needsVault ? <Locked exists={status.data.exists} reload={() => { status.reload(); settings.reload(); }} /> : null}

@@ -200,12 +200,12 @@ export const SHIELD_ALLOW_KEY = "shieldAllow";
 export const SHIELD_RECENT_KEY = "shieldRecent";
 export const RECENT_EVENTS_KEPT = 50;
 
-/** Something the shield did this session: stopped a navigation, or let one through on purpose. */
+/** Something the shield did this session: stopped a navigation or a wallet request, or let one through on purpose. */
 export interface ShieldEvent {
   host: string;
   url: string;
   category: Category | null;
-  action: "blocked" | "opened";
+  action: "blocked" | "opened" | "tx-stopped" | "tx-continued";
   at: number;
 }
 export const ALLOW_ONCE_MS = 10 * 60_000;

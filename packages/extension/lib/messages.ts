@@ -4,11 +4,25 @@ import type { AgentView } from "./agents";
 import type { BlockEntry, BlockReason, ExportFormat, SyncStatus } from "./blocklist";
 import type { LedgerEntry } from "./ledger";
 import type { ApprovalRequest } from "./payments";
+import type { AddressLookup, GuardVerdict } from "./guard";
 import type { ReportResult } from "./report";
+import type { LocalReport, RewardsSummary } from "./reporter";
 import type { Settings, SinkholeSettings, TipSettings } from "./settings";
 import type { Category, ShieldEvent, Verdict } from "./shield";
 
 export const API_KIND = "payhole-api";
+export const GUARD_KIND = "payhole-guard";
+
+/** What the guard's bridge script sends from a page: a request to weigh, or the person's decision on one. */
+export type GuardMessage =
+  | { kind: typeof GUARD_KIND; type: "check"; method: string; params: unknown; origin: string }
+  | { kind: typeof GUARD_KIND; type: "decided"; origin: string; choice: "proceed" | "stop"; verdict: GuardVerdict };
+
+export function isGuardMessage(value: unknown): value is GuardMessage {
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as { kind?: unknown; type?: unknown };
+  return record.kind === GUARD_KIND && (record.type === "check" || record.type === "decided");
+}
 
 export interface VaultStatus {
   exists: boolean;
@@ -110,11 +124,27 @@ export interface ShieldStatus {
   error: string | null;
 }
 
+/** This browser's reporter identity and what it has reported. */
+export interface ReporterStatus {
+  address: string | null;
+  holder: string | null;
+  wallet: string | null;
+  walletIsOwn: boolean;
+  reports: LocalReport[];
+}
+
 export interface Api {
+  "reporter:status": { params: Record<string, never>; result: ReporterStatus };
+  "reporter:setWallet": { params: { wallet: string }; result: ReporterStatus };
+  "reporter:link": { params: { proof: string }; result: ReporterStatus };
+  "reporter:unlink": { params: Record<string, never>; result: ReporterStatus };
+  "reporter:rewards": { params: Record<string, never>; result: RewardsSummary | null };
+  "reporter:claim": { params: Record<string, never>; result: { status: string; detail: string | null } };
+  "shield:checkAddress": { params: { address: string }; result: AddressLookup };
   "shield:status": { params: { url: string }; result: ShieldStatus };
   "shield:check": { params: { input: string }; result: { host: string; verdict: Verdict } };
   "shield:allowOnce": { params: { host: string }; result: { until: number } };
-  "shield:report": { params: { name: string; category?: Category; reason?: string }; result: ReportResult };
+  "shield:report": { params: { name: string; category?: Category; reason?: string }; result: { result: ReportResult; fellBack: boolean } };
   "shield:recent": { params: Record<string, never>; result: ShieldEvent[] };
   "vault:status": { params: Record<string, never>; result: VaultStatus };
   "vault:create": { params: { password: string }; result: { mnemonic: string; owner: Address } };

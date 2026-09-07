@@ -1,10 +1,27 @@
 import { useState, type ReactNode } from "react";
 import { describeReport, type ReportResult } from "@/lib/report";
 import { call } from "@/lib/rpc";
+import type { AddressLookup } from "@/lib/guard";
 import { CATEGORY_LABELS, REPORT_CATEGORIES, describeVerdict, isDangerous, type Category, type Verdict } from "@/lib/shield";
 import { errorText } from "@/lib/format";
 
 const SOURCE_WORDS: Record<string, string> = { list: "subscribed list", swarm: "swarm", manual: "operator", local: "extension" };
+const ADDRESS_CATEGORIES: readonly Category[] = ["drainer", "phishing", "infra"];
+const ADDRESS_WORDS: Record<string, string> = { drainer: "drainer", phishing: "phishing wallet", infra: "drainer infrastructure" };
+
+/** What the resolver said about an address. */
+export function AddressView({ lookup }: { lookup: AddressLookup }) {
+  return (
+    <div className="stack tight">
+      <div className="row between">
+        <Eyebrow tone={lookup.flagged ? "danger" : "accent"}>{lookup.flagged ? "Flagged" : "Not flagged"}</Eyebrow>
+        {lookup.flagged ? <span className="tag danger">{ADDRESS_WORDS[lookup.category ?? ""] ?? "flagged"}</span> : null}
+      </div>
+      <div className="subject">{lookup.address}</div>
+      <p className="lead">{lookup.flagged ? `A known ${ADDRESS_WORDS[lookup.category ?? ""] ?? "bad address"}${lookup.label ? ` (${lookup.label})` : ""}. The guard stops sends and approvals to it.` : "Not on the address list. Not a guarantee."}</p>
+    </div>
+  );
+}
 
 export type Tone = "accent" | "danger" | "muted";
 
@@ -44,7 +61,8 @@ export function VerdictView({ verdict, big = false }: { verdict: Verdict; big?: 
 
 /** Report a name to the resolver: pick what it is, add a note, send. */
 export function ReportForm({ name, onDone }: { name: string; onDone?: (result: ReportResult) => void }) {
-  const [category, setCategory] = useState<Category>("phishing");
+  const isAddress = /^0x[0-9a-fA-F]{40}$/.test(name);
+  const [category, setCategory] = useState<Category>(isAddress ? "drainer" : "phishing");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [line, setLine] = useState<string | null>(null);
@@ -53,7 +71,7 @@ export function ReportForm({ name, onDone }: { name: string; onDone?: (result: R
     setBusy(true);
     setLine(null);
     try {
-      const result = await call("shield:report", { name, category, reason });
+      const { result } = await call("shield:report", { name, category, reason });
       setLine(describeReport(result));
       setFailed(result.status === "invalid" || result.status === "rejected");
       onDone?.(result);
@@ -67,7 +85,7 @@ export function ReportForm({ name, onDone }: { name: string; onDone?: (result: R
   return (
     <div className="stack">
       <div className="chips">
-        {REPORT_CATEGORIES.map((c) => (
+        {(isAddress ? ADDRESS_CATEGORIES : REPORT_CATEGORIES).map((c) => (
           <button key={c} type="button" className={`chip ${c === category ? "active" : ""}`} onClick={() => setCategory(c)}>
             {CATEGORY_LABELS[c]}
           </button>
@@ -85,7 +103,7 @@ export function ReportForm({ name, onDone }: { name: string; onDone?: (result: R
 }
 
 /** Paste a link or a name and ask the resolver. */
-export function CheckForm({ onResult, autoFocus = false }: { onResult: (host: string, verdict: Verdict) => void; autoFocus?: boolean }) {
+export function CheckForm({ onResult, onAddress, autoFocus = false }: { onResult: (host: string, verdict: Verdict) => void; onAddress?: (lookup: AddressLookup) => void; autoFocus?: boolean }) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,8 +112,12 @@ export function CheckForm({ onResult, autoFocus = false }: { onResult: (host: st
     setBusy(true);
     setError(null);
     try {
-      const result = await call("shield:check", { input });
-      onResult(result.host, result.verdict);
+      if (/^0x[0-9a-fA-F]{40}$/.test(input.trim()) && onAddress) {
+        onAddress(await call("shield:checkAddress", { address: input.trim() }));
+      } else {
+        const result = await call("shield:check", { input });
+        onResult(result.host, result.verdict);
+      }
     } catch (e) {
       setError(errorText(e));
     } finally {
@@ -110,7 +132,7 @@ export function CheckForm({ onResult, autoFocus = false }: { onResult: (host: st
         void run();
       }}
     >
-      <input type="text" value={input} placeholder="Link or domain" autoFocus={autoFocus} spellCheck={false} autoComplete="off" onChange={(e) => setInput(e.target.value)} />
+      <input type="text" value={input} placeholder={onAddress ? "Link, domain, or address" : "Link or domain"} autoFocus={autoFocus} spellCheck={false} autoComplete="off" onChange={(e) => setInput(e.target.value)} />
       <div className="row">
         <button type="submit" className="primary" disabled={busy || input.trim().length === 0}>
           {busy ? "Checking" : "Check"}

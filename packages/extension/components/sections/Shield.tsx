@@ -5,6 +5,8 @@ import { ActionStatus, Notice, Panel } from "@/components/ui";
 import { formatTimestamp } from "@/lib/format";
 import { call } from "@/lib/rpc";
 
+const ACTION_WORDS: Record<string, string> = { blocked: "stopped a page", opened: "opened once", "tx-stopped": "stopped a wallet request", "tx-continued": "continued anyway" };
+
 /** The shield's switches and what it did this session. */
 export function Shield() {
   const settings = useApi("settings:get", {});
@@ -19,6 +21,7 @@ export function Shield() {
   if (!settings.data) return <p className="muted">Loading...</p>;
   const shield = settings.data.shield;
   const pay = settings.data.pay;
+  const guard = settings.data.guard;
   const events = recent.data ?? [];
 
   return (
@@ -51,6 +54,28 @@ export function Shield() {
           </div>
         </div>
       </Panel>
+      <Panel title="Wallet guard">
+        <div className="stack">
+          <label className="inline">
+            <input
+              type="checkbox"
+              checked={guard.enabled}
+              onChange={(e) => action.run(async () => { await call("settings:set", { patch: { guard: { ...guard, enabled: e.target.checked } } }); })}
+            />
+            Look at what a wallet is asked to sign
+          </label>
+          <p className="muted small">Before MetaMask, Rabby, or any wallet opens, the addresses in a send, an approval, or a permit are checked against the network's list of drainers. A known one is stopped with a warning you can override.</p>
+          <label className="inline">
+            <input
+              type="checkbox"
+              checked={guard.warnUnlimited}
+              disabled={!guard.enabled}
+              onChange={(e) => action.run(async () => { await call("settings:set", { patch: { guard: { ...guard, warnUnlimited: e.target.checked } } }); })}
+            />
+            Also warn on unlimited approvals to unknown addresses
+          </label>
+        </div>
+      </Panel>
       <Panel title={`This session (${events.length})`}>
         {events.length === 0 ? <p className="muted">Nothing stopped yet.</p> : null}
         {events.length > 0 ? (
@@ -70,7 +95,7 @@ export function Shield() {
                     <td>{formatTimestamp(event.at)}</td>
                     <td className="mono">{event.host}</td>
                     <td><CategoryTag category={event.category} /></td>
-                    <td className={event.action === "blocked" ? "danger" : "warn"}>{event.action === "blocked" ? "stopped" : "opened once"}</td>
+                    <td className={event.action === "blocked" || event.action === "tx-stopped" ? "danger" : "warn"}>{ACTION_WORDS[event.action]}</td>
                   </tr>
                 ))}
               </tbody>

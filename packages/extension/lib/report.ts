@@ -17,11 +17,16 @@ const STATUSES = new Set(["hinted", "already_blocked", "allowlisted", "flagged",
 
 export class ReportError extends Error {}
 
-/** Sends one report and returns the resolver's answer. Throws on network trouble or an answer that is not a report result. */
+/** Sends one plain report and returns the resolver's answer. */
 export async function sendReport(resolver: string, input: ReportInput, fetchImpl: typeof fetch = fetch): Promise<ReportResult> {
   const body: Record<string, unknown> = { name: input.name };
   if (isCategory(input.category)) body["category"] = input.category;
   if (input.reason && input.reason.trim().length > 0) body["reason"] = input.reason.trim().slice(0, 200);
+  return postReport(resolver, body, fetchImpl);
+}
+
+/** Posts any report body, signed hint or delegated flag included. Throws on network trouble or an answer that is not a report result. */
+export async function postReport(resolver: string, body: Record<string, unknown>, fetchImpl: typeof fetch = fetch): Promise<ReportResult> {
   const response = await fetchImpl(`${resolver.replace(/\/+$/, "")}/report`, {
     method: "POST",
     headers: { "content-type": "application/json", accept: "application/json" },

@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { browser } from "wxt/browser";
 import { useApi } from "@/components/hooks";
-import { CheckForm, Eyebrow, ReportForm, VerdictView } from "@/components/shield";
+import { AddressView, CheckForm, Eyebrow, ReportForm, VerdictView } from "@/components/shield";
+import type { AddressLookup } from "@/lib/guard";
 import { Brand, Notice } from "@/components/ui";
 import { errorText } from "@/lib/format";
 import type { ShieldStatus } from "@/lib/messages";
@@ -23,6 +24,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [reporting, setReporting] = useState(false);
   const [checked, setChecked] = useState<{ host: string; verdict: Verdict } | null>(null);
+  const [address, setAddress] = useState<AddressLookup | null>(null);
   const settings = useApi("settings:get", {});
   const vault = useApi("vault:status", {});
 
@@ -92,9 +94,20 @@ export function App() {
       <section className="panel">
         <div className="stack">
           <Eyebrow>Check a link</Eyebrow>
-          <CheckForm onResult={(host, verdict) => setChecked({ host, verdict })} />
+          <CheckForm
+            onResult={(host, verdict) => {
+              setChecked({ host, verdict });
+              setAddress(null);
+            }}
+            onAddress={(lookup) => {
+              setAddress(lookup);
+              setChecked(null);
+            }}
+          />
           {checked ? <VerdictView verdict={checked.verdict} /> : null}
           {checked && !checked.verdict.blocked ? <ReportForm name={checked.host} /> : null}
+          {address ? <AddressView lookup={address} /> : null}
+          {address && !address.flagged ? <ReportForm name={address.address} /> : null}
         </div>
       </section>
 

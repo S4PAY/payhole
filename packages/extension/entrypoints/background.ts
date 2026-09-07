@@ -2,7 +2,7 @@ import { browser } from "wxt/browser";
 import { defineBackground } from "wxt/utils/define-background";
 import { BackgroundApp } from "@/lib/app";
 import { parseBridgeRequest } from "@/lib/bridge";
-import { isApiRequest } from "@/lib/messages";
+import { isApiRequest, isGuardMessage } from "@/lib/messages";
 
 const HTTP_URLS = ["http://*/*", "https://*/*"];
 
@@ -12,6 +12,10 @@ export default defineBackground(() => {
   browser.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
     if (isApiRequest(message)) {
       void app.handleApi(message, sender).then(sendResponse);
+      return true;
+    }
+    if (isGuardMessage(message)) {
+      void app.handleGuard(message, sender).then(sendResponse);
       return true;
     }
     const bridge = parseBridgeRequest(message);

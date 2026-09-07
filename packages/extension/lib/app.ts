@@ -12,12 +12,15 @@ import { allocateRuleId, isNavigationRuleId, navigationRule, NAVIGATION_RULE_TTL
 import { errorText, toBigint } from "./format";
 import { agentAccount, isValidMnemonic, newMnemonic, normalizeMnemonic, normalizeOrigin, originAccount, ownerAccount, seedFromMnemonic } from "./keys";
 import { Ledger } from "./ledger";
-import type { Api, ApiName, ApiRequest, ApiResponse, BudgetView, ShieldStatus, SiteCard, VaultStatus } from "./messages";
+import type { Api, ApiName, ApiRequest, ApiResponse, BudgetView, ReporterStatus, ShieldStatus, SiteCard, VaultStatus } from "./messages";
 import { AttemptLog, ObservedOffers, type ObservedResourceType } from "./observed";
 import { PaymentCore, type ApprovalRequest } from "./payments";
 import { lookupCreator } from "./registry";
-import { sendReport } from "./report";
-import { AllowOnce, RECENT_EVENTS_KEPT, SHIELD_RECENT_KEY, VerdictCache, blockRule, checkPageUrl, describeVerdict, extractName, fetchVerdict, hostnameOf, isShieldRuleId, shieldRuleId, shouldBlock, type ShieldEvent, type Verdict } from "./shield";
+import { AddressCache, assess, fetchAddress, inspectRequest, type GuardVerdict } from "./guard";
+import type { GuardMessage } from "./messages";
+import { postReport, type ReportResult } from "./report";
+import { ReporterStore, buildDelegatedFlag, fetchRewards, requestPayout, signHint } from "./reporter";
+import { AllowOnce, RECENT_EVENTS_KEPT, SHIELD_RECENT_KEY, VerdictCache, blockRule, checkPageUrl, describeVerdict, extractName, fetchVerdict, hostnameOf, isShieldRuleId, shieldRuleId, shouldBlock, type Category, type ShieldEvent, type Verdict } from "./shield";
 import { DEFAULT_SETTINGS, loadSettings, mergeSettings, saveSettings, SETTINGS_KEY, siteCapFor, validateSettings, type Settings } from "./settings";
 import { localStore, sessionStore } from "./storage";
 import { limitsForTier, readTierState, unlockTier, ZERO_ADDRESS, type TierLimits } from "./tiers";
@@ -90,6 +93,8 @@ export class BackgroundApp {
   private tierCache: { at: number; owner: Address; limits: TierLimits; tier: number } | null = null;
   private readonly verdicts = new VerdictCache((name) => fetchVerdict(name, this.settings.shield.resolver));
   private readonly allow = new AllowOnce(sessionStore);
+  private readonly addressCache = new AddressCache((address) => fetchAddress(address, this.settings.shield.resolver));
+  private readonly reporter = new ReporterStore(localStore);
   private recentEvents: ShieldEvent[] = [];
   readonly ready: Promise<void>;
 
@@ -135,7 +140,7 @@ export class BackgroundApp {
 
   private async init(): Promise<void> {
     this.settings = await loadSettings(localStore);
-    await Promise.all([this.ledger.load(), this.blocklist.load(), this.agents.load(), this.tips.load(), this.allow.load()]);
+    await Promise.all([this.ledger.load(), this.blocklist.load(), this.agents.load(), this.tips.load(), this.allow.load(), this.reporter.load()]);
     this.recentEvents = (await sessionStore.get<ShieldEvent[]>(SHIELD_RECENT_KEY)) ?? [];
     try {
       await browser.storage.session.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
@@ -467,6 +472,37 @@ export class BackgroundApp {
     }
   }
 
+  private reporterStatus(): ReporterStatus {
+    return { address: this.reporter.address, holder: this.reporter.holder, wallet: this.reporter.payTo, walletIsOwn: this.reporter.walletIsOwn, reports: this.reporter.list() };
+  }
+
+  /**
+   * Reports a name or an address: as the linked wallet's flag when a tier holder linked this browser, falling
+   * back to a signed hint when the node does not take delegated flags yet, and as a signed hint otherwise.
+   */
+  private async report(subject: string, category: Category | undefined, reason: string | undefined): Promise<{ result: ReportResult; fellBack: boolean }> {
+    const resolver = this.settings.shield.resolver;
+    const signer = this.reporter.signer();
+    const note = reason?.trim().slice(0, 200) ?? "";
+    const hint = async (): Promise<ReportResult> => postReport(resolver, { ...(await signHint(signer, subject, category ?? null, note, this.reporter.payTo)) });
+    let outcome: { result: ReportResult; fellBack: boolean };
+    const proof = this.reporter.linked;
+    if (proof && !subject.startsWith("0x")) {
+      const message = await buildDelegatedFlag(signer, proof, { type: "flag", domain: subject, reason: note || "reported from a browser", ts: Date.now(), ...(category ? { category } : {}) });
+      const signed = await postReport(resolver, { message });
+      outcome = signed.status === "rejected" && signed.detail.includes("not accepted") ? { result: await hint(), fellBack: true } : { result: signed, fellBack: false };
+    } else {
+      outcome = { result: await hint(), fellBack: false };
+    }
+    const status = outcome.result.status;
+    if (status === "hinted" || status === "flagged" || status === "confirmed") await this.reporter.remember(outcome.result.domain, category ?? null);
+    if (status === "confirmed" || status === "already_blocked") {
+      this.verdicts.forget(subject);
+      this.addressCache.clear();
+    }
+    return outcome;
+  }
+
   private async allowOnce(host: string): Promise<number> {
     const until = await this.allow.allow(host);
     await this.dropShieldRule(host);
@@ -488,6 +524,26 @@ export class BackgroundApp {
     const url = info.menuItemId === MENU_CHECK_LINK ? info.linkUrl : info.menuItemId === MENU_CHECK_PAGE ? info.pageUrl : undefined;
     if (!url) return;
     await browser.tabs.create({ url: checkPageUrl(this.checkPage(), url) });
+  }
+
+  // ------------------------------------------------------------------- guard
+
+  /** A page's wallet request, described by the bridge script: weigh it, or record what the person decided. */
+  async handleGuard(message: GuardMessage, sender: Browser.runtime.MessageSender): Promise<GuardVerdict | { ok: boolean }> {
+    await this.ready;
+    const clear: GuardVerdict = { level: "clear", flagged: [], unlimited: [], summary: "Nothing known." };
+    if (sender.id !== browser.runtime.id || !sender.tab) return message.type === "check" ? clear : { ok: false };
+    if (message.type === "decided") {
+      const host = hostnameOf(message.origin) ?? message.origin;
+      await this.remember({ host, url: message.origin, category: (message.verdict.flagged[0]?.category as ShieldEvent["category"]) ?? null, action: message.choice === "stop" ? "tx-stopped" : "tx-continued", at: Date.now() });
+      this.log(`wallet request on ${host}: ${message.choice === "stop" ? "stopped" : "continued"} (${message.verdict.summary})`);
+      return { ok: true };
+    }
+    if (!this.settings.guard.enabled) return clear;
+    const inspection = inspectRequest(message.method, message.params);
+    if (!inspection || inspection.addresses.length === 0) return clear;
+    const lookups = await this.addressCache.lookupAll(inspection.addresses);
+    return assess(inspection, lookups, { warnUnlimited: this.settings.guard.warnUnlimited });
   }
 
   // --------------------------------------------------------------- webRequest
@@ -772,7 +828,10 @@ export class BackgroundApp {
     const resolverChanged = next.shield.resolver !== this.settings.shield.resolver;
     const shieldOff = !next.shield.enabled && this.settings.shield.enabled;
     this.settings = next;
-    if (resolverChanged) this.verdicts.clear();
+    if (resolverChanged) {
+      this.verdicts.clear();
+      this.addressCache.clear();
+    }
     if (shieldOff) await this.dropShieldRules();
     if (chainChanged) {
       this.clients.clear();
@@ -795,12 +854,38 @@ export class BackgroundApp {
       if (!clean) throw new Error("not a hostname");
       return { until: await this.allowOnce(clean) };
     },
-    "shield:report": async ({ name, category, reason }) => {
-      const host = extractName(name);
-      if (!host) throw new Error("That is not a link or a domain name.");
-      const result = await sendReport(this.settings.shield.resolver, { name: host, category, reason });
-      if (result.status === "confirmed" || result.status === "already_blocked") this.verdicts.forget(host);
-      return result;
+    "shield:report": ({ name, category, reason }) => {
+      const address = /^0x[0-9a-fA-F]{40}$/.test(name.trim()) ? name.trim().toLowerCase() : null;
+      const subject = address ?? extractName(name);
+      if (!subject) throw new Error("That is not a link, a domain name, or an address.");
+      return this.report(subject, category, reason);
+    },
+    "shield:checkAddress": ({ address }) => {
+      const clean = address.trim().toLowerCase();
+      if (!/^0x[0-9a-f]{40}$/.test(clean)) throw new Error("That is not an address.");
+      return this.addressCache.lookup(clean);
+    },
+    "reporter:status": () => Promise.resolve(this.reporterStatus()),
+    "reporter:setWallet": async ({ wallet }) => {
+      await this.reporter.setWallet(wallet);
+      return this.reporterStatus();
+    },
+    "reporter:link": async ({ proof }) => {
+      await this.reporter.link(proof);
+      return this.reporterStatus();
+    },
+    "reporter:unlink": async () => {
+      await this.reporter.unlink();
+      return this.reporterStatus();
+    },
+    "reporter:rewards": () => {
+      const wallet = this.reporter.payTo;
+      return wallet ? fetchRewards(this.settings.shield.resolver, wallet) : Promise.resolve(null);
+    },
+    "reporter:claim": () => {
+      const wallet = this.reporter.payTo;
+      if (!wallet) return Promise.resolve({ status: "no_wallet", detail: "Add a rewards wallet first." });
+      return requestPayout(this.settings.shield.resolver, wallet);
     },
     "shield:recent": () => Promise.resolve([...this.recentEvents]),
     "vault:status": () => this.status(),
