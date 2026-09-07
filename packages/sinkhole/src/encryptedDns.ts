@@ -40,6 +40,8 @@ export interface EncryptedDnsShared {
   report?: ((input: ReportInput) => Promise<ReportResult>) | undefined;
   /** The node's own curated names for `GET /lists/payhole.txt` and `.hosts`; absent means the routes are not served. */
   curatedList?: (() => MergedEntry[]) | undefined;
+  /** `GET /rewards?wallet=` and `POST /rewards/claim`; absent means the routes are not served. */
+  rewards?: { summary(wallet: string): Promise<unknown>; claim(wallet: string): Promise<{ status: number; body: unknown }> } | undefined;
 }
 
 const DNS_MESSAGE = "application/dns-message";
@@ -154,6 +156,32 @@ export function createDohServer(shared: EncryptedDnsShared, counters: EncryptedD
           "cache-control": "no-store",
           "access-control-allow-origin": "*",
         });
+        return res.end(body);
+      }
+      if (url.pathname === "/rewards" || url.pathname === "/rewards/claim") {
+        if (!shared.rewards) return plain(res, 404, "not found");
+        const claiming = url.pathname === "/rewards/claim";
+        if (req.method === "OPTIONS") {
+          res.writeHead(204, { "access-control-allow-origin": "*", "access-control-allow-methods": claiming ? "POST" : "GET", "access-control-allow-headers": "content-type", "access-control-max-age": "86400" });
+          return res.end();
+        }
+        if (req.method !== (claiming ? "POST" : "GET")) return plain(res, 405, claiming ? "use POST" : "use GET", { allow: claiming ? "POST, OPTIONS" : "GET, OPTIONS" });
+        const limit = shared.limiter.take(clientAddress(req));
+        if (!limit.allowed) return plain(res, 429, "too many requests", { "retry-after": String(limit.retryAfterSeconds) });
+        let wallet: unknown = url.searchParams.get("wallet");
+        if (claiming) {
+          const raw = await readBody(req, MAX_MESSAGE_BYTES);
+          if (!raw) return plain(res, 413, `body exceeds ${MAX_MESSAGE_BYTES} bytes`);
+          try {
+            wallet = (JSON.parse(raw.toString("utf8")) as { wallet?: unknown }).wallet;
+          } catch {
+            return plain(res, 400, "body is not JSON");
+          }
+        }
+        if (typeof wallet !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(wallet)) return plain(res, 400, "wallet must be an address");
+        const answer = claiming ? await shared.rewards.claim(wallet) : { status: 200, body: await shared.rewards.summary(wallet) };
+        const body = JSON.stringify(answer.body);
+        res.writeHead(answer.status, { "content-type": "application/json; charset=utf-8", "content-length": Buffer.byteLength(body), "cache-control": "no-store", "access-control-allow-origin": "*" });
         return res.end(body);
       }
       if (url.pathname === "/lists/payhole.txt" || url.pathname === "/lists/payhole.hosts") {

@@ -59,8 +59,39 @@ encrypted DNS rate limit) takes reports from people who are not running a node.
   `REPORT_DELEGATES=1` turns this on; leave it off until every node runs a version that verifies delegated signatures,
   because older nodes drop them and penalise the relay.
 
-`GET /api/reports/ledger?days=30` lists, for every name the swarm confirmed in the window, the wallet whose flag came first.
-That is the record a bounty is paid from; the node keeps it, nobody's memory does.
+A hint may be signed by the phone's reporter key: `key`, `payTo` (the wallet rewards go to, optional), `ts`, and `signature`,
+an EIP-191 signature over the canonical JSON `{"type":"hint","domain","category","reason","ts","payTo"}`. The first signed
+report of a name records who was first and where to pay; later reports only add to the count. A report that names a key or a
+wallet without a valid signature is refused, so nobody can attach a wallet to someone else's report.
+
+### Evidence
+
+With `EVIDENCE_ENABLED=1` the node gathers evidence for every new hinted name, one at a time, and keeps it with the hint: whether
+the name resolves, the brands it trades on, free hosting platforms, the domain's age from the public registry record (RDAP),
+the newest certificate's age (crt.sh), and a bounded fetch of the page (512 KB, 8 s) scanned for seed phrase forms, wallet
+connection tied to claim or airdrop wording, approval calls, brand logins, and heavy obfuscation. The result is a 0 to 100 score
+with the marks in words, shown to operators so a tier holder can confirm in one look. Off by default: a home node should not
+fetch scam pages.
+
+### Bounties
+
+The node keeps the ledger a bounty is paid from; it never moves money. A report earns when the name was unknown to the network
+at the time (a name already blocked is answered `already_blocked` and never counted), the reporter was first, and the network
+later agreed: two tier holders other than the reporter confirmed it, or a public list caught up within fourteen days. Amounts:
+0.50 USDG for a wallet drainer or drainer infrastructure, 0.30 for phishing or a counterfeit token site, at most ten paid reports
+per wallet per day; the rest are `capped`. A name later allowlisted is `void`. Rewards go to the wallet the phone named, or to
+the tier holder for a flag from a node; a phone that reported before naming a wallet can be assigned one later.
+
+- `GET /rewards?wallet=0x...` (public, cross-origin) answers what a wallet is owed and has been paid, its entries, whether it is
+  eligible to be paid (it holds a tier, or at least `MIN_HOLD_TOKENS` PAYHOLE), and any open payout request.
+- `POST /rewards/claim` with `{"wallet": "0x..."}` requests a payout once the wallet is owed at least 10 USDG and is eligible.
+  Anyone may request a payout for a wallet; the money can only go to that wallet.
+- `GET /api/rewards` lists every entry and claim for the operator; `GET /api/rewards?wallet=` one wallet's balance.
+- `POST /api/rewards/paid` with `{"wallet", "tx"}` records that the owner paid: every payable entry the wallet holds is marked
+  with the transaction and its claim closes.
+
+`GET /api/reports/ledger?days=30` is the older, flatter view: for every name the swarm confirmed in the window, the wallet whose
+flag came first.
 
 ### The PayHole list
 

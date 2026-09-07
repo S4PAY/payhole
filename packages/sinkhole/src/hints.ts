@@ -1,5 +1,6 @@
 import { parseCategory, type Category } from "./category.js";
 import { cleanReason, normalizeHostname } from "./hostname.js";
+import type { Evidence } from "./evidence.js";
 import { readJson, writeJsonAtomic } from "./store.js";
 
 /**
@@ -8,6 +9,14 @@ import { readJson, writeJsonAtomic } from "./store.js";
  * someone who can confirm it. Bounded, and written to disk a few seconds after it changes.
  */
 
+export interface HintReporter {
+  /** The phone's reporter key, checksummed. */
+  key: string;
+  /** Where a bounty for this name goes; null until the reporter names a wallet. */
+  payTo: string | null;
+  at: number;
+}
+
 export interface Hint {
   domain: string;
   count: number;
@@ -15,6 +24,9 @@ export interface Hint {
   lastAt: number;
   categories: Partial<Record<Category, number>>;
   reasons: string[];
+  /** The first signed report, if any report was signed. */
+  firstBy?: HintReporter;
+  evidence?: Evidence;
 }
 
 export interface HintsFile {
@@ -63,6 +75,8 @@ export class Hints {
           lastAt: entry.lastAt,
           categories,
           reasons: Array.isArray(entry.reasons) ? entry.reasons.filter((reason): reason is string => typeof reason === "string").slice(0, REASONS_KEPT) : [],
+          ...(entry.firstBy && typeof entry.firstBy.key === "string" && typeof entry.firstBy.at === "number" ? { firstBy: { key: entry.firstBy.key, payTo: typeof entry.firstBy.payTo === "string" ? entry.firstBy.payTo : null, at: entry.firstBy.at } } : {}),
+          ...(entry.evidence && typeof entry.evidence.score === "number" ? { evidence: entry.evidence } : {}),
         });
       }
     }
@@ -81,7 +95,7 @@ export class Hints {
   }
 
   /** Counts one report of a name. Null when the input is not a hostname. */
-  record(input: unknown, category: unknown = null, reason: unknown = "", now = this.clock()): Hint | null {
+  record(input: unknown, category: unknown = null, reason: unknown = "", now = this.clock(), by?: { key: string; payTo: string | null }): Hint | null {
     const domain = normalizeHostname(input);
     if (!domain) return null;
     let hint = this.hints.get(domain);
@@ -96,8 +110,25 @@ export class Hints {
     if (parsed) hint.categories[parsed] = (hint.categories[parsed] ?? 0) + 1;
     const text = cleanReason(reason, "");
     if (text.length > 0 && !hint.reasons.includes(text) && hint.reasons.length < REASONS_KEPT) hint.reasons.push(text);
+    if (by) {
+      if (!hint.firstBy) hint.firstBy = { key: by.key, payTo: by.payTo, at: now };
+      else if (hint.firstBy.key.toLowerCase() === by.key.toLowerCase() && by.payTo) hint.firstBy.payTo = by.payTo;
+    }
     this.schedule();
     return hint;
+  }
+
+  /** Attaches what the evidence probes found. */
+  setEvidence(domain: string, evidence: Evidence): void {
+    const hint = this.hints.get(domain);
+    if (!hint) return;
+    hint.evidence = evidence;
+    this.schedule();
+  }
+
+  /** Every hint, for the ledger. */
+  all(): Hint[] {
+    return [...this.hints.values()];
   }
 
   /** Drops a name, for a report an operator judged junk or one the network has since decided. */

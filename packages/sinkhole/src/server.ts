@@ -8,6 +8,7 @@ import { isQueryStatus, type QueryFilter, type QueryRecord, type StatsSnapshot }
 import { isExportFormat, renderExport } from "./render/export.js";
 import type { Hint } from "./hints.js";
 import type { LedgerEntry, RadarSnapshot } from "./radar.js";
+import type { Rewards } from "./rewards.js";
 import type { RefreshResult, SubscriptionInfo } from "./subscriptions.js";
 import type { AnnouncementResult, DirectoryEntry } from "./swarm/directory.js";
 import type { EndpointAnnouncement } from "./swarm/probe.js";
@@ -42,6 +43,8 @@ export interface AdminDeps {
   hints?: { recent(since: number, limit: number): Hint[]; remove(input: unknown): boolean } | undefined;
   /** Who reported first each name the swarm confirmed, for `GET /api/reports/ledger`. */
   ledger?: ((since: number) => LedgerEntry[]) | undefined;
+  /** The bounty ledger: entries, claims, and the owner's paid marks. */
+  rewards?: Pick<Rewards, "entries" | "allClaims" | "markPaid" | "balance"> | undefined;
   /** The operator wallet's BurnVault tier and the unlock action; absent when the node has no vault. */
   membership?: Membership | undefined;
   maxBodyBytes?: number;
@@ -314,6 +317,25 @@ export function createAdminServer(deps: AdminDeps): Server {
       const limit = Math.min(1000, Math.max(1, Number(url.searchParams.get("limit") ?? "100") || 100));
       const since = Date.now() - days * 24 * 60 * 60 * 1000;
       return json(res, 200, { since, hints: deps.hints.recent(since, limit) });
+    }
+    if (path === "/api/rewards") {
+      if (method !== "GET") throw new HttpError(405, "method_not_allowed", "use GET");
+      if (!deps.rewards) throw new HttpError(404, "not_found", "rewards are not enabled");
+      const wallet = url.searchParams.get("wallet");
+      if (wallet) return json(res, 200, { wallet, ...deps.rewards.balance(wallet) });
+      return json(res, 200, { entries: deps.rewards.entries(), claims: deps.rewards.allClaims() });
+    }
+    if (path === "/api/rewards/paid") {
+      if (method !== "POST") throw new HttpError(405, "method_not_allowed", "use POST");
+      if (!deps.rewards) throw new HttpError(404, "not_found", "rewards are not enabled");
+      const body = await readJson(req, maxBody);
+      if (!isRecord(body)) throw new HttpError(400, "invalid_body", "body must be a JSON object");
+      const wallet = body.wallet;
+      const tx = body.tx;
+      if (typeof wallet !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(wallet)) throw new HttpError(400, "invalid_wallet", "wallet must be an address");
+      if (typeof tx !== "string" || !/^0x[0-9a-fA-F]{64}$/.test(tx)) throw new HttpError(400, "invalid_tx", "tx must be a transaction hash");
+      const paid = await deps.rewards.markPaid(wallet, tx);
+      return json(res, 200, { wallet, tx, paid: paid.length, amount: Math.round(paid.reduce((sum, entry) => sum + entry.amount, 0) * 100) / 100 });
     }
     if (path === "/api/reports/ledger") {
       if (method !== "GET") throw new HttpError(405, "method_not_allowed", "use GET");

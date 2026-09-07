@@ -15,9 +15,11 @@ import { QueryStats, type QueryStatsState } from "./queryLog.js";
 import { RateLimiter } from "./rateLimit.js";
 import { createAdminServer } from "./server.js";
 import { debounce, readJson, writeJsonAtomic } from "./store.js";
+import { EvidenceQueue } from "./evidence.js";
 import { Hints } from "./hints.js";
 import { buildLedger, buildRadar, memoize } from "./radar.js";
 import { createReporter } from "./reports.js";
+import { MIN_PAYOUT_USDG, Rewards, createHoldingCheck } from "./rewards.js";
 import { Subscriptions } from "./subscriptions.js";
 import { parseAllowlistText } from "./allowlist.js";
 import { Directory, type DirectoryEntry } from "./swarm/directory.js";
@@ -165,6 +167,20 @@ async function run(config: SinkholeConfig): Promise<void> {
   subscriptions.onChange(() => blocklist.setLists(subscriptions.domains()));
   const hints = await Hints.load({ path: join(config.dataDir, "hints.json"), log });
   if (hints.size > 0) log(`${hints.size} hinted names loaded`);
+  const evidence = config.reports.evidence
+    ? new EvidenceQueue({ log }, (domain) => hints.get(domain)?.evidence ?? null, (domain, found) => hints.setEvidence(domain, found))
+    : null;
+  if (evidence) for (const hint of hints.all()) evidence.enqueue(hint.domain);
+  const rewards = await Rewards.load(
+    {
+      confirmations: (since) => blocklist.recentConfirmations(since),
+      hints: () => hints.all(),
+      listArrival: (domain) => subscriptions.listArrival(domain),
+      isBlocked: (domain) => blocklist.inspect(domain)?.blocked ?? false,
+      isAllowlisted: (domain) => blocklist.inspect(domain)?.allowlisted ?? false,
+    },
+    { path: join(config.dataDir, "rewards.json"), log },
+  );
   const radar = memoize(
     () => buildRadar({ blocklist, hints, lists: { list: () => subscriptions.list(), historyOf: (id) => subscriptions.historyOf(id), domains: () => subscriptions.domains() } }),
     MINUTE,
@@ -249,9 +265,37 @@ async function run(config: SinkholeConfig): Promise<void> {
   let swarm: Swarm | null = null;
   /** The swarm's tier reader once it exists; reports are verified with it. */
   let tierOfRef: TierReader = () => Promise.resolve(0);
+  const holdingCheck = config.membership.vault
+    ? createHoldingCheck({ rpcUrl: config.membership.rpcUrl, chainId: config.membership.chainId, vault: config.membership.vault, minHoldTokens: config.reports.minHoldTokens, tierOf: (address) => tierOfRef(address) })
+    : null;
+  const rewardRoutes = {
+    summary: async (wallet: string) => {
+      const balance = rewards.balance(wallet);
+      const eligible = holdingCheck ? await holdingCheck(wallet as `0x${string}`).catch(() => null) : null;
+      return {
+        wallet,
+        owed: balance.owed,
+        paid: balance.paid,
+        pending: balance.pending,
+        minPayout: MIN_PAYOUT_USDG,
+        eligible,
+        claim: rewards.openClaim(wallet),
+        entries: rewards.entries().filter((entry) => entry.wallet?.toLowerCase() === wallet.toLowerCase()).slice(0, 100),
+      };
+    },
+    claim: async (wallet: string) => {
+      const eligible = holdingCheck ? await holdingCheck(wallet as `0x${string}`).catch(() => null) : null;
+      if (eligible && !eligible.ok) return { status: 403, body: { status: "not_eligible", detail: `hold at least ${eligible.required} PAYHOLE or a tier to be paid`, ...eligible } };
+      const result = await rewards.claim(wallet);
+      if (!result.ok) return { status: 409, body: { status: result.reason, owed: result.owed, minPayout: MIN_PAYOUT_USDG } };
+      log(`payout requested by ${wallet}: ${result.claim.amount} USDG`);
+      return { status: 200, body: { status: "requested", claim: result.claim } };
+    },
+  };
   const report = createReporter({
     blocklist,
     hints,
+    onHint: evidence ? (domain) => evidence.enqueue(domain) : undefined,
     verify: (raw) => verifySwarmMessage(raw, "", { tierOf: tierOfRef, minTier: config.membership.minTier }),
     publish: (message) => (swarm ? swarm.publish(message) : Promise.resolve(0)),
     acceptDelegates: config.reports.delegates,
@@ -270,6 +314,7 @@ async function run(config: SinkholeConfig): Promise<void> {
       radar,
       report,
       curatedList: () => blocklist.curatedEntries(),
+      rewards: rewardRoutes,
     };
     if (config.doh.enabled) {
       doh = createDohServer(shared);
@@ -449,6 +494,7 @@ async function run(config: SinkholeConfig): Promise<void> {
     radar,
     hints,
     ledger: (since: number) => buildLedger(blocklist, since),
+    rewards,
     subscriptions: {
       list: () => subscriptions.list(),
       get: (id) => subscriptions.get(id),

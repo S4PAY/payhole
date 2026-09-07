@@ -70,6 +70,8 @@ export interface Confirmation {
   at: number;
   /** The wallet whose live flag came first, lowercase; who a bounty for the name belongs to. */
   firstReporter: string | null;
+  /** The distinct wallets whose live flags confirmed it, lowercase, at most ten. */
+  reporterSet: string[];
 }
 
 export interface FlagSummary {
@@ -201,7 +203,14 @@ export class Blocklist {
       for (const entry of state.confirmations) {
         const domain = typeof entry.domain === "string" ? normalizeHostname(entry.domain) : null;
         if (domain && typeof entry.at === "number" && typeof entry.reporters === "number") {
-          this.confirmations.push({ domain, category: parseCategory(entry.category) ?? "phishing", reporters: entry.reporters, at: entry.at, firstReporter: typeof entry.firstReporter === "string" ? entry.firstReporter : null });
+          this.confirmations.push({
+            domain,
+            category: parseCategory(entry.category) ?? "phishing",
+            reporters: entry.reporters,
+            at: entry.at,
+            firstReporter: typeof entry.firstReporter === "string" ? entry.firstReporter : null,
+            reporterSet: Array.isArray(entry.reporterSet) ? entry.reporterSet.filter((item): item is string => typeof item === "string").slice(0, 10) : [],
+          });
         }
       }
       this.confirmations = this.confirmations.slice(-CONFIRMATIONS_KEPT);
@@ -390,13 +399,16 @@ export class Blocklist {
       for (const flag of live) strongestCategory = strongest(strongestCategory, flag.category);
       let firstReporter: string | null = null;
       let firstTs = Number.POSITIVE_INFINITY;
+      const reporterSet: string[] = [];
       for (const [address, flag] of flags) {
-        if (flag.seen + this.ttlMs > seen && flag.ts < firstTs) {
+        if (flag.seen + this.ttlMs <= seen) continue;
+        if (reporterSet.length < 10) reporterSet.push(address);
+        if (flag.ts < firstTs) {
           firstTs = flag.ts;
           firstReporter = address;
         }
       }
-      this.confirmations.push({ domain, category: strongestCategory ?? "phishing", reporters, at: seen, firstReporter });
+      this.confirmations.push({ domain, category: strongestCategory ?? "phishing", reporters, at: seen, firstReporter, reporterSet });
       if (this.confirmations.length > CONFIRMATIONS_KEPT) this.confirmations.splice(0, this.confirmations.length - CONFIRMATIONS_KEPT);
     }
     this.checkChanged();

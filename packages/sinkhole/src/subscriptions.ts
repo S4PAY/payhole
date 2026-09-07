@@ -308,6 +308,19 @@ export class Subscriptions {
     await writeJsonAtomic(join(this.dir, "history.json"), { version: 1, items: Object.fromEntries(this.history) } satisfies HistoryFile);
   }
 
+  /** When a public list first gained a name, from the kept refresh history; null when no refresh recorded it. */
+  listArrival(domain: string): { at: number; label: string } | null {
+    let best: { at: number; label: string } | null = null;
+    for (const [id, events] of this.history) {
+      const item = this.items.get(id);
+      if (!item) continue;
+      for (const event of events) {
+        if (event.names.includes(domain) && (best === null || event.at < best.at)) best = { at: event.at, label: item.url };
+      }
+    }
+    return best;
+  }
+
   /** Refreshes that changed the list, oldest first; empty for a list that never had a baseline. */
   historyOf(id: string): RefreshEvent[] {
     return [...(this.history.get(id) ?? [])];

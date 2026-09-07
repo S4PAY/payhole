@@ -25,7 +25,7 @@ export interface SinkholeConfig {
     proofJson: string | undefined;
   };
   probe: { allowPrivate: boolean };
-  reports: { delegates: boolean };
+  reports: { delegates: boolean; evidence: boolean; minHoldTokens: number };
   queryLog: { enabled: boolean };
   lists: { urls: string[]; refreshHours: number };
   /** Names never blocked: fetched rule lists plus an optional local file. Refreshed with the blocklists. */
@@ -153,7 +153,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): SinkholeConfig
       proofJson: optional(env["NODE_PROOF_JSON"]),
     },
     probe: { allowPrivate: flag(env["PROBE_ALLOW_PRIVATE"]) },
-    reports: { delegates: flag(env["REPORT_DELEGATES"]) },
+    reports: { delegates: flag(env["REPORT_DELEGATES"]), evidence: flag(env["EVIDENCE_ENABLED"]), minHoldTokens: integer(env["MIN_HOLD_TOKENS"], 0, "MIN_HOLD_TOKENS", 0) },
     queryLog: { enabled: flag(env["QUERY_LOG_ENABLED"], true) },
     lists: { urls: list(env["BLOCKLIST_URLS"]), refreshHours: integer(env["BLOCKLIST_REFRESH_HOURS"], 24, "BLOCKLIST_REFRESH_HOURS") },
     allow: {
