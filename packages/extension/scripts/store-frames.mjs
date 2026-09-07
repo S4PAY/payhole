@@ -25,10 +25,10 @@ p{margin:14px 0 0;font:400 19px/1.5 Inter,sans-serif;color:#A1A1AA;max-width:520
 const logo = data(join(root, "public", "logo.png"));
 
 const shots = [
-  { file: "popup.png", name: "1-pages-pay-themselves.png", side: true, h1: "Pages pay themselves.", p: "A site answers 402, the pocket settles it in USDG, the page loads. Under the cap you never see it." },
-  { file: "dashboard-budget.png", name: "2-one-pocket-capped.png", side: false, h1: "One pocket, capped.", p: "Fund a BudgetAccount with USDG. Every site gets its own address, topped up in small chunks from the pocket." },
-  { file: "dashboard-sites.png", name: "3-per-site-caps.png", side: false, h1: "Per-site caps you control.", p: "Set a cap per site, block a site, read the ledger. Nothing spends past what you allowed." },
-  { file: "approve.png", name: "4-over-the-cap-one-prompt.png", side: true, h1: "Over the cap? One prompt.", p: "A price above the site cap asks you first. Pay once, or deny. Caps stay where you put them." },
+  { file: "wall.png", name: "1-scam-pages-stop.png", side: false, h1: "Scam pages stop before they load.", p: "Every site is checked against PayHole's resolver. A listed name lands on a wall: what it is, who says so, Go back or Open once." },
+  { file: "guard-stop.png", name: "2-drainers-stop-at-the-wallet.png", side: false, h1: "Drainers stop before the wallet opens.", p: "Sends, approvals and permits are read first. A known drainer address is stopped on the page; the wallet never sees it." },
+  { file: "popup-shield.png", name: "3-check-any-link.png", side: true, h1: "Check any link or address.", p: "The verdict for the site you are on, a box for anything you were sent, and a report button. First confirmed reports pay in USDG." },
+  { file: "dashboard-reports.png", name: "4-reports-that-pay.png", side: false, h1: "Reports that pay.", p: "A reporter key signs every report. Link a tier, name a wallet, and watch what became of each one." },
 ];
 
 const browser = await chromium.launch();

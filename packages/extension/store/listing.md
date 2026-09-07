@@ -2,95 +2,110 @@
 
 Everything the developer console asks for, in the order it asks. Upload `.output/payholeextension-<version>-chrome.zip`
 (build with `pnpm build && pnpm zip`; the version in `package.json` must go up on every upload). Images are in this
-directory: `1-pages-pay-themselves.png` to `4-over-the-cap-one-prompt.png` (1280 by 800), `promo-small-440x280.png`,
-`promo-marquee-1400x560.png`, and the icon is `public/icon/128.png`. Regenerate with `pnpm exec tsx scripts/store-shots.ts`
-then `node scripts/store-frames.mjs`.
+directory: `1-scam-pages-stop.png` to `4-reports-that-pay.png` (1280 by 800), `promo-small-440x280.png`,
+`promo-marquee-1400x560.png`, and the icon is `public/icon/128.png`. Regenerate the frames with
+`node scripts/store-frames.mjs` after refreshing the raw captures in `store/raw`.
+
+The listing is live at https://chromewebstore.google.com/detail/calplcemfhaiomnhjphgmicdamdjhhep. Every field below
+replaces what the first submission said; the extension changed from a spending pocket to a shield in 0.2 and 0.3.
 
 ## Store listing tab
 
 Name: PayHole
 
 Summary (132 characters max):
-A capped spending pocket on Robinhood Chain that pays websites, tools, and agents over x402 while you browse.
+Scam links stop loading, and drainers stop before your wallet opens. Checks every site and every wallet request.
 
-Category: Productivity. Language: English.
+Category: Privacy & Security (Tools if the console does not offer it). Language: English.
 
 Description:
 
-PayHole gives your browser a spending pocket. You fund it with USDG on Robinhood Chain and set a cap. When a page,
-an API, or a tool answers with HTTP 402 and a price, PayHole pays it from an address that exists only for that site,
-retries the request, and the page loads. Under the cap you never see a prompt. Over the cap you get one.
+PayHole stops crypto scams in two places: the page and the wallet.
+
+Every site you open is checked against the PayHole resolver, the same answer the PayHole app gives on a phone. A
+known wallet drainer, phishing page, or counterfeit token site never loads. In its place you see what the name is and
+who says so, with Go back or Open once. A name the browser has already seen blocked is stopped inside the browser
+before a single request leaves.
+
+Before MetaMask, Rabby, or any wallet opens, PayHole reads what the page asked for: a send, an approval, a permit, a
+signature. Every address in it is checked against the network's list of drainer contracts and the wallets behind
+them. A known one is stopped with a warning you can override; an unlimited approval to an address nobody knows gets a
+heads-up. It works with every wallet, on every EVM chain, and never touches a seed.
 
 What it does
-- Pays x402 requests (the open payment standard built on HTTP 402) with USDG, on Robinhood Chain, chain id 4663.
-- Gives every site its own address, derived from your seed. A site sees only what it was paid. It never learns your
-  other addresses, your balance, or what you paid elsewhere.
-- Enforces caps on chain and in the extension: a cap per site, a shared cap for agent keys, and a prompt threshold.
-- Keeps a ledger of every payment with the settlement transaction, in your browser only.
-- Blocks known payment-drainer and tracker domains from a blocklist you control, before the browser connects to them.
-- Lets you tip registered creators per visit, off by default.
-- Hands out capped session keys for agents and command-line tools, so a script can pay from the same pocket
-  without ever holding your seed.
+- Checks each site as it loads and walls off listed names: drainers, phishing, counterfeit token sites.
+- Reads wallet requests before the wallet sees them and stops sends, approvals, and permits to known drainer
+  addresses. Optional warning on unlimited approvals.
+- Shows a badge on blocked tabs; the popup gives the verdict for any site, a box to check any link or address, and a
+  report button.
+- Right-click any link: Check this link with PayHole.
+- Reports are signed by a key that lives in the extension. Name a rewards wallet and confirmed first reports pay in
+  USDG. Link the key to a tier holder's wallet on payhole.org and reports count as that wallet's flags.
+- Point it at your own PayHole resolver on your network if you run one.
 
 What it does not do
-- No account, no sign-up, no analytics, no telemetry. Your seed never leaves your device.
-- No custody. Funds sit in a BudgetAccount contract that only your owner key controls; withdraw at any time.
-- No rewards, cashback, or token emissions of any kind.
+- No account, no sign-up, no analytics, no telemetry. The only thing that leaves the browser is the hostname of a
+  site or the addresses in a wallet request, sent to the resolver you chose, which answers from memory and keeps no
+  log.
+- No wallet, no keys to your funds, no custody. The guard only reads requests. (An optional x402 spending pocket for
+  Robinhood Chain is included, off by default, for sites that charge per page.)
+- No rewards in a token, ever. Bounties are paid in USDG by the project.
 
 Getting started
-1. Create a seed and a password. Write the recovery phrase down.
-2. Send a little USDG and a little ETH for gas to the owner address shown in the dashboard.
-3. Create the pocket, top it up, and browse. Try it on payhole.org/try.html, a real article behind a real 402.
+1. Pin the icon. Everything is on from the first page.
+2. Open the dashboard from the popup for the session log, the switches, and your reporter key.
+3. To earn bounties, add a rewards wallet in the Reports tab.
 
-Open source under the MIT license at github.com/S4PAY/payhole. Contracts are verified on Robinhood Chain. Privacy
-policy at payhole.org/privacy.html.
+Open source under the MIT license. Privacy policy at payhole.org/privacy.html.
 
 Official URL: https://payhole.org
 Homepage URL: https://payhole.org
-Support URL: https://github.com/S4PAY/payhole/issues
+Support URL: https://payhole.org/extension.html
 Contact email: hello@payhole.org
 
 ## Privacy tab
 
 Single purpose description:
-PayHole is a capped spending pocket for the browser. When a website or API answers a request with HTTP 402 and a
-price, the extension pays that price in USDG from an address dedicated to that site, within limits the user set, and
-retries the request. Every other feature exists to run that pocket: funding it, setting caps, reviewing the ledger,
-approving a payment above a cap, and blocking known payment-drainer domains.
+PayHole protects the browser from crypto scams: it stops known scam sites before they load and stops wallet requests
+that would send funds, approvals, or permits to known drainer addresses. Every other feature exists to run that
+protection: checking a link or address by hand, reporting one, showing what was stopped, and choosing the resolver.
 
 Permission justifications:
 
-- storage: keeps the encrypted vault, per-site caps, the payment ledger, the blocklist, and settings on the device.
-  Nothing is synced or sent to us.
-- alarms: refreshes balances and the blocklist on a schedule while the browser is idle, so the popup is current
-  and blocking rules stay up to date.
-- tabs: reads the origin of the active tab so the popup shows the pocket, address, and spend for the site you are on,
-  and opens the dashboard and approval pages in tabs.
-- webRequest: observes responses with status 402 and the payment headers they carry. That is the only way to notice
-  that a page or API asked to be paid. Request bodies are never read.
-- webNavigation: notices page loads that ended in a 402, so a top-level navigation can be paid and reloaded, and
-  clears the one-time payment header rule afterwards.
-- declarativeNetRequest and declarativeNetRequestWithHostAccess: adds the payment header to exactly one retried
-  request per payment, and blocks domains on the user's blocklist before the browser connects to them.
-- Host permission on all sites: a 402 can come from any site or API, and payment must work wherever the user
-  browses. The extension only acts on responses with status 402 and on domains the user has chosen to block; it does
-  not read or change page content otherwise.
+- Host permission on all sites: a scam page can be on any site, and a wallet request can come from any page, so the
+  extension must see navigations and wallet requests everywhere. It reads only the hostname of each navigation and
+  the requests a page makes to a wallet.
+- webNavigation: to notice a page load as it starts, ask the resolver about the name, and send a listed one to the
+  wall page before it loads.
+- declarativeNetRequest and declarativeNetRequestWithHostAccess: to redirect a name the browser already saw blocked
+  to the wall page before any request leaves, and to block domains from the user's own list.
+- tabs: to know which site is in the active tab so the popup and the badge show the right verdict, and to open the
+  wall page.
+- contextMenus: for "Check this link with PayHole" and "Check this page with PayHole".
+- webRequest: to notice HTTP 402 responses when the optional spending pocket is on. Request bodies are never read.
+- storage: to keep settings, the reporter key, the rewards wallet, the user's own blocklist, and the session log on
+  the device; with the pocket on, the encrypted vault and the ledger too. Nothing is synced or sent to us.
+- alarms: to refresh the user's own blocklist on a schedule while the extension is idle.
+- Content scripts on all sites: one in the page's world wraps the wallet's request function so a request can be read
+  before the wallet sees it; one in the isolated world shows the warning and talks to the extension.
 
-Remote code: No. All code ships in the package. The extension talks to the Robinhood Chain RPC endpoint, to the site
-being paid, and to the facilitator that site names, over plain HTTPS requests. No scripts are fetched or evaluated.
+Remote code: No. All code ships in the package. The extension talks over plain HTTPS to the resolver the user chose
+(dns.payhole.org by default) for verdicts, address checks, and reports; with the pocket on, also to the Robinhood
+Chain RPC endpoint, to the site being paid, and to the facilitator that site names. No scripts are fetched or
+evaluated.
 
-Data usage, what to tick:
-- Financial and payment information: yes. The extension creates signed USDG transfer authorizations and sends them to
-  the website being paid or the facilitator that site names, at the user's request. Amounts and addresses are public
-  on chain by nature.
-- Everything else: no. No personally identifiable information, health, authentication, personal communications,
-  location, web history, user activity, or website content is collected or transmitted. The ledger and settings stay
-  in the browser's local extension storage.
-- Certifications: tick all three. Data is not sold to third parties, not used for purposes unrelated to the single
-  purpose, and not used to determine creditworthiness or for lending.
-
-Privacy policy URL: https://payhole.org/privacy.html
+Data usage disclosure:
+- Web history: the hostname of each site the user opens is sent to the resolver to learn whether it is listed. It is
+  answered from memory and not stored by the resolver; the extension keeps the answer in memory for a while.
+- Financial and payment information: the addresses in a wallet request are sent to the resolver to learn whether any
+  is a known drainer; with the pocket on, payment authorizations are signed and sent to the site being paid.
+- Certifications: data is not sold to third parties, not used or transferred for purposes unrelated to the
+  extension's single purpose, and not used or transferred to determine creditworthiness or for lending.
 
 ## Distribution tab
 
-Visibility: Public. Regions: all. Pricing: free. Mature content: no.
+Visibility: Public. Regions: all. Free.
+
+## Trader declaration
+
+Non-trader. The publisher is an individual without a registered business; the extension is free and open source.
