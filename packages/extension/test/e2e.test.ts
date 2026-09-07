@@ -80,6 +80,7 @@ async function seedExtension(): Promise<Page> {
   if (!context) throw new Error("no browser");
   const vault = await encryptSecret(TEST_MNEMONIC, PASSWORD, 5_000);
   const settings: Partial<Settings> = {
+    pay: { enabled: true },
     rpcUrl: anvil!.rpcUrl,
     chainId: CHAIN_ID,
     usdg: deployed.usdg,

@@ -494,7 +494,7 @@ export class BackgroundApp {
 
   async onHeadersReceived(details: HeadersDetails): Promise<void> {
     await this.ready;
-    if (details.tabId < 0 || !isHttpUrl(details.url)) return;
+    if (!this.settings.pay.enabled || details.tabId < 0 || !isHttpUrl(details.url)) return;
     const getHeader = headerGetter(details.responseHeaders);
     const key = AttemptLog.key(details.tabId, details.url);
 
@@ -622,6 +622,7 @@ export class BackgroundApp {
   }
 
   private async payPageRequest(sender: BridgeSender, request: Extract<BridgeRequest, { type: "402" }>): Promise<PageReply> {
+    if (!this.settings.pay.enabled) return { kind: "refused", reason: "the pocket is off" };
     if (!this.core) return { kind: "refused", reason: "the wallet is locked" };
     const observed = this.observed.findByTabUrl(sender.tabId, request.url);
     let paymentRequired = observed?.paymentRequired;
