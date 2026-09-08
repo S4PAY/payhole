@@ -36,5 +36,4 @@ drainer still stops every time.
 ## Install
 
 [payhole.org/downloads/payhole-extension.zip](/downloads/payhole-extension.zip), steps on the
-[extension page](/extension.html). The Chrome Web Store copy is 0.1 until the review of this build
-lands; the zip is the one to use until then.
+[extension page](/extension.html). Update, September 8: this build passed review and is [on the Chrome Web Store](https://chromewebstore.google.com/detail/calplcemfhaiomnhjphgmicdamdjhhep).
